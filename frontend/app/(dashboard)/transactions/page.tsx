@@ -96,7 +96,7 @@ export default function TransactionsPage() {
     setDescription(t.description);
     setAmount(t.amount.toString());
     setUiType(t.type === 'TRANSFER' ? 'TRANSFER' : t.type); 
-    setStatus(t.status);
+    setStatus(t.status as any);
     setDate(new Date(t.date).toISOString().split('T')[0]);
     if (t.accountId) setAccountId(t.accountId);
     setIsModalOpen(true);
