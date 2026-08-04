@@ -1,14 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { Wallet, TrendingUp, TrendingDown, CreditCard, PiggyBank, Target } from 'lucide-react';
+import { Wallet, TrendingUp, TrendingDown, PiggyBank, Target } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, ResponsiveContainer,
-  XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, Legend
+  XAxis, YAxis, Tooltip as RechartsTooltip, CartesianGrid, Legend, LabelList
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SummaryCard } from '@/components/dashboard/summary-card';
-import { useDashboardSummary } from '@/hooks/use-dashboard'; // Ajuste se precisar buscar monthly-flow tbm
+import { useDashboardSummary } from '@/hooks/use-dashboard'; 
 import { formatCurrency } from '@/utils/currency';
 
 export default function DashboardPage() {
@@ -16,11 +16,9 @@ export default function DashboardPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
-  // Imaginando que seu hook suporte passar parametros, caso não, você pode adaptá-lo:
-  // const { data, isLoading } = useDashboardSummary({ month: selectedMonth, year: selectedYear });
-  const { data, isLoading } = useDashboardSummary();
+  // Passando os parâmetros para o hook (você precisará garantir que o hook envia isso na URL da API)
+  const { data, isLoading } = useDashboardSummary({ month: selectedMonth, year: selectedYear });
 
-  // Dados para o novo gráfico de comparação do mês atual
   const comparisonData = [
     {
       name: 'Resumo do Mês',
@@ -31,20 +29,11 @@ export default function DashboardPage() {
     }
   ];
 
-  // Placeholder enquanto o hook useMonthlyFlow não é criado (ou você pode puxar direto na page)
-  const monthlyFlow = [
-    { month: 'Jan', receitas: 6000, despesas: 3500 },
-    { month: 'Fev', receitas: 6200, despesas: 3800 },
-    { month: 'Mar', receitas: 6500, despesas: 4100 },
-    { month: 'Abr', receitas: 6300, despesas: 3950 },
-    { month: 'Mai', receitas: 7000, despesas: 4400 },
-    { month: 'Jun', receitas: 6800, despesas: 4200 },
-    { month: 'Jul', receitas: 7200, despesas: 4600 },
-  ];
+  // Agora pega os dados REAIS da evolução que enviamos pelo backend
+  const monthlyFlow = data?.monthlyFlow || [];
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Cabeçalho e Filtros */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Visão geral</h1>
@@ -83,40 +72,45 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Cards Principais - Agora com Sobras e Investimentos */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      {/* Removido Fatura do Cartão. Grid atualizado para 5 colunas lg:grid-cols-5 */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <SummaryCard label="Saldo Geral" value={data?.currentBalance} icon={Wallet} isLoading={isLoading} />
         <SummaryCard label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading} />
         <SummaryCard label="Despesas" value={data?.totalExpense} icon={TrendingDown} tone="danger" isLoading={isLoading} />
         <SummaryCard label="Investido" value={data?.totalInvested} icon={PiggyBank} isLoading={isLoading} />
         <SummaryCard label="Sobras" value={data?.leftovers} icon={Target} tone={data?.leftovers >= 0 ? "success" : "danger"} isLoading={isLoading} />
-        <SummaryCard label="Fatura (Cartão)" value={data?.cardsUsedLimit} icon={CreditCard} isLoading={isLoading} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Gráfico Comparativo do Mês */}
         <Card>
           <CardHeader>
             <CardTitle>Balanço do Mês</CardTitle>
           </CardHeader>
-          <CardContent className="h-72 pt-0">
+          <CardContent className="h-72 pt-4">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={comparisonData} margin={{ top: 20 }}>
+              <BarChart data={comparisonData} margin={{ top: 30 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => formatCurrency(v)} />
+                <YAxis hide /> {/* Ocultamos o eixo Y para ficar mais limpo já que temos as labels */}
                 <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
                 <Legend />
-                <Bar dataKey="Receitas" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Despesas" fill="hsl(var(--danger))" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Investimentos" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="Sobras" fill="#a855f7" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Receitas" fill="hsl(var(--success))" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="Receitas" position="top" formatter={(val: number) => formatCurrency(val)} style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                </Bar>
+                <Bar dataKey="Despesas" fill="hsl(var(--danger))" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="Despesas" position="top" formatter={(val: number) => formatCurrency(val)} style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                </Bar>
+                <Bar dataKey="Investimentos" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="Investimentos" position="top" formatter={(val: number) => formatCurrency(val)} style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                </Bar>
+                <Bar dataKey="Sobras" fill="#a855f7" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="Sobras" position="top" formatter={(val: number) => formatCurrency(val)} style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        {/* Gráfico de Evolução Anual */}
         <Card>
           <CardHeader>
             <CardTitle>Evolução Anual</CardTitle>
