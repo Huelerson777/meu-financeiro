@@ -14,7 +14,8 @@ async function bootstrap() {
   // Segurança
   app.use(helmet());
   app.enableCors({
-    origin: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+    origin: true, // O "true" libera o acesso tanto para o seu localhost quanto para os links da Vercel
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
 
