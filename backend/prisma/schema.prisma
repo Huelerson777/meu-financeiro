@@ -136,22 +136,26 @@ model RefreshToken {
 // ============================================================================
 
 model Account {
-  id             String      @id @default(uuid())
-  userId         String      @map("user_id")
-  name           String
-  type           AccountType
-  initialBalance Decimal     @default(0) @map("initial_balance") @db.Decimal(14, 2)
-  currentBalance Decimal     @default(0) @map("current_balance") @db.Decimal(14, 2)
-  color          String?
-  icon           String?
-  isArchived     Boolean     @default(false) @map("is_archived")
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+  id              String      @id @default(uuid())
+  userId          String      @map("user_id")
+  name            String
+  type            AccountType
+  initialBalance  Decimal     @default(0) @map("initial_balance") @db.Decimal(14, 2)
+  currentBalance  Decimal     @default(0) @map("current_balance") @db.Decimal(14, 2)
+  color           String?
+  icon            String?
+  isArchived      Boolean     @default(false) @map("is_archived")
+  
+  // NOVA LINHA ADICIONADA AQUI:
+  includeInDashboard Boolean  @default(true) @map("include_in_dashboard")
+  
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  user               User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions       Transaction[]
-  transfersFrom      Transfer[]    @relation("TransferFromAccount")
-  transfersTo        Transfer[]    @relation("TransferToAccount")
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+  transfersFrom   Transfer[]  @relation("TransferFromAccount")
+  transfersTo     Transfer[]  @relation("TransferToAccount")
 
   @@map("accounts")
   @@index([userId])
