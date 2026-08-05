@@ -12,7 +12,7 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  @ApiOperation({ summary: 'Cards principais: saldo, receitas, despesas, cartões, metas, sobras' })
+  @ApiOperation({ summary: 'Cards principais: saldo, receitas, despesas, investimentos, sobras' })
   @ApiQuery({ name: 'month', required: false, type: Number })
   @ApiQuery({ name: 'year', required: false, type: Number })
   getSummary(
@@ -28,19 +28,32 @@ export class DashboardController {
   }
 
   @Get('monthly-flow')
-  @ApiOperation({ summary: 'Dados de evolução para o gráfico de linha do tempo' })
+  @ApiOperation({ summary: 'Dados de evolução anual para o gráfico de área' })
   @ApiQuery({ name: 'year', required: false, type: Number })
   getMonthlyFlow(
     @CurrentUser() user: { id: string },
     @Query('year') year?: string,
   ) {
-    return this.dashboardService.getMonthlyFlow(user.id, year ? parseInt(year, 10) : undefined);
+    return this.dashboardService.getMonthlyFlow(
+      user.id,
+      year ? parseInt(year, 10) : undefined,
+    );
   }
 
   @Get('expenses-by-category')
-  @ApiOperation({ summary: 'Dados para o gráfico de gastos por categoria' })
-  getExpensesByCategory(@CurrentUser() user: { id: string }) {
-    return this.dashboardService.getExpensesByCategory(user.id);
+  @ApiOperation({ summary: 'Despesas agrupadas por categoria com nome e cor (ITEM 7)' })
+  @ApiQuery({ name: 'month', required: false, type: Number })
+  @ApiQuery({ name: 'year', required: false, type: Number })
+  getExpensesByCategory(
+    @CurrentUser() user: { id: string },
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+  ) {
+    return this.dashboardService.getExpensesByCategory(
+      user.id,
+      month ? parseInt(month, 10) : undefined,
+      year ? parseInt(year, 10) : undefined,
+    );
   }
 
   @Get('upcoming-bills')

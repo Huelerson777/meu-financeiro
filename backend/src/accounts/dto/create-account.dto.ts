@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AccountType } from '@prisma/client';
-import { IsEnum, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateAccountDto {
   @ApiProperty({ example: 'Conta Corrente Nubank' })
@@ -26,4 +26,13 @@ export class CreateAccountDto {
   @IsOptional()
   @IsString()
   icon?: string;
+
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Se falso, o saldo desta conta não entra no "Saldo Geral" do Dashboard',
+    default: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  includeInDashboard?: boolean;
 }

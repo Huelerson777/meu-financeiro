@@ -8,6 +8,7 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
+import { CategoriesService } from '../categories/categories.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 
@@ -19,6 +20,7 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
+    private categoriesService: CategoriesService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -38,6 +40,8 @@ export class AuthService {
       },
     });
 
+    await this.categoriesService.ensureDefaults(user.id);
+
     return this.issueTokens(user.id, user.email, user.role);
   }
 
@@ -55,6 +59,8 @@ export class AuthService {
     if (!user.isActive) {
       throw new UnauthorizedException('Conta desativada');
     }
+
+    await this.categoriesService.ensureDefaults(user.id);
 
     return this.issueTokens(user.id, user.email, user.role, dto.rememberMe);
   }

@@ -5,8 +5,10 @@ export interface Account {
   name: string;
   type: AccountType;
   currentBalance: number;
+  initialBalance?: number;
   color?: string;
   icon?: string;
+  includeInDashboard: boolean;
 }
 
 export interface User {
@@ -21,9 +23,15 @@ export interface DashboardSummary {
   currentBalance: number;
   totalIncome: number;
   totalExpense: number;
-  cardsUsedLimit: number;
-  cardsTotalLimit: number;
-  goalsCount: number;
+  totalInvested: number;
+  leftovers: number;
+  monthlyFlow: MonthlyFlowItem[];
+}
+
+export interface MonthlyFlowItem {
+  month: string;
+  receitas: number;
+  despesas: number;
 }
 
 export interface PaginatedResult<T> {
@@ -34,4 +42,12 @@ export interface PaginatedResult<T> {
 export interface ApiEnvelope<T> {
   success: boolean;
   data: T;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  color: string;
+  icon: string;
+  parentId?: string | null;
 }

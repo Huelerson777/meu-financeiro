@@ -22,6 +22,7 @@ export class AccountsRepository {
         currentBalance: dto.initialBalance ?? 0,
         color: dto.color,
         icon: dto.icon,
+        includeInDashboard: dto.includeInDashboard ?? true,
       },
     });
   }
