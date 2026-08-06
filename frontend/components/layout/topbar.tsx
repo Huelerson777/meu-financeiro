@@ -2,6 +2,7 @@
 
 import { Bell, Search } from 'lucide-react';
 import { ThemeToggle } from './theme-toggle';
+import { UserMenu } from './user-menu';
 import { Input } from '@/components/ui/input';
 
 export function Topbar() {
@@ -21,7 +22,7 @@ export function Topbar() {
           <span className="absolute right-2.5 top-2.5 h-1.5 w-1.5 rounded-full bg-danger" />
         </button>
         <ThemeToggle />
-        <div className="h-8 w-8 rounded-full bg-primary/20" />
+        <UserMenu />
       </div>
     </header>
   );
