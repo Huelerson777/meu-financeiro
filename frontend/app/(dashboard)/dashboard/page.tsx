@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Wallet, TrendingUp, TrendingDown, PiggyBank, Target } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Tooltip as RechartsTooltip,
@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { useDashboardSummary, useDashboardExpensesByCategory } from '@/hooks/use-dashboard';
 import { formatCurrency } from '@/utils/currency';
+import { api } from '@/services/api';
 
 // Formata valores grandes de forma compacta (R$ 5 mil, R$ 1,2 mi) para caber no eixo Y
 function formatCompactCurrency(value: number) {
@@ -33,6 +34,14 @@ const CategoryTooltip = ({ active, payload }: any) => {
 };
 
 // Label customizado para o PieChart — exibe % no centro de cada fatia
+interface AccountBalance {
+  id: string;
+  name: string;
+  currentBalance: number | string;
+  color?: string;
+  includeInDashboard: boolean;
+}
+
 const RADIAN = Math.PI / 180;
 const renderCustomizedLabel = ({
   cx, cy, midAngle, innerRadius, outerRadius, percent,
@@ -72,6 +81,34 @@ export default function DashboardPage() {
   ];
 
   // ITEM 4 — dados reais da evolução anual vindos do backend
+  // ITEM 4 — saldo por conta, independente de contar (ou não) no Saldo Geral
+  const [accounts, setAccounts] = useState<AccountBalance[]>([]);
+  const [accountsLoading, setAccountsLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .get('/accounts')
+      .then((res) => {
+        const raw = res.data;
+        const list = Array.isArray(raw) ? raw
+          : Array.isArray(raw?.data) ? raw.data
+          : Array.isArray(raw?.data?.items) ? raw.data.items
+          : Array.isArray(raw?.items) ? raw.items
+          : [];
+        setAccounts(list);
+      })
+      .catch(() => setAccounts([]))
+      .finally(() => setAccountsLoading(false));
+  }, []);
+
+  // ITEM 4 — dados formatados pro gráfico de barras de saldo por conta
+  const accountBalanceData = accounts.map((acc) => ({
+    name: acc.name,
+    saldo: Number(acc.currentBalance ?? 0),
+    color: acc.color || '#3b82f6',
+    includeInDashboard: acc.includeInDashboard,
+  }));
+
   const monthlyFlow = data?.monthlyFlow ?? [];
 
   return (
@@ -212,6 +249,56 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* ITEM 4 — Saldo por Conta (mostra todas as contas, no ou fora do Saldo Geral) */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Saldo por Conta</CardTitle>
+        </CardHeader>
+        <CardContent className="h-72 pt-4">
+          {accountsLoading ? (
+            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+              Carregando...
+            </div>
+          ) : accountBalanceData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+              Nenhuma conta cadastrada ainda.
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={accountBalanceData} margin={{ top: 30 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                <YAxis hide />
+                <RechartsTooltip
+                  formatter={(value: number, _n, item: any) => [
+                    formatCurrency(value),
+                    item?.payload?.includeInDashboard ? 'No Saldo Geral' : 'Fora do Saldo Geral',
+                  ]}
+                />
+                <Bar dataKey="saldo" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    dataKey="saldo"
+                    position="top"
+                    formatter={(val: number) => formatCurrency(val)}
+                    style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                  />
+                  {accountBalanceData.map((entry, index) => (
+                    <Cell
+                      key={`acc-cell-${index}`}
+                      fill={entry.color}
+                      fillOpacity={entry.includeInDashboard ? 1 : 0.4}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+          <p className="text-xs text-muted-foreground mt-2">
+            Contas mais claras/transparentes estão marcadas como "fora do Saldo Geral" (ajustável em Contas).
+          </p>
+        </CardContent>
+      </Card>
 
       {/* ITEM 7 — Gráfico de Despesas por Categoria */}
       <Card>
