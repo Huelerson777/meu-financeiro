@@ -11,6 +11,13 @@ import { SummaryCard } from '@/components/dashboard/summary-card';
 import { useDashboardSummary, useDashboardExpensesByCategory } from '@/hooks/use-dashboard';
 import { formatCurrency } from '@/utils/currency';
 
+// Formata valores grandes de forma compacta (R$ 5 mil, R$ 1,2 mi) para caber no eixo Y
+function formatCompactCurrency(value: number) {
+  if (Math.abs(value) >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1)}mi`;
+  if (Math.abs(value) >= 1_000) return `R$ ${(value / 1_000).toFixed(0)}mil`;
+  return `R$ ${value.toFixed(0)}`;
+}
+
 // Tooltip customizado para o gráfico de categorias
 const CategoryTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
@@ -175,7 +182,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="h-72 pt-0">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyFlow} margin={{ left: -20, top: 20 }}>
+              <AreaChart data={monthlyFlow} margin={{ left: 8, right: 8, top: 20 }}>
                 <defs>
                   <linearGradient id="colorReceitas" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} />
@@ -188,7 +195,14 @@ export default function DashboardPage() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => formatCurrency(v)} />
+                <YAxis
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  width={70}
+                  tickFormatter={(v) => formatCompactCurrency(v)}
+                />
                 <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
                 <Legend />
                 <Area type="monotone" dataKey="receitas" name="Receitas" stroke="#16a34a" fill="url(#colorReceitas)" strokeWidth={2} />

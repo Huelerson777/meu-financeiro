@@ -12,6 +12,8 @@ interface Transaction {
   date: string;
   accountId?: string;
   account?: { name: string };
+  categoryId?: string | null;
+  category?: { name: string; color: string } | null;
 }
 
 interface AccountOption {
@@ -20,9 +22,16 @@ interface AccountOption {
   type: string;
 }
 
+interface CategoryOption {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -34,6 +43,7 @@ export default function TransactionsPage() {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [accountId, setAccountId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [destinationAccountId, setDestinationAccountId] = useState('');
   const [status, setStatus] = useState<'PAID' | 'PENDING'>('PAID');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -54,16 +64,19 @@ export default function TransactionsPage() {
     try {
       setLoading(true);
 
-      const [transRes, accRes] = await Promise.all([
+      const [transRes, accRes, catRes] = await Promise.all([
         api.get('/transactions').catch(() => ({ data: [] })),
         api.get('/accounts').catch(() => ({ data: [] })),
+        api.get('/categories').catch(() => ({ data: [] })),
       ]);
 
       const transList = extractList(transRes.data);
       const accList = extractList(accRes.data);
+      const catList = extractList(catRes.data);
 
       setTransactions(transList);
       setAccounts(accList);
+      setCategories(catList);
 
       if (accList.length > 0 && !accountId && !editingId) {
         setAccountId(accList[0].id);
@@ -85,6 +98,7 @@ export default function TransactionsPage() {
     setAmount('');
     setUiType('EXPENSE');
     setStatus('PAID');
+    setCategoryId('');
     setDestinationAccountId('');
     setDate(new Date().toISOString().split('T')[0]);
     if (accounts.length > 0) setAccountId(accounts[0].id);
@@ -99,6 +113,7 @@ export default function TransactionsPage() {
     setStatus(t.status as any);
     setDate(new Date(t.date).toISOString().split('T')[0]);
     if (t.accountId) setAccountId(t.accountId);
+    setCategoryId(t.categoryId || '');
     setIsModalOpen(true);
   };
 
@@ -153,6 +168,7 @@ export default function TransactionsPage() {
           amount: parsedAmount,
           type: uiType,
           accountId,
+          categoryId: categoryId || undefined,
           status,
           date: isoDate,
         };
@@ -240,7 +256,17 @@ export default function TransactionsPage() {
                         {isIncome ? '↑ Entrada' : isTransfer ? '⇄ Transf.' : '↓ Saída'}
                       </span>
                     </td>
-                    <td className="p-4 dark:text-gray-200 font-medium">{t.description}</td>
+                    <td className="p-4 dark:text-gray-200 font-medium">
+                      {t.description}
+                      {t.category && (
+                        <span
+                          className="ml-2 inline-flex items-center text-xs font-normal px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: `${t.category.color}20`, color: t.category.color }}
+                        >
+                          {t.category.name}
+                        </span>
+                      )}
+                    </td>
                     <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">{t.account?.name || '-'}</td>
                     <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
                     <td className="p-4">
@@ -335,6 +361,29 @@ export default function TransactionsPage() {
                 <label className="block text-sm font-medium dark:text-gray-300 mb-1">Descrição</label>
                 <input type="text" placeholder={uiType === 'INVESTMENT' ? 'Ex: Aporte CDB...' : 'Ex: Mercado...'} value={description} onChange={(e) => setDescription(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white" />
               </div>
+
+              {uiType !== 'TRANSFER' && uiType !== 'INVESTMENT' && (
+                <div>
+                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">
+                    Categoria {uiType === 'EXPENSE' && <span className="text-xs font-normal text-gray-400">(usada no gráfico do Dashboard)</span>}
+                  </label>
+                  <select
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white"
+                  >
+                    <option value="">Sem categoria</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                  {categories.length === 0 && (
+                    <p className="text-xs text-amber-500 mt-1">
+                      Nenhuma categoria encontrada. Saia e entre novamente na sua conta para criar as categorias padrão.
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

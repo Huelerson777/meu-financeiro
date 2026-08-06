@@ -1,6 +1,7 @@
-import { Controller, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { InvestmentsService } from './investments.service';
 
 @ApiTags('Investments')
@@ -10,5 +11,9 @@ import { InvestmentsService } from './investments.service';
 export class InvestmentsController {
   constructor(private readonly investmentsService: InvestmentsService) {}
 
-  // TODO: endpoints CRUD seguindo o padrão de AccountsController
+  @Get('contributions')
+  @ApiOperation({ summary: 'Histórico de aportes (transferências para contas de investimento)' })
+  getContributions(@CurrentUser() user: { id: string }) {
+    return this.investmentsService.getContributions(user.id);
+  }
 }

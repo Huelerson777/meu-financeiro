@@ -9,7 +9,6 @@ import {
   CreditCard,
   TrendingUp,
   Target,
-  FileBarChart,
   Settings,
   Wallet,
 } from 'lucide-react';
@@ -22,7 +21,6 @@ const navItems = [
   { href: '/cards', label: 'Cartões', icon: CreditCard },
   { href: '/investments', label: 'Investimentos', icon: TrendingUp },
   { href: '/goals', label: 'Metas', icon: Target },
-  { href: '/reports', label: 'Relatórios', icon: FileBarChart },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
