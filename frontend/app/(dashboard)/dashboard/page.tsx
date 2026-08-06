@@ -315,56 +315,42 @@ export default function DashboardPage() {
               Nenhuma despesa com categoria registrada neste mês.
             </div>
           ) : (
-            <div className="flex flex-col lg:flex-row items-center gap-6">
-              {/* Pizza */}
-              <div className="w-full lg:w-1/2 h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={categoryData}
-                      dataKey="total"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={110}
-                      labelLine={false}
-                      label={renderCustomizedLabel}
-                    >
-                      {categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip content={<CategoryTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Legenda detalhada com valores */}
-              <div className="w-full lg:w-1/2 flex flex-col gap-2">
-                {categoryData.map((cat, i) => {
-                  const totalGeral = categoryData.reduce((s, c) => s + c.total, 0);
-                  const pct = totalGeral > 0 ? ((cat.total / totalGeral) * 100).toFixed(1) : '0';
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <span
-                        className="flex-shrink-0 w-3 h-3 rounded-full"
-                        style={{ backgroundColor: cat.color }}
-                      />
-                      <span className="flex-1 text-sm text-gray-700 dark:text-gray-300 truncate">
-                        {cat.name}
-                      </span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500 w-10 text-right">
-                        {pct}%
-                      </span>
-                      <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 w-24 text-right">
-                        {formatCurrency(cat.total)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+// Gráfico de barras horizontais, ordenado do maior pro menor gasto,
+  // com o valor exato escrito no final de cada barra (estilo planilha)
+  <div style={{ height: Math.max(64 * categoryData.length, 240) }}>
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart
+        layout="vertical"
+        data={[...categoryData].sort((a, b) => b.total - a.total)}
+        margin={{ left: 20, right: 60 }}
+      >
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+        <XAxis type="number" hide />
+        <YAxis
+          type="category"
+          dataKey="name"
+          width={150}
+          stroke="hsl(var(--muted-foreground))"
+          fontSize={12}
+          tickLine={false}
+          axisLine={false}
+        />
+        <RechartsTooltip content={<CategoryTooltip />} />
+        <Bar dataKey="total" radius={[0, 4, 4, 0]} barSize={22}>
+          {categoryData.map((entry, index) => (
+            <Cell key={`cat-cell-${index}`} fill={entry.color} />
+          ))}
+          <LabelList
+            dataKey="total"
+            position="right"
+            formatter={(val: number) => formatCurrency(val)}
+            style={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 600 }}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  </div>
+)}
         </CardContent>
       </Card>
     </div>
