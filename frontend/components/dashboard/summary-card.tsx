@@ -10,11 +10,15 @@ interface SummaryCardProps {
   icon: LucideIcon;
   isLoading?: boolean;
   tone?: 'default' | 'success' | 'danger';
+  onClick?: () => void;
 }
 
-export function SummaryCard({ label, value, icon: Icon, isLoading, tone = 'default' }: SummaryCardProps) {
+export function SummaryCard({ label, value, icon: Icon, isLoading, tone = 'default', onClick }: SummaryCardProps) {
   return (
-    <Card className="transition-theme hover:shadow-md">
+    <Card
+      className={cn('transition-theme hover:shadow-md', onClick && 'cursor-pointer hover:border-primary/40')}
+      onClick={onClick}
+    >
       <CardContent className="flex items-start justify-between p-5">
         <div className="flex flex-col gap-1.5">
           <span className="text-sm text-muted-foreground">{label}</span>

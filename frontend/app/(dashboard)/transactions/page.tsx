@@ -14,6 +14,7 @@ interface Transaction {
   account?: { name: string };
   categoryId?: string | null;
   category?: { name: string; color: string } | null;
+  transfer?: { id: string; toId: string; toAccount?: { name: string; type: string } } | null;
 }
 
 interface AccountOption {
@@ -37,6 +38,7 @@ export default function TransactionsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTransferId, setEditingTransferId] = useState<string | null>(null);
 
   // Form State
   const [uiType, setUiType] = useState<'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT'>('EXPENSE');
@@ -90,10 +92,12 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleOpenCreate = () => {
     setEditingId(null);
+    setEditingTransferId(null);
     setDescription('');
     setAmount('');
     setUiType('EXPENSE');
@@ -106,10 +110,33 @@ export default function TransactionsPage() {
   };
 
   const handleEdit = (t: Transaction) => {
+    if (t.type === 'TRANSFER') {
+      if (!t.transfer?.id) {
+        alert(
+          'Esta movimentação foi criada antes da atualização do sistema e não guarda o vínculo ' +
+          'necessário para edição. Você pode excluí-la e lançar novamente.'
+        );
+        return;
+      }
+      setEditingId(t.id);
+      setEditingTransferId(t.transfer.id);
+      setUiType(t.transfer.toAccount?.type === 'INVESTMENT' ? 'INVESTMENT' : 'TRANSFER');
+      setDescription(t.description);
+      setAmount(t.amount.toString());
+      setStatus('PAID');
+      setDate(new Date(t.date).toISOString().split('T')[0]);
+      if (t.accountId) setAccountId(t.accountId);
+      setDestinationAccountId(t.transfer.toId);
+      setCategoryId('');
+      setIsModalOpen(true);
+      return;
+    }
+
     setEditingId(t.id);
+    setEditingTransferId(null);
     setDescription(t.description);
     setAmount(t.amount.toString());
-    setUiType(t.type === 'TRANSFER' ? 'TRANSFER' : t.type); 
+    setUiType(t.type);
     setStatus(t.status as any);
     setDate(new Date(t.date).toISOString().split('T')[0]);
     if (t.accountId) setAccountId(t.accountId);
@@ -117,10 +144,21 @@ export default function TransactionsPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (id: string, description: string) => {
-    if (!window.confirm(`Tem certeza que deseja excluir a transação "${description}"?`)) return;
+  const handleDelete = async (t: Transaction) => {
+    if (!window.confirm(`Tem certeza que deseja excluir a transação "${t.description}"?`)) return;
     try {
-      await api.delete(`/transactions/${id}`);
+      if (t.type === 'TRANSFER') {
+        if (!t.transfer?.id) {
+          alert(
+            'Esta movimentação foi criada antes da atualização do sistema e não guarda o vínculo ' +
+            'necessário para exclusão automática do saldo. Ajuste o saldo manualmente se precisar removê-la.'
+          );
+          return;
+        }
+        await api.delete(`/accounts/transfer/${t.transfer.id}`);
+      } else {
+        await api.delete(`/transactions/${t.id}`);
+      }
       fetchData();
     } catch (err: any) {
       alert('Erro ao excluir transação.');
@@ -160,6 +198,12 @@ export default function TransactionsPage() {
           description: description || (uiType === 'INVESTMENT' ? 'Aporte de Investimento' : 'Transferência entre contas'),
         };
 
+        if (editingTransferId) {
+          await api.patch(`/accounts/transfer/${editingTransferId}`, { ...transferPayload, date: isoDate });
+        } else {
+          await api.post('/accounts/transfer', transferPayload);
+        }
+
         console.log("Enviando Transferência:", transferPayload);
         await api.post('/accounts/transfer', transferPayload);
       } else {
@@ -182,6 +226,7 @@ export default function TransactionsPage() {
 
       setIsModalOpen(false);
       setEditingId(null);
+      setEditingTransferId(null);
       fetchData();
     } catch (err: any) {
       // LOGS DETALHADOS ADICIONADOS AQUI 👇
@@ -287,12 +332,10 @@ export default function TransactionsPage() {
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {!isTransfer && ( 
-                          <button onClick={() => handleEdit(t)} className="text-blue-500 hover:text-blue-700 text-sm font-medium">
-                            Editar
-                          </button>
-                        )}
-                        <button onClick={() => handleDelete(t.id, t.description)} className="text-red-500 hover:text-red-700 text-sm font-medium">
+                        <button onClick={() => handleEdit(t)} className="text-blue-500 hover:text-blue-700 text-sm font-medium">
+                          Editar
+                        </button>
+                        <button onClick={() => handleDelete(t)} className="text-red-500 hover:text-red-700 text-sm font-medium">
                           Excluir
                         </button>
                       </div>

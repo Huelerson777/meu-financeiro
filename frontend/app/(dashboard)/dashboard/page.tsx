@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Wallet, TrendingUp, TrendingDown, PiggyBank, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, PiggyBank, Target } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Tooltip as RechartsTooltip,
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend, LabelList,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SummaryCard } from '@/components/dashboard/summary-card';
+import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
 import { useDashboardSummary, useDashboardExpensesByCategory } from '@/hooks/use-dashboard';
 import { formatCurrency } from '@/utils/currency';
 import { api } from '@/services/api';
@@ -85,6 +86,37 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState<AccountBalance[]>([]);
   const [accountsLoading, setAccountsLoading] = useState(true);
 
+  // ITEM 1 — modal de detalhamento ao clicar em Receitas/Despesas
+  const [detailModal, setDetailModal] = useState<{ type: 'INCOME' | 'EXPENSE' } | null>(null);
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
+
+  const openDetail = async (type: 'INCOME' | 'EXPENSE') => {
+    setDetailModal({ type });
+    setTransactionsLoading(true);
+    try {
+      const res = await api.get('/transactions');
+      const raw = res.data;
+      const list = Array.isArray(raw) ? raw
+        : Array.isArray(raw?.data) ? raw.data
+        : [];
+      setAllTransactions(list);
+    } catch {
+      setAllTransactions([]);
+    } finally {
+      setTransactionsLoading(false);
+    }
+  };
+
+  // Filtra só as transações do tipo e do mês/ano selecionados no Dashboard
+  const detailTransactions = detailModal
+    ? allTransactions.filter((t) => {
+        if (t.type !== detailModal.type) return false;
+        const d = new Date(t.date);
+        return d.getMonth() + 1 === selectedMonth && d.getFullYear() === selectedYear;
+      })
+    : [];
+
   useEffect(() => {
     api
       .get('/accounts')
@@ -146,10 +178,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ITEM 3 — sem card de Fatura. 5 cards: Saldo, Receitas, Despesas, Investido, Sobras */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <SummaryCard label="Saldo Geral" value={data?.currentBalance} icon={Wallet} isLoading={isLoading} />
-        <SummaryCard label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading} />
-        <SummaryCard label="Despesas" value={data?.totalExpense} icon={TrendingDown} tone="danger" isLoading={isLoading} />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <SummaryCard label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading} onClick={() => openDetail('INCOME')} />
+        <SummaryCard label="Despesas" value={data?.totalExpense} icon={TrendingDown} tone="danger" isLoading={isLoading} onClick={() => openDetail('EXPENSE')} />
         <SummaryCard label="Investido" value={data?.totalInvested} icon={PiggyBank} isLoading={isLoading} />
         <SummaryCard
           label="Sobras"
@@ -229,6 +260,10 @@ export default function DashboardPage() {
                     <stop offset="5%" stopColor="#dc2626" stopOpacity={0.3} />
                     <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
                   </linearGradient>
+                  <linearGradient id="colorInvestido" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
@@ -244,6 +279,7 @@ export default function DashboardPage() {
                 <Legend />
                 <Area type="monotone" dataKey="receitas" name="Receitas" stroke="#16a34a" fill="url(#colorReceitas)" strokeWidth={2} />
                 <Area type="monotone" dataKey="despesas" name="Despesas" stroke="#dc2626" fill="url(#colorDespesas)" strokeWidth={2} />
+                <Area type="monotone" dataKey="investido" name="Investido" stroke="#3b82f6" fill="url(#colorInvestido)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
@@ -295,8 +331,8 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           )}
           <p className="text-xs text-muted-foreground mt-2">
-            Contas mais claras/transparentes estão marcadas como "fora do Saldo Geral" (ajustável em Contas).
-          </p>
+  Contas mais claras/transparentes estão marcadas como &quot;fora do Saldo Geral&quot; (ajustável em Contas).
+</p>
         </CardContent>
       </Card>
 
@@ -353,6 +389,16 @@ export default function DashboardPage() {
 )}
         </CardContent>
       </Card>
+
+      <TransactionDetailModal
+        open={!!detailModal}
+        onClose={() => setDetailModal(null)}
+        title={detailModal?.type === 'INCOME' ? 'Receitas' : 'Despesas'}
+        monthLabel={`${['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'][selectedMonth - 1]} de ${selectedYear}`}
+        transactions={detailTransactions}
+        loading={transactionsLoading}
+        tone={detailModal?.type === 'INCOME' ? 'success' : 'danger'}
+      />
     </div>
   );
 }
