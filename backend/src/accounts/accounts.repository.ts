@@ -114,10 +114,80 @@ export class AccountsRepository {
           amount,
           status: 'PAID',
           date: new Date(),
+          transferId: transfer.id,
         },
       });
 
       return transfer;
+    });
+  }
+
+  findTransferById(id: string) {
+    return this.prisma.transfer.findUnique({
+      where: { id },
+      include: { fromAccount: true, toAccount: true },
+    });
+  }
+
+  /**
+   * Edita uma transferência (ou aporte de investimento) já existente,
+   * revertendo o efeito antigo nas duas contas e aplicando o novo —
+   * mesmo que a conta de origem/destino tenha mudado.
+   */
+  updateTransfer(params: {
+    id: string;
+    oldFromId: string;
+    oldToId: string;
+    oldAmount: number;
+    newFromId: string;
+    newToId: string;
+    newAmount: number;
+    description?: string;
+    date?: Date;
+  }) {
+    const { id, oldFromId, oldToId, oldAmount, newFromId, newToId, newAmount, description, date } = params;
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Reverte o efeito antigo
+      await tx.account.update({ where: { id: oldFromId }, data: { currentBalance: { increment: oldAmount } } });
+      await tx.account.update({ where: { id: oldToId }, data: { currentBalance: { decrement: oldAmount } } });
+
+      // 2. Aplica o efeito novo (pode ser em contas diferentes)
+      await tx.account.update({ where: { id: newFromId }, data: { currentBalance: { decrement: newAmount } } });
+      await tx.account.update({ where: { id: newToId }, data: { currentBalance: { increment: newAmount } } });
+
+      // 3. Atualiza o registro da transferência
+      const updatedTransfer = await tx.transfer.update({
+        where: { id },
+        data: { fromId: newFromId, toId: newToId, amount: newAmount, description, date },
+      });
+
+      // 4. Atualiza a transação visual vinculada (se existir)
+      await tx.transaction.updateMany({
+        where: { transferId: id },
+        data: {
+          accountId: newFromId,
+          amount: newAmount,
+          description: description || 'Transferência entre contas',
+          date: date ?? undefined,
+        },
+      });
+
+      return updatedTransfer;
+    });
+  }
+
+  /**
+   * Exclui uma transferência: reverte o saldo nas duas contas e apaga o
+   * registro (a transação visual vinculada é apagada em cascata).
+   */
+  deleteTransfer(params: { id: string; fromId: string; toId: string; amount: number }) {
+    const { id, fromId, toId, amount } = params;
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.account.update({ where: { id: fromId }, data: { currentBalance: { increment: amount } } });
+      await tx.account.update({ where: { id: toId }, data: { currentBalance: { decrement: amount } } });
+      await tx.transfer.delete({ where: { id } });
     });
   }
 

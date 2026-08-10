@@ -3,6 +3,7 @@ import { AccountsRepository } from './accounts.repository';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
+import { UpdateTransferDto } from './dto/update-transfer.dto';
 import { PaginationQueryDto, PaginatedResult } from '../common/dto/pagination-query.dto';
 
 @Injectable()
@@ -72,6 +73,49 @@ export class AccountsService {
       toAccountId: dto.toAccountId,
       amount: dto.amount,
       description: dto.description,
+    });
+  }
+
+  async updateTransfer(id: string, userId: string, dto: UpdateTransferDto) {
+    if (dto.fromAccountId === dto.toAccountId) {
+      throw new BadRequestException('A conta de origem e destino devem ser diferentes');
+    }
+
+    const existing = await this.accountsRepository.findTransferById(id);
+    if (!existing) throw new NotFoundException('Transferência não encontrada');
+    if (existing.fromAccount.userId !== userId || existing.toAccount.userId !== userId) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
+    // Garante que as novas contas escolhidas também são suas
+    await this.ensureOwnership(dto.fromAccountId, userId);
+    await this.ensureOwnership(dto.toAccountId, userId);
+
+    return this.accountsRepository.updateTransfer({
+      id,
+      oldFromId: existing.fromId,
+      oldToId: existing.toId,
+      oldAmount: Number(existing.amount),
+      newFromId: dto.fromAccountId,
+      newToId: dto.toAccountId,
+      newAmount: dto.amount,
+      description: dto.description,
+      date: dto.date ? new Date(dto.date) : undefined,
+    });
+  }
+
+  async removeTransfer(id: string, userId: string) {
+    const existing = await this.accountsRepository.findTransferById(id);
+    if (!existing) throw new NotFoundException('Transferência não encontrada');
+    if (existing.fromAccount.userId !== userId || existing.toAccount.userId !== userId) {
+      throw new ForbiddenException('Acesso negado');
+    }
+
+    return this.accountsRepository.deleteTransfer({
+      id,
+      fromId: existing.fromId,
+      toId: existing.toId,
+      amount: Number(existing.amount),
     });
   }
 

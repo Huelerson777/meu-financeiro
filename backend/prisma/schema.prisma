@@ -145,10 +145,7 @@ model Account {
   color           String?
   icon            String?
   isArchived      Boolean     @default(false) @map("is_archived")
-  
-  // NOVA LINHA ADICIONADA AQUI:
   includeInDashboard Boolean  @default(true) @map("include_in_dashboard")
-  
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
@@ -162,16 +159,17 @@ model Account {
 }
 
 model Transfer {
-  id         String   @id @default(uuid())
-  fromId     String   @map("from_account_id")
-  toId       String   @map("to_account_id")
-  amount     Decimal  @db.Decimal(14, 2)
+  id          String   @id @default(uuid())
+  fromId      String   @map("from_account_id")
+  toId        String   @map("to_account_id")
+  amount      Decimal  @db.Decimal(14, 2)
   description String?
-  date       DateTime @default(now())
-  createdAt  DateTime @default(now()) @map("created_at")
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now()) @map("created_at")
 
   fromAccount Account @relation("TransferFromAccount", fields: [fromId], references: [id], onDelete: Cascade)
   toAccount   Account @relation("TransferToAccount", fields: [toId], references: [id], onDelete: Cascade)
+  transaction Transaction?
 
   @@map("transfers")
   @@index([fromId])
@@ -221,8 +219,10 @@ model Transaction {
   isRecurring       Boolean               @default(false) @map("is_recurring")
   recurrenceFreq    RecurrenceFrequency?  @map("recurrence_frequency")
 
-  isInstallment     Boolean  @default(false) @map("is_installment")
-  installmentGroupId String? @map("installment_group_id")
+  isInstallment       Boolean @default(false) @map("is_installment")
+  installmentGroupId  String? @map("installment_group_id")
+
+  transferId String? @unique @map("transfer_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -231,6 +231,7 @@ model Transaction {
   account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
   category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   card         Card?         @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  transfer     Transfer?     @relation(fields: [transferId], references: [id], onDelete: Cascade)
   installments Installment[]
 
   @@map("transactions")
@@ -295,7 +296,7 @@ model Investment {
   averagePrice Decimal            @map("average_price") @db.Decimal(14, 2)
   currentPrice Decimal            @map("current_price") @db.Decimal(14, 2)
   createdAt    DateTime           @default(now()) @map("created_at")
-  updatedAt    DateTime            @updatedAt @map("updated_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

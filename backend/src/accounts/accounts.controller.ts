@@ -17,6 +17,7 @@ import { AccountsService } from './accounts.service';
 import { CreateAccountDto } from './dto/create-account.dto';
 import { UpdateAccountDto } from './dto/update-account.dto';
 import { CreateTransferDto } from './dto/create-transfer.dto';
+import { UpdateTransferDto } from './dto/update-transfer.dto';
 
 @ApiTags('Accounts')
 @ApiBearerAuth()
@@ -63,9 +64,25 @@ export class AccountsController {
     return this.accountsService.archive(id, user.id);
   }
 
-  @Post('transfer')
+ @Post('transfer')
   @ApiOperation({ summary: 'Transfere valor entre duas contas do usuário' })
   transfer(@CurrentUser() user: { id: string }, @Body() dto: CreateTransferDto) {
     return this.accountsService.transfer(user.id, dto);
+  }
+
+  @Patch('transfer/:id')
+  @ApiOperation({ summary: 'Edita uma transferência/investimento já existente' })
+  updateTransfer(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Body() dto: UpdateTransferDto,
+  ) {
+    return this.accountsService.updateTransfer(id, user.id, dto);
+  }
+
+  @Delete('transfer/:id')
+  @ApiOperation({ summary: 'Exclui uma transferência/investimento, revertendo o saldo' })
+  removeTransfer(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.accountsService.removeTransfer(id, user.id);
   }
 }

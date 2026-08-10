@@ -97,10 +97,22 @@ export class DashboardService {
       select: { amount: true, type: true, date: true },
     });
 
+    // ITEM 5 — aportes do ano inteiro, para plotar "Investido" mês a mês
+    const yearTransfersToInvestment = investmentAccountIds.length > 0
+      ? await this.prisma.transfer.findMany({
+          where: {
+            toId: { in: investmentAccountIds },
+            date: { gte: yearStart, lt: yearEnd },
+          },
+          select: { amount: true, date: true },
+        })
+      : [];
+
     const monthlyFlow = Array.from({ length: 12 }, (_, i) => ({
       month: new Date(targetYear, i).toLocaleString('pt-BR', { month: 'short' }),
       receitas: 0,
       despesas: 0,
+      investido: 0,
     }));
 
     yearTransactions.forEach((t) => {
@@ -108,6 +120,11 @@ export class DashboardService {
       const val = Number(t.amount);
       if (t.type === 'INCOME') monthlyFlow[mIndex].receitas += val;
       if (t.type === 'EXPENSE') monthlyFlow[mIndex].despesas += val;
+    });
+
+    yearTransfersToInvestment.forEach((t) => {
+      const mIndex = t.date.getMonth();
+      monthlyFlow[mIndex].investido += Number(t.amount);
     });
 
     return {

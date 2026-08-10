@@ -16,6 +16,13 @@ export class TransactionsService {
       include: {
         account: { select: { name: true } },
         category: { select: { name: true, color: true } },
+        transfer: {
+          select: {
+            id: true,
+            toId: true,
+            toAccount: { select: { name: true, type: true } },
+          },
+        },
       },
       orderBy: { date: 'desc' },
     });
