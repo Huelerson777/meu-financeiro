@@ -27,18 +27,26 @@ export class DashboardService {
         where: { userId, isArchived: false, includeInDashboard: true },
         _sum: { currentBalance: true },
       }),
-      // Receitas do mês
+      // Receitas do mês — só de contas "No controle de saldo" (includeInDashboard)
       this.prisma.transaction.aggregate({
-        where: { userId, type: 'INCOME', status: 'PAID', date: dateFilter },
+        where: {
+          userId,
+          type: 'INCOME',
+          status: 'PAID',
+          date: dateFilter,
+          account: { includeInDashboard: true },
+        },
         _sum: { amount: true },
       }),
-      // Despesas do mês (exclui aportes em contas de investimento)
+      // Despesas do mês — de contas "No controle de saldo" OU compras de cartão
+      // (que não têm conta vinculada, só cardId, e sempre contam)
       this.prisma.transaction.aggregate({
         where: {
           userId,
           type: 'EXPENSE',
           status: 'PAID',
           date: dateFilter,
+          OR: [{ account: { includeInDashboard: true } }, { accountId: null }],
           // Se há contas de investimento, exclui despesas nessas contas (aportes)
           ...(investmentAccountIds.length > 0
             ? { NOT: { accountId: { in: investmentAccountIds } } }
@@ -54,11 +62,6 @@ export class DashboardService {
               type: 'TRANSFER',
               status: 'PAID',
               date: dateFilter,
-              // A transferência visual é gerada na conta de ORIGEM (debita) —
-              // portanto somamos o que foi debitado de contas NÃO-investimento
-              // e creditado em contas de investimento.
-              // O Transfer visual fica na fromAccount, então filtramos pelo valor
-              // que chegou nas contas de investimento via transfers.
             },
             _sum: { amount: true },
           })
@@ -93,26 +96,15 @@ export class DashboardService {
         status: 'PAID',
         date: { gte: yearStart, lt: yearEnd },
         type: { in: ['INCOME', 'EXPENSE'] },
+        OR: [{ account: { includeInDashboard: true } }, { accountId: null }],
       },
       select: { amount: true, type: true, date: true },
     });
-
-    // ITEM 5 — aportes do ano inteiro, para plotar "Investido" mês a mês
-    const yearTransfersToInvestment = investmentAccountIds.length > 0
-      ? await this.prisma.transfer.findMany({
-          where: {
-            toId: { in: investmentAccountIds },
-            date: { gte: yearStart, lt: yearEnd },
-          },
-          select: { amount: true, date: true },
-        })
-      : [];
 
     const monthlyFlow = Array.from({ length: 12 }, (_, i) => ({
       month: new Date(targetYear, i).toLocaleString('pt-BR', { month: 'short' }),
       receitas: 0,
       despesas: 0,
-      investido: 0,
     }));
 
     yearTransactions.forEach((t) => {
@@ -120,11 +112,6 @@ export class DashboardService {
       const val = Number(t.amount);
       if (t.type === 'INCOME') monthlyFlow[mIndex].receitas += val;
       if (t.type === 'EXPENSE') monthlyFlow[mIndex].despesas += val;
-    });
-
-    yearTransfersToInvestment.forEach((t) => {
-      const mIndex = t.date.getMonth();
-      monthlyFlow[mIndex].investido += Number(t.amount);
     });
 
     return {
@@ -149,6 +136,7 @@ export class DashboardService {
         status: 'PAID',
         date: { gte: yearStart, lt: yearEnd },
         type: { in: ['INCOME', 'EXPENSE'] },
+        OR: [{ account: { includeInDashboard: true } }, { accountId: null }],
       },
       select: { amount: true, type: true, date: true },
     });
@@ -185,6 +173,7 @@ export class DashboardService {
         status: 'PAID',
         date: { gte: startDate, lt: endDate },
         categoryId: { not: null },
+        OR: [{ account: { includeInDashboard: true } }, { accountId: null }],
       },
       _sum: { amount: true },
       orderBy: { _sum: { amount: 'desc' } },

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { TrendingUp, TrendingDown, PiggyBank, Target } from 'lucide-react';
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, Tooltip as RechartsTooltip,
+  AreaChart, Area, BarChart, Bar, Cell, Tooltip as RechartsTooltip,
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend, LabelList,
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,30 +34,6 @@ const CategoryTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-// Label customizado para o PieChart — exibe % no centro de cada fatia
-interface AccountBalance {
-  id: string;
-  name: string;
-  currentBalance: number | string;
-  color?: string;
-  includeInDashboard: boolean;
-}
-
-const RADIAN = Math.PI / 180;
-const renderCustomizedLabel = ({
-  cx, cy, midAngle, innerRadius, outerRadius, percent,
-}: any) => {
-  if (percent < 0.04) return null; // não renderiza label em fatias muito pequenas
-  const radius = innerRadius + (outerRadius - innerRadius) * 0.55;
-  const x = cx + radius * Math.cos(-midAngle * RADIAN);
-  const y = cy + radius * Math.sin(-midAngle * RADIAN);
-  return (
-    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={11} fontWeight={600}>
-      {`${(percent * 100).toFixed(0)}%`}
-    </text>
-  );
-};
-
 export default function DashboardPage() {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
@@ -80,11 +56,6 @@ export default function DashboardPage() {
       Sobras: Math.max(data?.leftovers ?? 0, 0), // não plota barra negativa
     },
   ];
-
-  // ITEM 4 — dados reais da evolução anual vindos do backend
-  // ITEM 4 — saldo por conta, independente de contar (ou não) no Saldo Geral
-  const [accounts, setAccounts] = useState<AccountBalance[]>([]);
-  const [accountsLoading, setAccountsLoading] = useState(true);
 
   // ITEM 1 — modal de detalhamento ao clicar em Receitas/Despesas
   const [detailModal, setDetailModal] = useState<{ type: 'INCOME' | 'EXPENSE' } | null>(null);
@@ -116,30 +87,6 @@ export default function DashboardPage() {
         return d.getMonth() + 1 === selectedMonth && d.getFullYear() === selectedYear;
       })
     : [];
-
-  useEffect(() => {
-    api
-      .get('/accounts')
-      .then((res) => {
-        const raw = res.data;
-        const list = Array.isArray(raw) ? raw
-          : Array.isArray(raw?.data) ? raw.data
-          : Array.isArray(raw?.data?.items) ? raw.data.items
-          : Array.isArray(raw?.items) ? raw.items
-          : [];
-        setAccounts(list);
-      })
-      .catch(() => setAccounts([]))
-      .finally(() => setAccountsLoading(false));
-  }, []);
-
-  // ITEM 4 — dados formatados pro gráfico de barras de saldo por conta
-  const accountBalanceData = accounts.map((acc) => ({
-    name: acc.name,
-    saldo: Number(acc.currentBalance ?? 0),
-    color: acc.color || '#3b82f6',
-    includeInDashboard: acc.includeInDashboard,
-  }));
 
   const monthlyFlow = data?.monthlyFlow ?? [];
 
@@ -177,7 +124,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ITEM 3 — sem card de Fatura. 5 cards: Saldo, Receitas, Despesas, Investido, Sobras */}
+      {/* Sem card de Fatura e sem Saldo Geral. 4 cards: Receitas, Despesas, Investido, Sobras */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryCard label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading} onClick={() => openDetail('INCOME')} />
         <SummaryCard label="Despesas" value={data?.totalExpense} icon={TrendingDown} tone="danger" isLoading={isLoading} onClick={() => openDetail('EXPENSE')} />
@@ -286,56 +233,6 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* ITEM 4 — Saldo por Conta (mostra todas as contas, no ou fora do Saldo Geral) */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Saldo por Conta</CardTitle>
-        </CardHeader>
-        <CardContent className="h-72 pt-4">
-          {accountsLoading ? (
-            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-              Carregando...
-            </div>
-          ) : accountBalanceData.length === 0 ? (
-            <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-              Nenhuma conta cadastrada ainda.
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={accountBalanceData} margin={{ top: 30 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis hide />
-                <RechartsTooltip
-                  formatter={(value: number, _n, item: any) => [
-                    formatCurrency(value),
-                    item?.payload?.includeInDashboard ? 'No Saldo Geral' : 'Fora do Saldo Geral',
-                  ]}
-                />
-                <Bar dataKey="saldo" radius={[4, 4, 0, 0]}>
-                  <LabelList
-                    dataKey="saldo"
-                    position="top"
-                    formatter={(val: number) => formatCurrency(val)}
-                    style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                  />
-                  {accountBalanceData.map((entry, index) => (
-                    <Cell
-                      key={`acc-cell-${index}`}
-                      fill={entry.color}
-                      fillOpacity={entry.includeInDashboard ? 1 : 0.4}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-          <p className="text-xs text-muted-foreground mt-2">
-  Contas mais claras/transparentes estão marcadas como &quot;fora do Saldo Geral&quot; (ajustável em Contas).
-</p>
-        </CardContent>
-      </Card>
-
       {/* ITEM 7 — Gráfico de Despesas por Categoria */}
       <Card>
         <CardHeader>
@@ -351,42 +248,42 @@ export default function DashboardPage() {
               Nenhuma despesa com categoria registrada neste mês.
             </div>
           ) : (
-// Gráfico de barras horizontais, ordenado do maior pro menor gasto,
-  // com o valor exato escrito no final de cada barra (estilo planilha)
-  <div style={{ height: Math.max(64 * categoryData.length, 240) }}>
-    <ResponsiveContainer width="100%" height="100%">
-      <BarChart
-        layout="vertical"
-        data={[...categoryData].sort((a, b) => b.total - a.total)}
-        margin={{ left: 20, right: 60 }}
-      >
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-        <XAxis type="number" hide />
-        <YAxis
-          type="category"
-          dataKey="name"
-          width={150}
-          stroke="hsl(var(--muted-foreground))"
-          fontSize={12}
-          tickLine={false}
-          axisLine={false}
-        />
-        <RechartsTooltip content={<CategoryTooltip />} />
-        <Bar dataKey="total" radius={[0, 4, 4, 0]} barSize={22}>
-          {categoryData.map((entry, index) => (
-            <Cell key={`cat-cell-${index}`} fill={entry.color} />
-          ))}
-          <LabelList
-            dataKey="total"
-            position="right"
-            formatter={(val: number) => formatCurrency(val)}
-            style={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 600 }}
-          />
-        </Bar>
-      </BarChart>
-    </ResponsiveContainer>
-  </div>
-)}
+            // Gráfico de barras horizontais, ordenado do maior pro menor gasto,
+            // com o valor exato escrito no final de cada barra (estilo planilha)
+            <div style={{ height: Math.max(64 * categoryData.length, 240) }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={[...categoryData].sort((a, b) => b.total - a.total)}
+                  margin={{ left: 20, right: 60 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={150}
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <RechartsTooltip content={<CategoryTooltip />} />
+                  <Bar dataKey="total" radius={[0, 4, 4, 0]} barSize={22}>
+                    {categoryData.map((entry, index) => (
+                      <Cell key={`cat-cell-${index}`} fill={entry.color} />
+                    ))}
+                    <LabelList
+                      dataKey="total"
+                      position="right"
+                      formatter={(val: number) => formatCurrency(val)}
+                      style={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 600 }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </CardContent>
       </Card>
 
