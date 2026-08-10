@@ -104,11 +104,14 @@ export class TransactionsService {
    */
   private async applyBalanceEffect(
     tx: TxClient,
-    accountId: string,
+    accountId: string | null | undefined,
     type: TransactionType,
     amount: number,
     direction: 1 | -1,
   ) {
+    // Compras de cartão não têm conta vinculada (só cartão) — nada a fazer aqui
+    if (!accountId) return;
+
     if (type === 'INCOME') {
       await tx.account.update({
         where: { id: accountId },

@@ -206,7 +206,7 @@ model Category {
 model Transaction {
   id             String            @id @default(uuid())
   userId         String            @map("user_id")
-  accountId      String            @map("account_id")
+  accountId      String?           @map("account_id")
   categoryId     String?           @map("category_id")
   cardId         String?           @map("card_id")
   type           TransactionType
@@ -228,7 +228,7 @@ model Transaction {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account      Account       @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account      Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
   category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   card         Card?         @relation(fields: [cardId], references: [id], onDelete: SetNull)
   transfer     Transfer?     @relation(fields: [transferId], references: [id], onDelete: Cascade)
