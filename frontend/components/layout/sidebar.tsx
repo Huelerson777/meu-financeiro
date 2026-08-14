@@ -11,6 +11,7 @@ import {
   Target,
   Settings,
   Wallet,
+  FileBarChart,
   X,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -23,6 +24,7 @@ const navItems = [
   { href: '/cards', label: 'Cartões', icon: CreditCard },
   { href: '/investments', label: 'Investimentos', icon: TrendingUp },
   { href: '/goals', label: 'Metas', icon: Target },
+  { href: '/reports', label: 'Relatórios', icon: FileBarChart },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
