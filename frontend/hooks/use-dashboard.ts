@@ -25,3 +25,17 @@ export function useDashboardPaymentsStatus(params?: { month?: number; year?: num
     refetchInterval: 30_000,
   });
 }
+
+export function useNetWorthTrend(months = 12) {
+  return useQuery({
+    queryKey: ['dashboard', 'net-worth-trend', months],
+    queryFn: () => dashboardService.getNetWorthTrend(months),
+  });
+}
+
+export function useGoalsSummary() {
+  return useQuery({
+    queryKey: ['dashboard', 'goals-summary'],
+    queryFn: () => dashboardService.getGoalsSummary(),
+  });
+}

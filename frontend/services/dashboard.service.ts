@@ -21,7 +21,38 @@ export const dashboardService = {
     api
       .get<{ data: PaymentsStatus }>('/dashboard/payments-status', { params })
       .then((r) => r.data.data),
+
+  getNetWorthTrend: (months?: number) =>
+    api
+      .get<{ data: NetWorthPoint[] }>('/dashboard/net-worth-trend', { params: { months } })
+      .then((r) => r.data.data),
+
+  getGoalsSummary: () =>
+    api.get<{ data: GoalsSummary }>('/dashboard/goals-summary').then((r) => r.data.data),
 };
+
+export interface NetWorthPoint {
+  key: string;
+  month: string;
+  netWorth: number;
+}
+
+export interface GoalsSummaryItem {
+  id: string;
+  name: string;
+  currentAmount: number;
+  targetAmount: number;
+  progress: number;
+  deadline: string | null;
+}
+
+export interface GoalsSummary {
+  count: number;
+  totalTarget: number;
+  totalCurrent: number;
+  overallProgress: number;
+  goals: GoalsSummaryItem[];
+}
 
 export interface PaymentsStatusItem {
   id: string;

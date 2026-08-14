@@ -1,4 +1,4 @@
-import { LucideIcon } from 'lucide-react';
+import { LucideIcon, ArrowUp, ArrowDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/utils/currency';
@@ -11,9 +11,25 @@ interface SummaryCardProps {
   isLoading?: boolean;
   tone?: 'default' | 'success' | 'danger';
   onClick?: () => void;
+  /** Variação percentual vs. período anterior. Positivo bom nem sempre é positivo (ex: despesa) — use invertChangeTone. */
+  changePct?: number | null;
+  /** Se true, uma alta (%) é ruim e uma queda é boa — usado em cards de despesa. */
+  invertChangeTone?: boolean;
 }
 
-export function SummaryCard({ label, value, icon: Icon, isLoading, tone = 'default', onClick }: SummaryCardProps) {
+export function SummaryCard({
+  label,
+  value,
+  icon: Icon,
+  isLoading,
+  tone = 'default',
+  onClick,
+  changePct,
+  invertChangeTone,
+}: SummaryCardProps) {
+  const isGoodChange = changePct != null && (invertChangeTone ? changePct < 0 : changePct > 0);
+  const isBadChange = changePct != null && (invertChangeTone ? changePct > 0 : changePct < 0);
+
   return (
     <Card
       className={cn('transition-theme hover:shadow-md', onClick && 'cursor-pointer hover:border-primary/40')}
@@ -25,15 +41,30 @@ export function SummaryCard({ label, value, icon: Icon, isLoading, tone = 'defau
           {isLoading ? (
             <Skeleton className="h-7 w-28" />
           ) : (
-            <span
-              className={cn(
-                'text-2xl font-semibold tracking-tight',
-                tone === 'success' && 'text-success',
-                tone === 'danger' && 'text-danger',
+            <>
+              <span
+                className={cn(
+                  'text-2xl font-semibold tracking-tight',
+                  tone === 'success' && 'text-success',
+                  tone === 'danger' && 'text-danger',
+                )}
+              >
+                {formatCurrency(value ?? 0)}
+              </span>
+              {changePct != null && (
+                <span
+                  className={cn(
+                    'inline-flex w-fit items-center gap-0.5 text-xs font-medium',
+                    isGoodChange && 'text-success',
+                    isBadChange && 'text-danger',
+                    !isGoodChange && !isBadChange && 'text-muted-foreground',
+                  )}
+                >
+                  {changePct > 0 ? <ArrowUp className="h-3 w-3" /> : changePct < 0 ? <ArrowDown className="h-3 w-3" /> : null}
+                  {Math.abs(changePct)}% vs. mês anterior
+                </span>
               )}
-            >
-              {formatCurrency(value ?? 0)}
-            </span>
+            </>
           )}
         </div>
         <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">

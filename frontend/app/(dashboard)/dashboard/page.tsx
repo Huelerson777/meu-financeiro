@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, PiggyBank, Target, CircleCheck, CircleDashed } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { TrendingUp, TrendingDown, PiggyBank, Target, CircleCheck, CircleDashed, Wallet } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, Cell, Tooltip as RechartsTooltip,
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend, LabelList,
@@ -14,6 +15,8 @@ import {
   useDashboardSummary,
   useDashboardExpensesByCategory,
   useDashboardPaymentsStatus,
+  useNetWorthTrend,
+  useGoalsSummary,
 } from '@/hooks/use-dashboard';
 import { formatCurrency } from '@/utils/currency';
 import { api } from '@/services/api';
@@ -40,6 +43,7 @@ const CategoryTooltip = ({ active, payload }: any) => {
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
@@ -54,7 +58,18 @@ export default function DashboardPage() {
     month: selectedMonth,
     year: selectedYear,
   });
+  const { data: netWorthTrend, isLoading: netWorthLoading } = useNetWorthTrend(12);
+  const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
   const { isEnabled } = useEnabledWidgets();
+
+  // Clique numa barra do gráfico de categoria leva pra Transações já filtrado
+  const goToCategoryTransactions = (categoryId: string | null) => {
+    if (!categoryId) return;
+    const monthStr = String(selectedMonth).padStart(2, '0');
+    const startDate = `${selectedYear}-${monthStr}-01`;
+    const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+    router.push(`/transactions?categoryId=${categoryId}&startDate=${startDate}&endDate=${endDate}`);
+  };
 
   // ITEM 5 — dados do gráfico Balanço do Mês com Investimentos e Sobras
   const comparisonData = [
@@ -99,6 +114,7 @@ export default function DashboardPage() {
     : [];
 
   const monthlyFlow = data?.monthlyFlow ?? [];
+  const sortedCategoryData = categoryData ? [...categoryData].sort((a, b) => b.total - a.total) : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -140,13 +156,22 @@ export default function DashboardPage() {
       {(isEnabled('income') || isEnabled('expense') || isEnabled('invested') || isEnabled('leftovers')) && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {isEnabled('income') && (
-            <SummaryCard label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading} onClick={() => openDetail('INCOME')} />
+            <SummaryCard
+              label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading}
+              onClick={() => openDetail('INCOME')} changePct={data?.comparison?.incomeChangePct}
+            />
           )}
           {isEnabled('expense') && (
-            <SummaryCard label="Despesas" value={data?.totalExpense} icon={TrendingDown} tone="danger" isLoading={isLoading} onClick={() => openDetail('EXPENSE')} />
+            <SummaryCard
+              label="Despesas" value={data?.totalExpense} icon={TrendingDown} tone="danger" isLoading={isLoading}
+              onClick={() => openDetail('EXPENSE')} changePct={data?.comparison?.expenseChangePct} invertChangeTone
+            />
           )}
           {isEnabled('invested') && (
-            <SummaryCard label="Investido" value={data?.totalInvested} icon={PiggyBank} isLoading={isLoading} />
+            <SummaryCard
+              label="Investido" value={data?.totalInvested} icon={PiggyBank} isLoading={isLoading}
+              changePct={data?.comparison?.investedChangePct}
+            />
           )}
           {isEnabled('leftovers') && (
             <SummaryCard
@@ -155,6 +180,7 @@ export default function DashboardPage() {
               icon={Target}
               tone={(data?.leftovers ?? 0) >= 0 ? 'success' : 'danger'}
               isLoading={isLoading}
+              changePct={data?.comparison?.leftoversChangePct}
             />
           )}
         </div>
@@ -341,7 +367,7 @@ export default function DashboardPage() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   layout="vertical"
-                  data={[...categoryData].sort((a, b) => b.total - a.total)}
+                  data={sortedCategoryData}
                   margin={{ left: 20, right: 60 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
@@ -356,8 +382,14 @@ export default function DashboardPage() {
                     axisLine={false}
                   />
                   <RechartsTooltip content={<CategoryTooltip />} />
-                  <Bar dataKey="total" radius={[0, 4, 4, 0]} barSize={22}>
-                    {categoryData.map((entry, index) => (
+                  <Bar
+                    dataKey="total"
+                    radius={[0, 4, 4, 0]}
+                    barSize={22}
+                    cursor="pointer"
+                    onClick={(entry: any) => goToCategoryTransactions(entry.categoryId ?? null)}
+                  >
+                    {sortedCategoryData.map((entry, index) => (
                       <Cell key={`cat-cell-${index}`} fill={entry.color} />
                     ))}
                     <LabelList

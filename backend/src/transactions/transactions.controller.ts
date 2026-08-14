@@ -16,8 +16,9 @@ export class TransactionsController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('search') search?: string,
+    @Query('categoryId') categoryId?: string,
   ) {
-    return this.transactionsService.findAll(user.id, { startDate, endDate, search });
+    return this.transactionsService.findAll(user.id, { startDate, endDate, search, categoryId });
   }
 
   @Post()

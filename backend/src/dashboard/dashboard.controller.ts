@@ -77,4 +77,17 @@ export class DashboardController {
       year ? parseInt(year, 10) : undefined,
     );
   }
+
+  @Get('net-worth-trend')
+  @ApiOperation({ summary: 'Patrimônio total (todas as contas) no fim de cada um dos últimos N meses' })
+  @ApiQuery({ name: 'months', required: false, type: Number })
+  getNetWorthTrend(@CurrentUser() user: { id: string }, @Query('months') months?: string) {
+    return this.dashboardService.getNetWorthTrend(user.id, months ? parseInt(months, 10) : undefined);
+  }
+
+  @Get('goals-summary')
+  @ApiOperation({ summary: 'Resumo de progresso das metas para o widget do dashboard' })
+  getGoalsSummary(@CurrentUser() user: { id: string }) {
+    return this.dashboardService.getGoalsSummary(user.id);
+  }
 }

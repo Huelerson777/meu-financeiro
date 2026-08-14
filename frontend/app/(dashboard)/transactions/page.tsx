@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { api } from '@/services/api';
 
 interface Transaction {
@@ -29,7 +30,11 @@ interface CategoryOption {
   color: string;
 }
 
-export default function TransactionsPage() {
+function TransactionsPageContent() {
+  // Chegando aqui pelo card de categoria do dashboard, a URL já vem com
+  // ?categoryId=...&startDate=...&endDate=... — usamos isso como filtro inicial
+  const searchParams = useSearchParams();
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -40,9 +45,10 @@ export default function TransactionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTransferId, setEditingTransferId] = useState<string | null>(null);
 
-  // Filtro de período
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  // Filtro de período e categoria
+  const [startDate, setStartDate] = useState(() => searchParams.get('startDate') ?? '');
+  const [endDate, setEndDate] = useState(() => searchParams.get('endDate') ?? '');
+  const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('categoryId') ?? '');
 
   // Form State
   const [uiType, setUiType] = useState<'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT'>('EXPENSE');
@@ -73,6 +79,7 @@ export default function TransactionsPage() {
       const transactionsParams: Record<string, string> = {};
       if (startDate) transactionsParams.startDate = startDate;
       if (endDate) transactionsParams.endDate = endDate;
+      if (categoryFilter) transactionsParams.categoryId = categoryFilter;
 
       const [transRes, accRes, catRes] = await Promise.all([
         api.get('/transactions', { params: transactionsParams }).catch(() => ({ data: [] })),
@@ -101,7 +108,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate]);
+  }, [startDate, endDate, categoryFilter]);
 
   const handleOpenCreate = () => {
     setEditingId(null);
@@ -211,9 +218,6 @@ export default function TransactionsPage() {
         } else {
           await api.post('/accounts/transfer', transferPayload);
         }
-
-        console.log("Enviando Transferência:", transferPayload);
-        await api.post('/accounts/transfer', transferPayload);
       } else {
         const payload = {
           description,
@@ -301,6 +305,19 @@ export default function TransactionsPage() {
           >
             Limpar período
           </button>
+        )}
+        {categoryFilter && (
+          <div className="flex items-center gap-2 pb-2">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+              Categoria: {categories.find((c) => c.id === categoryFilter)?.name ?? '...'}
+            </span>
+            <button
+              onClick={() => setCategoryFilter('')}
+              className="text-sm text-blue-600 hover:underline"
+            >
+              Limpar categoria
+            </button>
+          </div>
         )}
       </div>
 
@@ -497,5 +514,13 @@ export default function TransactionsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function TransactionsPage() {
+  return (
+    <Suspense fallback={null}>
+      <TransactionsPageContent />
+    </Suspense>
   );
 }

@@ -26,6 +26,12 @@ export interface DashboardSummary {
   totalInvested: number;
   leftovers: number;
   monthlyFlow: MonthlyFlowItem[];
+  comparison?: {
+    incomeChangePct: number | null;
+    expenseChangePct: number | null;
+    leftoversChangePct: number | null;
+    investedChangePct: number | null;
+  };
 }
 
 export interface MonthlyFlowItem {
