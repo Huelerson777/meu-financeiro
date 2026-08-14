@@ -45,10 +45,17 @@ function TransactionsPageContent() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTransferId, setEditingTransferId] = useState<string | null>(null);
 
-  // Filtro de período e categoria
+  // Filtro de período, categoria e tipo
   const [startDate, setStartDate] = useState(() => searchParams.get('startDate') ?? '');
   const [endDate, setEndDate] = useState(() => searchParams.get('endDate') ?? '');
   const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('categoryId') ?? '');
+  const [typeFilter, setTypeFilter] = useState<'' | 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT'>('');
+
+  // Paginação
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 20;
 
   // Form State
   const [uiType, setUiType] = useState<'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT'>('EXPENSE');
@@ -72,14 +79,19 @@ function TransactionsPageContent() {
     return [];
   };
 
+  const extractMeta = (rawResponse: any) => {
+    return rawResponse?.data?.meta ?? rawResponse?.meta ?? null;
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
 
-      const transactionsParams: Record<string, string> = {};
+      const transactionsParams: Record<string, string | number> = { page, limit: pageSize };
       if (startDate) transactionsParams.startDate = startDate;
       if (endDate) transactionsParams.endDate = endDate;
       if (categoryFilter) transactionsParams.categoryId = categoryFilter;
+      if (typeFilter) transactionsParams.type = typeFilter;
 
       const [transRes, accRes, catRes] = await Promise.all([
         api.get('/transactions', { params: transactionsParams }).catch(() => ({ data: [] })),
@@ -90,10 +102,13 @@ function TransactionsPageContent() {
       const transList = extractList(transRes.data);
       const accList = extractList(accRes.data);
       const catList = extractList(catRes.data);
+      const transMeta = extractMeta(transRes.data);
 
       setTransactions(transList);
       setAccounts(accList);
       setCategories(catList);
+      setTotalPages(transMeta?.totalPages ?? 1);
+      setTotal(transMeta?.total ?? transList.length);
 
       if (accList.length > 0 && !accountId && !editingId) {
         setAccountId(accList[0].id);
@@ -108,7 +123,7 @@ function TransactionsPageContent() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, categoryFilter]);
+  }, [startDate, endDate, categoryFilter, typeFilter, page]);
 
   const handleOpenCreate = () => {
     setEditingId(null);
@@ -278,14 +293,14 @@ function TransactionsPageContent() {
         </button>
       </div>
 
-      {/* Filtro de período */}
+      {/* Filtro de período, tipo e categoria */}
       <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-4 mb-6 flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">De</label>
           <input
             type="date"
             value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
+            onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
             className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
           />
         </div>
@@ -294,13 +309,27 @@ function TransactionsPageContent() {
           <input
             type="date"
             value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
+            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
             className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
           />
         </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tipo</label>
+          <select
+            value={typeFilter}
+            onChange={(e) => { setTypeFilter(e.target.value as typeof typeFilter); setPage(1); }}
+            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white text-sm"
+          >
+            <option value="">Todos os tipos</option>
+            <option value="INCOME">Receitas</option>
+            <option value="EXPENSE">Despesas</option>
+            <option value="TRANSFER">Transferências</option>
+            <option value="INVESTMENT">Investimentos</option>
+          </select>
+        </div>
         {(startDate || endDate) && (
           <button
-            onClick={() => { setStartDate(''); setEndDate(''); }}
+            onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }}
             className="text-sm text-blue-600 hover:underline pb-2"
           >
             Limpar período
@@ -312,7 +341,7 @@ function TransactionsPageContent() {
               Categoria: {categories.find((c) => c.id === categoryFilter)?.name ?? '...'}
             </span>
             <button
-              onClick={() => setCategoryFilter('')}
+              onClick={() => { setCategoryFilter(''); setPage(1); }}
               className="text-sm text-blue-600 hover:underline"
             >
               Limpar categoria
@@ -402,6 +431,30 @@ function TransactionsPageContent() {
           </table>
         )}
       </div>
+
+      {!loading && transactions.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {total} {total === 1 ? 'transação' : 'transações'} · página {page} de {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-zinc-800 dark:text-white"
+            >
+              Anterior
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-zinc-800 dark:text-white"
+            >
+              Próxima
+            </button>
+          </div>
+        </div>
+      )}
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">

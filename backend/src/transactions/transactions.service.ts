@@ -10,7 +10,22 @@ type TxClient = Prisma.TransactionClient;
 export class TransactionsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(userId: string, filters?: { startDate?: string; endDate?: string; search?: string; categoryId?: string }) {
+  async findAll(
+    userId: string,
+    filters?: {
+      startDate?: string;
+      endDate?: string;
+      search?: string;
+      categoryId?: string;
+      // 'INVESTMENT' não existe como TransactionType — é uma TRANSFER cuja
+      // conta de destino é do tipo INVESTMENT. 'TRANSFER' aqui significa
+      // "transferência que não é investimento", pra bater com o que o
+      // formulário do frontend trata como tipos distintos (uiType).
+      type?: 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
+      page?: number;
+      limit?: number;
+    },
+  ) {
     const where: Prisma.TransactionWhereInput = { userId };
 
     if (filters?.startDate || filters?.endDate) {
@@ -24,6 +39,16 @@ export class TransactionsService {
       where.categoryId = filters.categoryId;
     }
 
+    if (filters?.type === 'INVESTMENT') {
+      where.type = 'TRANSFER';
+      where.transfer = { toAccount: { type: 'INVESTMENT' } };
+    } else if (filters?.type === 'TRANSFER') {
+      where.type = 'TRANSFER';
+      where.NOT = { transfer: { toAccount: { type: 'INVESTMENT' } } };
+    } else if (filters?.type) {
+      where.type = filters.type;
+    }
+
     if (filters?.search) {
       where.OR = [
         { description: { contains: filters.search, mode: 'insensitive' } },
@@ -32,21 +57,36 @@ export class TransactionsService {
       ];
     }
 
-    return this.prisma.transaction.findMany({
-      where,
-      include: {
-        account: { select: { name: true } },
-        category: { select: { name: true, color: true } },
-        transfer: {
-          select: {
-            id: true,
-            toId: true,
-            toAccount: { select: { name: true, type: true } },
-          },
+    const page = filters?.page && filters.page > 0 ? filters.page : 1;
+    const limit = filters?.limit && filters.limit > 0 ? Math.min(filters.limit, 100) : 20;
+
+    const include = {
+      account: { select: { name: true } },
+      category: { select: { name: true, color: true } },
+      transfer: {
+        select: {
+          id: true,
+          toId: true,
+          toAccount: { select: { name: true, type: true } },
         },
       },
-      orderBy: { date: 'desc' },
-    });
+    } satisfies Prisma.TransactionInclude;
+
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.transaction.findMany({
+        where,
+        include,
+        orderBy: { date: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.transaction.count({ where }),
+    ]);
+
+    return {
+      items,
+      meta: { total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) },
+    };
   }
 
   async create(userId: string, data: CreateTransactionDto) {

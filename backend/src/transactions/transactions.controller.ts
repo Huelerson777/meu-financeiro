@@ -17,8 +17,19 @@ export class TransactionsController {
     @Query('endDate') endDate?: string,
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
+    @Query('type') type?: 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT',
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.transactionsService.findAll(user.id, { startDate, endDate, search, categoryId });
+    return this.transactionsService.findAll(user.id, {
+      startDate,
+      endDate,
+      search,
+      categoryId,
+      type,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
   }
 
   @Post()
