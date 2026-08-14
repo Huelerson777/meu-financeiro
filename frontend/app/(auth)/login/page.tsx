@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
+import { Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -26,6 +27,7 @@ export default function LoginPage() {
   const router = useRouter();
   const setTokens = useAuthStore((s) => s.setTokens);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -70,7 +72,25 @@ export default function LoginPage() {
                 Esqueci minha senha
               </Link>
             </div>
-            <Input id="password" type="password" placeholder="••••••••" {...register('password')} error={errors.password?.message} />
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                className="pr-10"
+                {...register('password')}
+                error={errors.password?.message}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                tabIndex={-1}
+                className="absolute right-3 top-5 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-muted-foreground">

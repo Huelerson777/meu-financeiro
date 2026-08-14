@@ -67,4 +67,13 @@ export class CardsController {
   deletePurchase(@CurrentUser() user: { id: string }, @Param('groupId') groupId: string) {
     return this.cardsService.deletePurchase(groupId, user.id);
   }
+
+  @Patch('installments/:id/paid')
+  setInstallmentPaid(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body('paid') paid: boolean,
+  ) {
+    return this.cardsService.setInstallmentPaid(id, user.id, Boolean(paid));
+  }
 }

@@ -14,6 +14,8 @@ interface InvoiceItem {
   category?: { name: string; color: string } | null;
   categoryId?: string | null;
   installmentGroupId: string;
+  installmentId: string | null;
+  paid: boolean;
 }
 
 interface Invoice {
@@ -86,6 +88,32 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
       fetchInvoices();
     } catch (err: any) {
       alert('Erro ao excluir compra.');
+    }
+  };
+
+  const handleTogglePaid = async (item: InvoiceItem) => {
+    if (!item.installmentId) return;
+    const nextPaid = !item.paid;
+
+    // Atualiza otimisticamente na UI
+    setInvoices((prev) =>
+      prev.map((inv) => ({
+        ...inv,
+        items: inv.items.map((it) => (it.id === item.id ? { ...it, paid: nextPaid } : it)),
+      })),
+    );
+
+    try {
+      await api.patch(`/cards/installments/${item.installmentId}/paid`, { paid: nextPaid });
+    } catch {
+      // Reverte se der erro
+      setInvoices((prev) =>
+        prev.map((inv) => ({
+          ...inv,
+          items: inv.items.map((it) => (it.id === item.id ? { ...it, paid: !nextPaid } : it)),
+        })),
+      );
+      alert('Erro ao atualizar status da parcela.');
     }
   };
 
@@ -168,26 +196,44 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                     const { installmentLabel, name } = parseInstallmentLabel(item.description);
                     return (
                       <div key={item.id} className="flex items-center justify-between gap-3 pb-3 border-b border-gray-50 dark:border-zinc-800 last:border-0 group">
-                        <div className="flex flex-col min-w-0">
-                          <span className="text-sm font-medium text-gray-800 dark:text-gray-100 truncate">
-                            {installmentLabel && (
-                              <span className="text-blue-600 dark:text-blue-400 font-semibold mr-1.5">
-                                {installmentLabel}
+                        <div className="flex items-center gap-3 min-w-0">
+                          {item.installmentId && (
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePaid(item)}
+                              title={item.paid ? 'Marcar como em aberto' : 'Marcar como paga'}
+                              className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition ${
+                                item.paid
+                                  ? 'bg-green-500 border-green-500 text-white'
+                                  : 'border-gray-300 dark:border-zinc-600 text-transparent hover:border-green-400'
+                              }`}
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3 h-3">
+                                <path d="M20 6L9 17l-5-5" />
+                              </svg>
+                            </button>
+                          )}
+                          <div className="flex flex-col min-w-0">
+                            <span className={`text-sm font-medium truncate ${item.paid ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
+                              {installmentLabel && (
+                                <span className="text-blue-600 dark:text-blue-400 font-semibold mr-1.5">
+                                  {installmentLabel}
+                                </span>
+                              )}
+                              {name}
+                            </span>
+                            {item.category && (
+                              <span
+                                className="mt-1 inline-flex w-fit items-center text-xs font-normal px-2 py-0.5 rounded-full"
+                                style={{ backgroundColor: `${item.category.color}20`, color: item.category.color }}
+                              >
+                                {item.category.name}
                               </span>
                             )}
-                            {name}
-                          </span>
-                          {item.category && (
-                            <span
-                              className="mt-1 inline-flex w-fit items-center text-xs font-normal px-2 py-0.5 rounded-full"
-                              style={{ backgroundColor: `${item.category.color}20`, color: item.category.color }}
-                            >
-                              {item.category.name}
-                            </span>
-                          )}
+                          </div>
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
-                          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 whitespace-nowrap">
+                          <span className={`text-sm font-semibold whitespace-nowrap ${item.paid ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
                             {formatCurrency(item.amount)}
                           </span>
                           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">

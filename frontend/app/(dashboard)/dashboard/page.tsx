@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { TrendingUp, TrendingDown, PiggyBank, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, PiggyBank, Target, CircleCheck, CircleDashed } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, Cell, Tooltip as RechartsTooltip,
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend, LabelList,
@@ -9,7 +9,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
-import { useDashboardSummary, useDashboardExpensesByCategory } from '@/hooks/use-dashboard';
+import { WidgetPicker, useEnabledWidgets } from '@/components/dashboard/widget-picker';
+import {
+  useDashboardSummary,
+  useDashboardExpensesByCategory,
+  useDashboardPaymentsStatus,
+} from '@/hooks/use-dashboard';
 import { formatCurrency } from '@/utils/currency';
 import { api } from '@/services/api';
 
@@ -45,6 +50,11 @@ export default function DashboardPage() {
     month: selectedMonth,
     year: selectedYear,
   });
+  const { data: paymentsStatus, isLoading: paymentsLoading } = useDashboardPaymentsStatus({
+    month: selectedMonth,
+    year: selectedYear,
+  });
+  const { isEnabled } = useEnabledWidgets();
 
   // ITEM 5 — dados do gráfico Balanço do Mês com Investimentos e Sobras
   const comparisonData = [
@@ -121,26 +131,98 @@ export default function DashboardPage() {
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
+
+          <WidgetPicker />
         </div>
       </div>
 
-      {/* Sem card de Fatura e sem Saldo Geral. 4 cards: Receitas, Despesas, Investido, Sobras */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <SummaryCard label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading} onClick={() => openDetail('INCOME')} />
-        <SummaryCard label="Despesas" value={data?.totalExpense} icon={TrendingDown} tone="danger" isLoading={isLoading} onClick={() => openDetail('EXPENSE')} />
-        <SummaryCard label="Investido" value={data?.totalInvested} icon={PiggyBank} isLoading={isLoading} />
-        <SummaryCard
-          label="Sobras"
-          value={data?.leftovers}
-          icon={Target}
-          tone={(data?.leftovers ?? 0) >= 0 ? 'success' : 'danger'}
-          isLoading={isLoading}
-        />
-      </div>
+      {/* 4 cards: Receitas, Despesas, Investido, Sobras — cada um pode ser ocultado em "Personalizar" */}
+      {(isEnabled('income') || isEnabled('expense') || isEnabled('invested') || isEnabled('leftovers')) && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {isEnabled('income') && (
+            <SummaryCard label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading} onClick={() => openDetail('INCOME')} />
+          )}
+          {isEnabled('expense') && (
+            <SummaryCard label="Despesas" value={data?.totalExpense} icon={TrendingDown} tone="danger" isLoading={isLoading} onClick={() => openDetail('EXPENSE')} />
+          )}
+          {isEnabled('invested') && (
+            <SummaryCard label="Investido" value={data?.totalInvested} icon={PiggyBank} isLoading={isLoading} />
+          )}
+          {isEnabled('leftovers') && (
+            <SummaryCard
+              label="Sobras"
+              value={data?.leftovers}
+              icon={Target}
+              tone={(data?.leftovers ?? 0) >= 0 ? 'success' : 'danger'}
+              isLoading={isLoading}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Pago x Em Aberto */}
+      {isEnabled('paymentsStatus') && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Pago x Em Aberto</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+              <div className="flex items-center gap-3 rounded-lg border border-border p-4">
+                <CircleCheck className="h-8 w-8 text-success shrink-0" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Pago no mês</p>
+                  <p className="text-xl font-semibold">{formatCurrency(paymentsStatus?.paidExpenseTotal ?? 0)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 rounded-lg border border-border p-4">
+                <CircleDashed className="h-8 w-8 text-amber-500 shrink-0" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Em aberto no mês</p>
+                  <p className="text-xl font-semibold">{formatCurrency(paymentsStatus?.openExpenseTotal ?? 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {paymentsLoading ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p>
+            ) : !paymentsStatus || paymentsStatus.openItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                Nada em aberto neste mês — tudo pago!
+              </p>
+            ) : (
+              <div className="flex flex-col divide-y divide-border">
+                {paymentsStatus.openItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">
+                        {item.description}
+                        {item.isOverdue && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
+                            Atrasado
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.source} · vence em {new Date(item.dueDate).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                    <span className={`text-sm font-semibold shrink-0 ${item.type === 'INCOME' ? 'text-success' : 'text-foreground'}`}>
+                      {item.type === 'INCOME' ? '+ ' : ''}{formatCurrency(item.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Linha 2 — Balanço do Mês + Evolução Anual */}
+      {(isEnabled('balanceChart') || isEnabled('yearlyChart')) && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ITEM 5 — Balanço do Mês com labels no topo das barras */}
+        {isEnabled('balanceChart') && (
         <Card>
           <CardHeader>
             <CardTitle>Balanço do Mês</CardTitle>
@@ -189,8 +271,10 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+        )}
 
         {/* ITEM 4 — Evolução Anual com dados reais do backend */}
+        {isEnabled('yearlyChart') && (
         <Card>
           <CardHeader>
             <CardTitle>Evolução Anual {selectedYear}</CardTitle>
@@ -231,9 +315,12 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+        )}
       </div>
+      )}
 
       {/* ITEM 7 — Gráfico de Despesas por Categoria */}
+      {isEnabled('categoryChart') && (
       <Card>
         <CardHeader>
           <CardTitle>Despesas por Categoria</CardTitle>
@@ -286,6 +373,7 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
       <TransactionDetailModal
         open={!!detailModal}

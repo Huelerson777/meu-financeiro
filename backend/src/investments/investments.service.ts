@@ -19,7 +19,7 @@ export class InvestmentsService {
     return accounts;
   }
 
-  async getContributions(userId: string) {
+  async getContributions(userId: string, filters?: { startDate?: string; endDate?: string }) {
     const investmentAccounts = await this.getInvestmentAccountIds(userId);
     const investmentAccountIds = investmentAccounts.map((a) => a.id);
 
@@ -28,7 +28,17 @@ export class InvestmentsService {
     }
 
     const transfers = await this.prisma.transfer.findMany({
-      where: { toId: { in: investmentAccountIds } },
+      where: {
+        toId: { in: investmentAccountIds },
+        ...(filters?.startDate || filters?.endDate
+          ? {
+              date: {
+                ...(filters.startDate ? { gte: new Date(`${filters.startDate}T00:00:00.000Z`) } : {}),
+                ...(filters.endDate ? { lte: new Date(`${filters.endDate}T23:59:59.999Z`) } : {}),
+              },
+            }
+          : {}),
+      },
       orderBy: { date: 'desc' },
       include: {
         fromAccount: { select: { name: true } },

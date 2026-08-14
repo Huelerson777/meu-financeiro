@@ -40,24 +40,60 @@ function formatMonth(key: string) {
 export default function InvestmentsPage() {
   const [data, setData] = useState<ContributionsResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
+    setLoading(true);
+    const params: Record<string, string> = {};
+    if (startDate) params.startDate = startDate;
+    if (endDate) params.endDate = endDate;
+
     api
-      .get('/investments/contributions')
+      .get('/investments/contributions', { params })
       .then((res) => setData(res.data?.data ?? res.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, []);
+  }, [startDate, endDate]);
 
   const hasInvestmentAccount = (data?.investmentAccounts?.length ?? 0) > 0;
 
   return (
     <div className="p-8">
       <h1 className="text-3xl font-bold dark:text-white">Investimentos</h1>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-8">
+      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-6">
         Histórico dos seus aportes mensais — o mesmo valor que aparece no card
         "Investido" do Dashboard.
       </p>
+
+      <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-4 mb-8 flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">De</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Até</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
+          />
+        </div>
+        {(startDate || endDate) && (
+          <button
+            onClick={() => { setStartDate(''); setEndDate(''); }}
+            className="text-sm text-blue-600 hover:underline pb-2"
+          >
+            Limpar período
+          </button>
+        )}
+      </div>
 
       {loading ? (
         <div className="text-gray-500 py-8">Carregando...</div>

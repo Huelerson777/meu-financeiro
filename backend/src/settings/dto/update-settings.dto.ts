@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
 
 export class UpdateSettingsDto {
   @ApiPropertyOptional({ enum: ['light', 'dark', 'system'] })
@@ -16,4 +16,14 @@ export class UpdateSettingsDto {
   @IsOptional()
   @IsString()
   currency?: string;
+
+  @ApiPropertyOptional({
+    description: 'Chaves dos widgets exibidos na tela principal do Dashboard',
+    example: ['income', 'expense', 'invested', 'leftovers'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  dashboardWidgets?: string[];
 }

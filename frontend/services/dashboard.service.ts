@@ -16,7 +16,32 @@ export const dashboardService = {
 
   getUpcomingBills: () =>
     api.get('/dashboard/upcoming-bills').then((r) => r.data.data),
+
+  getPaymentsStatus: (params?: { month?: number; year?: number }) =>
+    api
+      .get<{ data: PaymentsStatus }>('/dashboard/payments-status', { params })
+      .then((r) => r.data.data),
 };
+
+export interface PaymentsStatusItem {
+  id: string;
+  kind: 'transaction' | 'installment';
+  type: 'INCOME' | 'EXPENSE';
+  description: string;
+  amount: number;
+  dueDate: string;
+  source: string;
+  category: { name: string; color: string } | null;
+  isOverdue: boolean;
+}
+
+export interface PaymentsStatus {
+  paidExpenseTotal: number;
+  paidIncomeTotal: number;
+  openExpenseTotal: number;
+  openIncomeTotal: number;
+  openItems: PaymentsStatusItem[];
+}
 
 export interface CategoryExpense {
   categoryId: string | null;

@@ -1,5 +1,5 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { InvestmentsService } from './investments.service';
@@ -13,7 +13,13 @@ export class InvestmentsController {
 
   @Get('contributions')
   @ApiOperation({ summary: 'Histórico de aportes (transferências para contas de investimento)' })
-  getContributions(@CurrentUser() user: { id: string }) {
-    return this.investmentsService.getContributions(user.id);
+  @ApiQuery({ name: 'startDate', required: false, type: String })
+  @ApiQuery({ name: 'endDate', required: false, type: String })
+  getContributions(
+    @CurrentUser() user: { id: string },
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.investmentsService.getContributions(user.id, { startDate, endDate });
   }
 }

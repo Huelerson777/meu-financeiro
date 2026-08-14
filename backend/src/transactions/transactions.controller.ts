@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
@@ -11,8 +11,13 @@ export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}
 
   @Get()
-  findAll(@CurrentUser() user: { id: string }) {
-    return this.transactionsService.findAll(user.id);
+  findAll(
+    @CurrentUser() user: { id: string },
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.transactionsService.findAll(user.id, { startDate, endDate, search });
   }
 
   @Post()

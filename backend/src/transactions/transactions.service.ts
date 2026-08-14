@@ -10,9 +10,26 @@ type TxClient = Prisma.TransactionClient;
 export class TransactionsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(userId: string) {
+  async findAll(userId: string, filters?: { startDate?: string; endDate?: string; search?: string }) {
+    const where: Prisma.TransactionWhereInput = { userId };
+
+    if (filters?.startDate || filters?.endDate) {
+      where.date = {
+        ...(filters.startDate ? { gte: new Date(`${filters.startDate}T00:00:00.000Z`) } : {}),
+        ...(filters.endDate ? { lte: new Date(`${filters.endDate}T23:59:59.999Z`) } : {}),
+      };
+    }
+
+    if (filters?.search) {
+      where.OR = [
+        { description: { contains: filters.search, mode: 'insensitive' } },
+        { category: { name: { contains: filters.search, mode: 'insensitive' } } },
+        { account: { name: { contains: filters.search, mode: 'insensitive' } } },
+      ];
+    }
+
     return this.prisma.transaction.findMany({
-      where: { userId },
+      where,
       include: {
         account: { select: { name: true } },
         category: { select: { name: true, color: true } },

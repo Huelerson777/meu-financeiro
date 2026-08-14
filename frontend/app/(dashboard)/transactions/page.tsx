@@ -40,6 +40,10 @@ export default function TransactionsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTransferId, setEditingTransferId] = useState<string | null>(null);
 
+  // Filtro de período
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
   // Form State
   const [uiType, setUiType] = useState<'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT'>('EXPENSE');
   const [description, setDescription] = useState('');
@@ -66,8 +70,12 @@ export default function TransactionsPage() {
     try {
       setLoading(true);
 
+      const transactionsParams: Record<string, string> = {};
+      if (startDate) transactionsParams.startDate = startDate;
+      if (endDate) transactionsParams.endDate = endDate;
+
       const [transRes, accRes, catRes] = await Promise.all([
-        api.get('/transactions').catch(() => ({ data: [] })),
+        api.get('/transactions', { params: transactionsParams }).catch(() => ({ data: [] })),
         api.get('/accounts').catch(() => ({ data: [] })),
         api.get('/categories').catch(() => ({ data: [] })),
       ]);
@@ -93,7 +101,7 @@ export default function TransactionsPage() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [startDate, endDate]);
 
   const handleOpenCreate = () => {
     setEditingId(null);
@@ -255,15 +263,45 @@ export default function TransactionsPage() {
             Gerencie suas entradas, saídas e movimentações
           </p>
         </div>
-        <button 
+        <button
           onClick={() => {
-            fetchData(); 
+            fetchData();
             handleOpenCreate();
           }}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow transition"
         >
           + Nova Movimentação
         </button>
+      </div>
+
+      {/* Filtro de período */}
+      <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-4 mb-6 flex flex-wrap items-end gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">De</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Até</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
+          />
+        </div>
+        {(startDate || endDate) && (
+          <button
+            onClick={() => { setStartDate(''); setEndDate(''); }}
+            className="text-sm text-blue-600 hover:underline pb-2"
+          >
+            Limpar período
+          </button>
+        )}
       </div>
 
       <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 overflow-hidden">

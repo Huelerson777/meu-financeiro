@@ -122,7 +122,10 @@ export class CardsService {
 
     const transactions = await this.prisma.transaction.findMany({
       where: { cardId, userId },
-      include: { category: { select: { name: true, color: true } } },
+      include: {
+        category: { select: { name: true, color: true } },
+        installments: { select: { id: true, paid: true, dueDate: true } },
+      },
       orderBy: { date: 'asc' },
     });
 
@@ -134,6 +137,7 @@ export class CardsService {
         invoicesMap.set(key, { month: key, total: 0, items: [] });
       }
       const invoice = invoicesMap.get(key)!;
+      const installment = t.installments[0];
       invoice.total += Number(t.amount);
       invoice.items.push({
         id: t.id,
@@ -143,10 +147,34 @@ export class CardsService {
         category: t.category,
         categoryId: t.categoryId,
         installmentGroupId: t.installmentGroupId,
+        installmentId: installment?.id ?? null,
+        paid: installment?.paid ?? false,
       });
     });
 
     return Array.from(invoicesMap.values()).sort((a, b) => (a.month < b.month ? -1 : 1));
+  }
+
+  /**
+   * Marca (ou desmarca) uma parcela individual como paga. Não afeta o limite
+   * do cartão nem o saldo de conta — é só um controle de "já quitei essa
+   * parcela", usado no painel de Pago x Em Aberto e nas notificações de
+   * vencimento próximo.
+   */
+  async setInstallmentPaid(installmentId: string, userId: string, paid: boolean) {
+    const installment = await this.prisma.installment.findUnique({
+      where: { id: installmentId },
+      include: { transaction: { select: { userId: true } } },
+    });
+    if (!installment) throw new NotFoundException('Parcela não encontrada');
+    if (installment.transaction.userId !== userId) {
+      throw new ForbiddenException('Esta parcela não pertence a você');
+    }
+
+    return this.prisma.installment.update({
+      where: { id: installmentId },
+      data: { paid },
+    });
   }
 /**
    * Exclui TODAS as parcelas de uma compra (mesmo installmentGroupId),

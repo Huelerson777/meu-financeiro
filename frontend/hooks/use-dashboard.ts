@@ -17,3 +17,11 @@ export function useDashboardExpensesByCategory(params?: { month?: number; year?:
     refetchInterval: 30_000,
   });
 }
+
+export function useDashboardPaymentsStatus(params?: { month?: number; year?: number }) {
+  return useQuery({
+    queryKey: ['dashboard', 'payments-status', params?.month, params?.year],
+    queryFn: () => dashboardService.getPaymentsStatus(params),
+    refetchInterval: 30_000,
+  });
+}

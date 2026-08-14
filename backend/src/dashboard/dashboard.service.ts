@@ -105,6 +105,7 @@ export class DashboardService {
       month: new Date(targetYear, i).toLocaleString('pt-BR', { month: 'short' }),
       receitas: 0,
       despesas: 0,
+      investido: 0,
     }));
 
     yearTransactions.forEach((t) => {
@@ -113,6 +114,17 @@ export class DashboardService {
       if (t.type === 'INCOME') monthlyFlow[mIndex].receitas += val;
       if (t.type === 'EXPENSE') monthlyFlow[mIndex].despesas += val;
     });
+
+    // Linha de Investido — aportes (Transfer) recebidos por contas INVESTMENT no ano
+    if (investmentAccountIds.length > 0) {
+      const yearTransfers = await this.prisma.transfer.findMany({
+        where: { toId: { in: investmentAccountIds }, date: { gte: yearStart, lt: yearEnd } },
+        select: { amount: true, date: true },
+      });
+      yearTransfers.forEach((t) => {
+        monthlyFlow[t.date.getMonth()].investido += Number(t.amount);
+      });
+    }
 
     return {
       currentBalance,
@@ -130,6 +142,12 @@ export class DashboardService {
     const yearStart = new Date(targetYear, 0, 1);
     const yearEnd = new Date(targetYear + 1, 0, 1);
 
+    const investmentAccounts = await this.prisma.account.findMany({
+      where: { userId, type: 'INVESTMENT', isArchived: false },
+      select: { id: true },
+    });
+    const investmentAccountIds = investmentAccounts.map((a) => a.id);
+
     const transactions = await this.prisma.transaction.findMany({
       where: {
         userId,
@@ -145,6 +163,7 @@ export class DashboardService {
       month: new Date(targetYear, i).toLocaleString('pt-BR', { month: 'short' }),
       receitas: 0,
       despesas: 0,
+      investido: 0,
     }));
 
     transactions.forEach((t) => {
@@ -153,6 +172,16 @@ export class DashboardService {
       if (t.type === 'INCOME') monthlyFlow[mIndex].receitas += val;
       if (t.type === 'EXPENSE') monthlyFlow[mIndex].despesas += val;
     });
+
+    if (investmentAccountIds.length > 0) {
+      const transfers = await this.prisma.transfer.findMany({
+        where: { toId: { in: investmentAccountIds }, date: { gte: yearStart, lt: yearEnd } },
+        select: { amount: true, date: true },
+      });
+      transfers.forEach((t) => {
+        monthlyFlow[t.date.getMonth()].investido += Number(t.amount);
+      });
+    }
 
     return monthlyFlow;
   }
@@ -211,5 +240,90 @@ export class DashboardService {
       take: 5,
       include: { category: true, account: true },
     });
+  }
+
+  /**
+   * Painel "Pago x Em Aberto": totais pagos/pendentes do mês e a lista de
+   * itens em aberto — transações INCOME/EXPENSE com status PENDING mais
+   * parcelas de cartão ainda não marcadas como pagas, ambas vencendo no
+   * mês/ano selecionado.
+   */
+  async getPaymentsStatus(userId: string, month?: number, year?: number) {
+    const currentDate = new Date();
+    const targetMonth = month ?? currentDate.getMonth() + 1;
+    const targetYear = year ?? currentDate.getFullYear();
+    const startDate = new Date(targetYear, targetMonth - 1, 1);
+    const endDate = new Date(targetYear, targetMonth, 1);
+    const today = new Date(new Date().setHours(0, 0, 0, 0));
+
+    const [paidAgg, pendingTransactions, openInstallments] = await Promise.all([
+      this.prisma.transaction.groupBy({
+        by: ['type'],
+        where: { userId, status: 'PAID', date: { gte: startDate, lt: endDate }, type: { in: ['INCOME', 'EXPENSE'] } },
+        _sum: { amount: true },
+      }),
+      this.prisma.transaction.findMany({
+        where: { userId, status: 'PENDING', date: { gte: startDate, lt: endDate }, type: { in: ['INCOME', 'EXPENSE'] } },
+        include: { account: { select: { name: true } }, category: { select: { name: true, color: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.installment.findMany({
+        where: {
+          paid: false,
+          dueDate: { gte: startDate, lt: endDate },
+          transaction: { userId },
+        },
+        include: {
+          transaction: {
+            select: { description: true, card: { select: { name: true, color: true } }, category: { select: { name: true, color: true } } },
+          },
+        },
+        orderBy: { dueDate: 'asc' },
+      }),
+    ]);
+
+    const paidExpenseTotal = Number(paidAgg.find((g) => g.type === 'EXPENSE')?._sum.amount ?? 0);
+    const paidIncomeTotal = Number(paidAgg.find((g) => g.type === 'INCOME')?._sum.amount ?? 0);
+
+    const pendingItems = pendingTransactions.map((t) => ({
+      id: t.id,
+      kind: 'transaction' as const,
+      type: t.type,
+      description: t.description,
+      amount: Number(t.amount),
+      dueDate: t.date,
+      source: t.account?.name ?? '—',
+      category: t.category,
+      isOverdue: t.date < today,
+    }));
+
+    const installmentItems = openInstallments.map((i) => ({
+      id: i.id,
+      kind: 'installment' as const,
+      type: 'EXPENSE' as const,
+      description: `${i.transaction.description.replace(/\s\(\d+\/\d+\)$/, '')} (parcela ${i.number}/${i.totalCount})`,
+      amount: Number(i.amount),
+      dueDate: i.dueDate,
+      source: i.transaction.card?.name ?? '—',
+      category: i.transaction.category,
+      isOverdue: i.dueDate < today,
+    }));
+
+    const openItems = [...pendingItems, ...installmentItems].sort(
+      (a, b) => a.dueDate.getTime() - b.dueDate.getTime(),
+    );
+
+    const openExpenseTotal =
+      pendingItems.filter((i) => i.type === 'EXPENSE').reduce((acc, i) => acc + i.amount, 0) +
+      installmentItems.reduce((acc, i) => acc + i.amount, 0);
+    const openIncomeTotal = pendingItems.filter((i) => i.type === 'INCOME').reduce((acc, i) => acc + i.amount, 0);
+
+    return {
+      paidExpenseTotal,
+      paidIncomeTotal,
+      openExpenseTotal,
+      openIncomeTotal,
+      openItems,
+    };
   }
 }

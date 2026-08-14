@@ -350,26 +350,29 @@ model Budget {
 // ============================================================================
 
 model Notification {
-  id        String           @id @default(uuid())
-  userId    String           @map("user_id")
-  type      NotificationType
-  title     String
-  message   String
-  read      Boolean          @default(false)
-  createdAt DateTime         @default(now()) @map("created_at")
+  id          String           @id @default(uuid())
+  userId      String           @map("user_id")
+  type        NotificationType
+  title       String
+  message     String
+  read        Boolean          @default(false)
+  referenceId String?          @map("reference_id")
+  createdAt   DateTime         @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
   @@index([userId])
+  @@index([referenceId])
 }
 
 model Settings {
-  id       String  @id @default(uuid())
-  userId   String  @unique @map("user_id")
-  theme    String  @default("system")
-  language String  @default("pt-BR")
-  currency String  @default("BRL")
+  id               String  @id @default(uuid())
+  userId           String  @unique @map("user_id")
+  theme            String  @default("system")
+  language         String  @default("pt-BR")
+  currency         String  @default("BRL")
+  dashboardWidgets Json?   @map("dashboard_widgets")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

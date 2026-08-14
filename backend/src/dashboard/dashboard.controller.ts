@@ -61,4 +61,20 @@ export class DashboardController {
   getUpcomingBills(@CurrentUser() user: { id: string }) {
     return this.dashboardService.getUpcomingBills(user.id);
   }
+
+  @Get('payments-status')
+  @ApiOperation({ summary: 'Pago x Em Aberto: totais e itens pendentes do mês' })
+  @ApiQuery({ name: 'month', required: false, type: Number })
+  @ApiQuery({ name: 'year', required: false, type: Number })
+  getPaymentsStatus(
+    @CurrentUser() user: { id: string },
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+  ) {
+    return this.dashboardService.getPaymentsStatus(
+      user.id,
+      month ? parseInt(month, 10) : undefined,
+      year ? parseInt(year, 10) : undefined,
+    );
+  }
 }
