@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
 import { WidgetPicker, useEnabledWidgets } from '@/components/dashboard/widget-picker';
+import { PaymentModal } from '@/components/cards/payment-modal';
 import {
   useDashboardSummary,
   useDashboardExpensesByCategory,
@@ -18,6 +19,7 @@ import {
   useNetWorthTrend,
   useGoalsSummary,
 } from '@/hooks/use-dashboard';
+import { PaymentsStatusItem } from '@/services/dashboard.service';
 import { formatCurrency } from '@/utils/currency';
 import { api } from '@/services/api';
 
@@ -49,15 +51,19 @@ export default function DashboardPage() {
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
   // ITEM 4 — passa month/year para que o hook realmente filtre no backend
-  const { data, isLoading } = useDashboardSummary({ month: selectedMonth, year: selectedYear });
+  const { data, isLoading, refetch: refetchSummary } = useDashboardSummary({
+    month: selectedMonth,
+    year: selectedYear,
+  });
   const { data: categoryData, isLoading: catLoading } = useDashboardExpensesByCategory({
     month: selectedMonth,
     year: selectedYear,
   });
-  const { data: paymentsStatus, isLoading: paymentsLoading } = useDashboardPaymentsStatus({
-    month: selectedMonth,
-    year: selectedYear,
-  });
+  const {
+    data: paymentsStatus,
+    isLoading: paymentsLoading,
+    refetch: refetchPaymentsStatus,
+  } = useDashboardPaymentsStatus({ month: selectedMonth, year: selectedYear });
   const { data: netWorthTrend, isLoading: netWorthLoading } = useNetWorthTrend(12);
   const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
   const { isEnabled } = useEnabledWidgets();
@@ -112,6 +118,26 @@ export default function DashboardPage() {
         return d.getMonth() + 1 === selectedMonth && d.getFullYear() === selectedYear;
       })
     : [];
+
+  // Pagar/receber um item em aberto direto pela lista de "Pago x Em Aberto"
+  const [payingItem, setPayingItem] = useState<PaymentsStatusItem | null>(null);
+
+  const handleConfirmPayment = async (accountId: string, date: string) => {
+    if (!payingItem) return;
+    if (payingItem.kind === 'installment') {
+      await api.patch(`/cards/installments/${payingItem.id}/pay`, { accountId, date });
+    } else {
+      // Transação avulsa: só troca o status — a data original é mantida
+      // pra não "mudar de mês" o que já foi lançado em fevereiro, por exemplo.
+      await api.patch(`/transactions/${payingItem.id}`, { status: 'PAID', accountId });
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    setPayingItem(null);
+    refetchPaymentsStatus();
+    refetchSummary();
+  };
 
   const monthlyFlow = data?.monthlyFlow ?? [];
   const sortedCategoryData = categoryData ? [...categoryData].sort((a, b) => b.total - a.total) : [];
@@ -233,9 +259,17 @@ export default function DashboardPage() {
                         {item.source} · vence em {new Date(item.dueDate).toLocaleDateString('pt-BR')}
                       </p>
                     </div>
-                    <span className={`text-sm font-semibold shrink-0 ${item.type === 'INCOME' ? 'text-success' : 'text-foreground'}`}>
-                      {item.type === 'INCOME' ? '+ ' : ''}{formatCurrency(item.amount)}
-                    </span>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className={`text-sm font-semibold ${item.type === 'INCOME' ? 'text-success' : 'text-foreground'}`}>
+                        {item.type === 'INCOME' ? '+ ' : ''}{formatCurrency(item.amount)}
+                      </span>
+                      <button
+                        onClick={() => setPayingItem(item)}
+                        className="text-xs font-semibold text-primary hover:underline shrink-0"
+                      >
+                        {item.type === 'INCOME' ? 'Receber' : 'Pagar'}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -416,6 +450,17 @@ export default function DashboardPage() {
         loading={transactionsLoading}
         tone={detailModal?.type === 'INCOME' ? 'success' : 'danger'}
       />
+
+      {payingItem && (
+        <PaymentModal
+          title={payingItem.type === 'INCOME' ? 'Confirmar recebimento' : 'Pagar conta'}
+          description={payingItem.description}
+          amount={payingItem.amount}
+          onClose={() => setPayingItem(null)}
+          onSuccess={handlePaymentSuccess}
+          onConfirm={handleConfirmPayment}
+        />
+      )}
     </div>
   );
 }
