@@ -8,4 +8,9 @@ export const authService = {
     api.post('/auth/register', { name, email, password }).then((r) => r.data.data),
 
   logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
+
+  forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }).then((r) => r.data.data),
+
+  resetPassword: (token: string, newPassword: string) =>
+    api.post('/auth/reset-password', { token, newPassword }).then((r) => r.data.data),
 };

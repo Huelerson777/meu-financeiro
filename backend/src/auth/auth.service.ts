@@ -11,9 +11,11 @@ import { RegisterDto } from './dto/register.dto';
 import { CategoriesService } from '../categories/categories.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
+import { MailService } from '../common/mail/mail.service';
 
 const ACCESS_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '15m';
 const REFRESH_EXPIRES_DAYS = 7;
+const RESET_TOKEN_EXPIRES_MINUTES = 60;
 
 @Injectable()
 export class AuthService {
@@ -21,6 +23,7 @@ export class AuthService {
     private prisma: PrismaService,
     private jwtService: JwtService,
     private categoriesService: CategoriesService,
+    private mailService: MailService,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -95,6 +98,63 @@ export class AuthService {
       data: { revoked: true },
     });
     return { message: 'Sessão encerrada com sucesso' };
+  }
+
+  /**
+   * Gera um token de recuperação e envia por e-mail. Sempre retorna a mesma
+   * mensagem de sucesso, exista ou não o e-mail — evita que alguém use este
+   * endpoint pra descobrir quais e-mails estão cadastrados no sistema.
+   */
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+
+    if (user && user.isActive) {
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = this.hashToken(rawToken);
+
+      await this.prisma.passwordResetToken.create({
+        data: {
+          userId: user.id,
+          tokenHash,
+          expiresAt: new Date(Date.now() + RESET_TOKEN_EXPIRES_MINUTES * 60 * 1000),
+        },
+      });
+
+      const resetUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/reset-password?token=${rawToken}`;
+      await this.mailService.send(
+        user.email,
+        'Recuperação de senha — FinanceFlow',
+        `<p>Olá, ${user.name}.</p>` +
+          `<p>Clique no link abaixo para redefinir sua senha. Ele expira em ${RESET_TOKEN_EXPIRES_MINUTES} minutos.</p>` +
+          `<p><a href="${resetUrl}">${resetUrl}</a></p>` +
+          `<p>Se você não pediu essa recuperação, pode ignorar este e-mail.</p>`,
+      );
+    }
+
+    return { message: 'Se este e-mail existir na nossa base, enviamos um link de recuperação.' };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const tokenHash = this.hashToken(token);
+    const stored = await this.prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+
+    if (!stored || stored.used || stored.expiresAt < new Date()) {
+      throw new UnauthorizedException('Link de recuperação inválido ou expirado');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: stored.userId }, data: { passwordHash } }),
+      this.prisma.passwordResetToken.update({ where: { id: stored.id }, data: { used: true } }),
+      // Redefinir a senha encerra todas as sessões ativas, por segurança
+      this.prisma.refreshToken.updateMany({
+        where: { userId: stored.userId, revoked: false },
+        data: { revoked: true },
+      }),
+    ]);
+
+    return { message: 'Senha redefinida com sucesso' };
   }
 
   private async issueTokens(userId: string, email: string, role: string, rememberMe = false) {
