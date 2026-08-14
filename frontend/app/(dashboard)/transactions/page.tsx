@@ -30,6 +30,18 @@ interface CategoryOption {
   color: string;
 }
 
+// Sem filtro nenhum, parcelas de cartão futuras (que podem ir anos à frente)
+// dominam o topo da lista por ordenação de data — por isso o período padrão
+// é o mês atual, igual o Dashboard já faz. "Limpar período" mostra tudo.
+function currentMonthRange() {
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  return {
+    start: fmt(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end: fmt(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+  };
+}
+
 function TransactionsPageContent() {
   // Chegando aqui pelo card de categoria do dashboard, a URL já vem com
   // ?categoryId=...&startDate=...&endDate=... — usamos isso como filtro inicial
@@ -46,8 +58,8 @@ function TransactionsPageContent() {
   const [editingTransferId, setEditingTransferId] = useState<string | null>(null);
 
   // Filtro de período, categoria e tipo
-  const [startDate, setStartDate] = useState(() => searchParams.get('startDate') ?? '');
-  const [endDate, setEndDate] = useState(() => searchParams.get('endDate') ?? '');
+  const [startDate, setStartDate] = useState(() => searchParams.get('startDate') ?? currentMonthRange().start);
+  const [endDate, setEndDate] = useState(() => searchParams.get('endDate') ?? currentMonthRange().end);
   const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('categoryId') ?? '');
   const [typeFilter, setTypeFilter] = useState<'' | 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT'>('');
 
