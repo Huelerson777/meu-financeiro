@@ -5,6 +5,7 @@ import { X, Pencil, Trash2 } from 'lucide-react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { PurchaseModal } from './purchase-modal';
+import { PaymentModal } from './payment-modal';
 
 interface InvoiceItem {
   id: string;
@@ -16,11 +17,14 @@ interface InvoiceItem {
   installmentGroupId: string;
   installmentId: string | null;
   paid: boolean;
+  paidAt?: string | null;
+  paidFromAccountName?: string | null;
 }
 
 interface Invoice {
   month: string; // "2026-08"
   total: number;
+  openTotal: number;
   items: InvoiceItem[];
 }
 
@@ -91,29 +95,26 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
     }
   };
 
-  const handleTogglePaid = async (item: InvoiceItem) => {
+  const [payingItem, setPayingItem] = useState<InvoiceItem | null>(null);
+  const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
+
+  const handleToggleClick = async (item: InvoiceItem) => {
     if (!item.installmentId) return;
-    const nextPaid = !item.paid;
 
-    // Atualiza otimisticamente na UI
-    setInvoices((prev) =>
-      prev.map((inv) => ({
-        ...inv,
-        items: inv.items.map((it) => (it.id === item.id ? { ...it, paid: nextPaid } : it)),
-      })),
-    );
+    if (!item.paid) {
+      // Marcar como paga sempre abre a janela de pagamento (precisa da conta de origem)
+      setPayingItem(item);
+      return;
+    }
 
+    // Desfazer pagamento: devolve o valor pra conta de onde saiu
+    if (!window.confirm('Desfazer o pagamento desta parcela? O valor volta para a conta de origem.')) return;
     try {
-      await api.patch(`/cards/installments/${item.installmentId}/paid`, { paid: nextPaid });
-    } catch {
-      // Reverte se der erro
-      setInvoices((prev) =>
-        prev.map((inv) => ({
-          ...inv,
-          items: inv.items.map((it) => (it.id === item.id ? { ...it, paid: !nextPaid } : it)),
-        })),
-      );
-      alert('Erro ao atualizar status da parcela.');
+      await api.patch(`/cards/installments/${item.installmentId}/unpay`);
+      fetchInvoices();
+    } catch (err: any) {
+      const msg = err.response?.data?.message;
+      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao desfazer pagamento.');
     }
   };
 
@@ -200,8 +201,8 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                           {item.installmentId && (
                             <button
                               type="button"
-                              onClick={() => handleTogglePaid(item)}
-                              title={item.paid ? 'Marcar como em aberto' : 'Marcar como paga'}
+                              onClick={() => handleToggleClick(item)}
+                              title={item.paid ? 'Desfazer pagamento' : 'Pagar esta parcela'}
                               className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition ${
                                 item.paid
                                   ? 'bg-green-500 border-green-500 text-white'
@@ -228,6 +229,12 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                                 style={{ backgroundColor: `${item.category.color}20`, color: item.category.color }}
                               >
                                 {item.category.name}
+                              </span>
+                            )}
+                            {item.paid && item.paidFromAccountName && (
+                              <span className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                                Pago com {item.paidFromAccountName}
+                                {item.paidAt && ` em ${new Date(item.paidAt).toLocaleDateString('pt-BR')}`}
                               </span>
                             )}
                           </div>
@@ -261,13 +268,23 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
             </div>
 
             {/* Total da fatura do mês */}
-            <div className="flex justify-between items-center p-6 pt-4 border-t border-gray-100 dark:border-zinc-800">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Total da fatura {currentInvoice ? formatMonth(currentInvoice.month) : ''}
-              </span>
-              <span className="text-lg font-bold text-gray-800 dark:text-gray-100">
-                {formatCurrency(currentInvoice?.total ?? 0)}
-              </span>
+            <div className="flex flex-col gap-3 p-6 pt-4 border-t border-gray-100 dark:border-zinc-800">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  Total da fatura {currentInvoice ? formatMonth(currentInvoice.month) : ''}
+                </span>
+                <span className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                  {formatCurrency(currentInvoice?.total ?? 0)}
+                </span>
+              </div>
+              {currentInvoice && currentInvoice.openTotal > 0 && (
+                <button
+                  onClick={() => setPayingInvoice(currentInvoice)}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2.5 rounded-lg transition"
+                >
+                  Pagar fatura total em aberto ({formatCurrency(currentInvoice.openTotal)})
+                </button>
+              )}
             </div>
           </>
         )}
@@ -282,6 +299,38 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
             setPurchaseToEdit(null);
             fetchInvoices();
           }}
+        />
+      )}
+
+      {payingItem && (
+        <PaymentModal
+          title="Pagar parcela"
+          description={parseInstallmentLabel(payingItem.description).name}
+          amount={payingItem.amount}
+          onClose={() => setPayingItem(null)}
+          onSuccess={() => {
+            setPayingItem(null);
+            fetchInvoices();
+          }}
+          onConfirm={(accountId, date) =>
+            api.patch(`/cards/installments/${payingItem.installmentId}/pay`, { accountId, date }).then(() => {})
+          }
+        />
+      )}
+
+      {payingInvoice && (
+        <PaymentModal
+          title="Pagar fatura total"
+          description={`${card.name} · ${formatMonth(payingInvoice.month)}`}
+          amount={payingInvoice.openTotal}
+          onClose={() => setPayingInvoice(null)}
+          onSuccess={() => {
+            setPayingInvoice(null);
+            fetchInvoices();
+          }}
+          onConfirm={(accountId, date) =>
+            api.post(`/cards/${card.id}/invoices/pay`, { accountId, date, month: payingInvoice.month }).then(() => {})
+          }
         />
       )}
     </div>

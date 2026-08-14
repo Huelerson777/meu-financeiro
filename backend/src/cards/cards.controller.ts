@@ -6,6 +6,8 @@ import { CardsService } from './cards.service';
 import { CreateCardDto } from './dto/create-card.dto';
 import { UpdateCardDto } from './dto/update-card.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
+import { PayInstallmentDto } from './dto/pay-installment.dto';
+import { PayInvoiceDto } from './dto/pay-invoice.dto';
 
 @ApiTags('Cards')
 @ApiBearerAuth()
@@ -68,12 +70,26 @@ export class CardsController {
     return this.cardsService.deletePurchase(groupId, user.id);
   }
 
-  @Patch('installments/:id/paid')
-  setInstallmentPaid(
+  @Patch('installments/:id/pay')
+  payInstallment(
     @CurrentUser() user: { id: string },
     @Param('id') id: string,
-    @Body('paid') paid: boolean,
+    @Body() dto: PayInstallmentDto,
   ) {
-    return this.cardsService.setInstallmentPaid(id, user.id, Boolean(paid));
+    return this.cardsService.payInstallment(id, user.id, dto);
+  }
+
+  @Patch('installments/:id/unpay')
+  unpayInstallment(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.cardsService.unpayInstallment(id, user.id);
+  }
+
+  @Post(':id/invoices/pay')
+  payInvoice(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: PayInvoiceDto,
+  ) {
+    return this.cardsService.payInvoice(id, user.id, dto);
   }
 }

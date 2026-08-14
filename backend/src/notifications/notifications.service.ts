@@ -51,8 +51,10 @@ export class NotificationsService {
         where: { paid: false, dueDate: { lte: limit }, transaction: { userId } },
         include: { transaction: { select: { description: true, card: { select: { name: true } } } } },
       }),
+      // cardId: null pra não duplicar aviso: parcelas de cartão pendentes já
+      // geram notificação própria via openInstallments, com nome do cartão.
       this.prisma.transaction.findMany({
-        where: { userId, type: 'EXPENSE', status: 'PENDING', date: { lte: limit } },
+        where: { userId, type: 'EXPENSE', status: 'PENDING', date: { lte: limit }, cardId: null },
       }),
       this.prisma.notification.findMany({
         where: { userId, referenceId: { not: null } },

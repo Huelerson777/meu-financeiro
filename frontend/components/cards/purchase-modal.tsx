@@ -36,7 +36,8 @@ interface PurchaseModalProps {
 export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: PurchaseModalProps) {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [description, setDescription] = useState(editingPurchase?.description ?? '');
-  const [totalAmount, setTotalAmount] = useState(editingPurchase?.totalAmount.toString() ?? '');
+  const [amountMode, setAmountMode] = useState<'total' | 'installment'>('total');
+  const [amountValue, setAmountValue] = useState(editingPurchase?.totalAmount.toString() ?? '');
   const [installmentsCount, setInstallmentsCount] = useState(editingPurchase?.installmentsCount.toString() ?? '1');
   const [purchaseDate, setPurchaseDate] = useState(editingPurchase?.purchaseDate ?? new Date().toISOString().split('T')[0]);
   const [categoryId, setCategoryId] = useState(editingPurchase?.categoryId ?? '');
@@ -51,9 +52,10 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
   }, []);
 
   const availableLimit = Number(card.limitAmount) - Number(card.usedLimit);
-  const parsedTotal = parseFloat(totalAmount || '0');
+  const parsedAmount = parseFloat(amountValue || '0');
   const parsedCount = parseInt(installmentsCount || '1', 10);
-  const installmentPreview = parsedCount > 0 ? parsedTotal / parsedCount : 0;
+  const parsedTotal = amountMode === 'installment' ? parsedAmount * parsedCount : parsedAmount;
+  const installmentPreview = amountMode === 'installment' ? parsedAmount : (parsedCount > 0 ? parsedTotal / parsedCount : 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,12 +107,37 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
           </div>
 
           <div>
-            <label className="block text-sm font-medium dark:text-gray-300 mb-1">Valor total da compra (R$)</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-sm font-medium dark:text-gray-300">
+                {amountMode === 'total' ? 'Valor total da compra (R$)' : 'Valor de cada parcela (R$)'}
+              </label>
+              <div className="flex gap-1 p-0.5 bg-gray-100 dark:bg-zinc-800 rounded-md">
+                <button
+                  type="button"
+                  onClick={() => setAmountMode('total')}
+                  className={`px-2 py-0.5 text-xs font-medium rounded transition ${amountMode === 'total' ? 'bg-white dark:bg-zinc-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                  Total
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAmountMode('installment')}
+                  className={`px-2 py-0.5 text-xs font-medium rounded transition ${amountMode === 'installment' ? 'bg-white dark:bg-zinc-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                >
+                  Por parcela
+                </button>
+              </div>
+            </div>
             <input
-              type="number" step="0.01" required
-              value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)}
+              type="number" step="0.01" required placeholder={amountMode === 'installment' ? 'Ex: 10,00' : undefined}
+              value={amountValue} onChange={(e) => setAmountValue(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
             />
+            {amountMode === 'installment' && parsedCount > 0 && parsedAmount > 0 && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                Total da compra: {formatCurrency(parsedTotal)} ({parsedCount}x de {formatCurrency(parsedAmount)})
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
