@@ -60,10 +60,9 @@ export class AccountsService {
 
     const fromAccount = await this.ensureOwnership(dto.fromAccountId, userId);
 
-    // 👇 REGRA COMENTADA TEMPORARIAMENTE PARA TESTARMOS A TRANSFERÊNCIA 👇
-    // if (Number(fromAccount.currentBalance) < dto.amount) {
-    //   throw new BadRequestException('Saldo insuficiente para realizar a transferência');
-    // }
+    if (Number(fromAccount.currentBalance) < dto.amount) {
+      throw new BadRequestException('Saldo insuficiente para realizar a transferência');
+    }
 
     await this.ensureOwnership(dto.toAccountId, userId);
 

@@ -36,11 +36,13 @@ export class UsersService {
 
     const newHash = await bcrypt.hash(dto.newPassword, 10);
     await this.usersRepository.updatePassword(userId, newHash);
+    await this.usersRepository.revokeAllRefreshTokens(userId);
     return { message: 'Senha alterada com sucesso' };
   }
 
   async deleteAccount(userId: string) {
     await this.usersRepository.softDelete(userId);
+    await this.usersRepository.revokeAllRefreshTokens(userId);
     return { message: 'Conta excluída com sucesso' };
   }
 }

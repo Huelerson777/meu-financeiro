@@ -10,7 +10,7 @@ type TxClient = Prisma.TransactionClient;
 export class TransactionsService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll(userId: string, filters?: { startDate?: string; endDate?: string; search?: string }) {
+  async findAll(userId: string, filters?: { startDate?: string; endDate?: string; search?: string; categoryId?: string }) {
     const where: Prisma.TransactionWhereInput = { userId };
 
     if (filters?.startDate || filters?.endDate) {
@@ -18,6 +18,10 @@ export class TransactionsService {
         ...(filters.startDate ? { gte: new Date(`${filters.startDate}T00:00:00.000Z`) } : {}),
         ...(filters.endDate ? { lte: new Date(`${filters.endDate}T23:59:59.999Z`) } : {}),
       };
+    }
+
+    if (filters?.categoryId) {
+      where.categoryId = filters.categoryId;
     }
 
     if (filters?.search) {
@@ -46,6 +50,9 @@ export class TransactionsService {
   }
 
   async create(userId: string, data: CreateTransactionDto) {
+    await this.ensureAccountOwnership(data.accountId, userId);
+    if (data.categoryId) await this.ensureCategoryOwnership(data.categoryId, userId);
+
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.transaction.create({
         data: {
@@ -66,6 +73,9 @@ export class TransactionsService {
   }
 
   async update(id: string, userId: string, dto: UpdateTransactionDto) {
+    if (dto.accountId) await this.ensureAccountOwnership(dto.accountId, userId);
+    if (dto.categoryId) await this.ensureCategoryOwnership(dto.categoryId, userId);
+
     return this.prisma.$transaction(async (tx) => {
       const existing = await tx.transaction.findFirst({ where: { id, userId } });
       if (!existing) throw new NotFoundException('Transação não encontrada');
@@ -141,5 +151,15 @@ export class TransactionsService {
       });
     }
     // TRANSFER não é tratado aqui — ver AccountsRepository.createTransfer
+  }
+
+  private async ensureAccountOwnership(accountId: string, userId: string) {
+    const account = await this.prisma.account.findFirst({ where: { id: accountId, userId } });
+    if (!account) throw new ForbiddenException('Conta não encontrada ou não pertence ao usuário');
+  }
+
+  private async ensureCategoryOwnership(categoryId: string, userId: string) {
+    const category = await this.prisma.category.findFirst({ where: { id: categoryId, userId } });
+    if (!category) throw new ForbiddenException('Categoria não encontrada ou não pertence ao usuário');
   }
 }

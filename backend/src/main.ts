@@ -16,7 +16,10 @@ async function bootstrap() {
   app.enableCors({
     origin: true, // O "true" libera o acesso tanto para o seu localhost quanto para os links da Vercel
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
+    // A autenticação é 100% via header Authorization (Bearer token), sem cookies —
+    // credentials:true não é necessário e, combinado com origin:true, permitiria
+    // qualquer site fazer requisições "credenciadas" à API. Ver auditoria de segurança.
+    credentials: false,
   });
 
   // Validação global de DTOs

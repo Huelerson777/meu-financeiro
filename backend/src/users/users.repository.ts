@@ -25,4 +25,13 @@ export class UsersRepository {
   softDelete(id: string) {
     return this.prisma.user.update({ where: { id }, data: { isActive: false } });
   }
+
+  // Invalida todas as sessões ativas — usado após trocar senha ou excluir a conta,
+  // pra que um refresh token vazado antes desse ponto pare de funcionar.
+  revokeAllRefreshTokens(userId: string) {
+    return this.prisma.refreshToken.updateMany({
+      where: { userId, revoked: false },
+      data: { revoked: true },
+    });
+  }
 }
