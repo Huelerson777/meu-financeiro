@@ -16,7 +16,6 @@ import {
   useDashboardSummary,
   useDashboardExpensesByCategory,
   useDashboardPaymentsStatus,
-  useNetWorthTrend,
   useGoalsSummary,
 } from '@/hooks/use-dashboard';
 import { PaymentsStatusItem } from '@/services/dashboard.service';
@@ -64,7 +63,6 @@ export default function DashboardPage() {
     isLoading: paymentsLoading,
     refetch: refetchPaymentsStatus,
   } = useDashboardPaymentsStatus({ month: selectedMonth, year: selectedYear });
-  const { data: netWorthTrend, isLoading: netWorthLoading } = useNetWorthTrend(12);
   const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
   const { isEnabled } = useEnabledWidgets();
 
@@ -291,6 +289,82 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Resumo de Metas */}
+      {isEnabled('goalsSummary') && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Metas
+              </span>
+              {goalsSummary && goalsSummary.count > 0 && (
+                <button
+                  onClick={() => router.push('/goals')}
+                  className="text-xs font-normal text-primary hover:underline"
+                >
+                  Ver todas
+                </button>
+              )}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {goalsLoading ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p>
+            ) : !goalsSummary || goalsSummary.count === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-sm text-muted-foreground mb-3">Você ainda não tem metas cadastradas.</p>
+                <button
+                  onClick={() => router.push('/goals')}
+                  className="text-sm font-semibold text-primary hover:underline"
+                >
+                  Criar sua primeira meta
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                <div>
+                  <div className="flex items-baseline justify-between mb-1">
+                    <span className="text-sm text-muted-foreground">Progresso geral</span>
+                    <span className="text-sm font-semibold">{goalsSummary.overallProgress}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <div
+                      className="h-2 rounded-full bg-primary transition-all"
+                      style={{ width: `${Math.min(100, goalsSummary.overallProgress)}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {formatCurrency(goalsSummary.totalCurrent)} de {formatCurrency(goalsSummary.totalTarget)}
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-3">
+                  {goalsSummary.goals.map((g) => (
+                    <div key={g.id}>
+                      <div className="flex items-baseline justify-between mb-1 gap-2">
+                        <span className="text-sm font-medium truncate">{g.name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">{g.progress}%</span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-1.5 rounded-full bg-success"
+                          style={{ width: `${Math.min(100, g.progress)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatCurrency(g.currentAmount)} de {formatCurrency(g.targetAmount)}
+                        {g.deadline ? ` · até ${new Date(g.deadline).toLocaleDateString('pt-BR')}` : ''}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>

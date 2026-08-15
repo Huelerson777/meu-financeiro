@@ -15,7 +15,6 @@ export const DASHBOARD_WIDGETS: { key: string; label: string }[] = [
   { key: 'balanceChart', label: 'Balanço do Mês' },
   { key: 'yearlyChart', label: 'Evolução Anual' },
   { key: 'categoryChart', label: 'Despesas por Categoria' },
-  { key: 'netWorthChart', label: 'Patrimônio' },
   { key: 'goalsSummary', label: 'Resumo de Metas' },
 ];
 
