@@ -1,16 +1,22 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TrendingUp, TrendingDown, PiggyBank, Target, CircleCheck, CircleDashed, Wallet } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, Cell, Tooltip as RechartsTooltip,
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend, LabelList,
 } from 'recharts';
+import {
+  DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SummaryCard } from '@/components/dashboard/summary-card';
+import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
-import { WidgetPicker, useEnabledWidgets } from '@/components/dashboard/widget-picker';
+import { WidgetPicker, useDashboardWidgetOrder, WIDGET_SPANS } from '@/components/dashboard/widget-picker';
 import { PaymentModal } from '@/components/cards/payment-modal';
 import {
   useDashboardSummary,
@@ -64,7 +70,21 @@ export default function DashboardPage() {
     refetch: refetchPaymentsStatus,
   } = useDashboardPaymentsStatus({ month: selectedMonth, year: selectedYear });
   const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
-  const { isEnabled } = useEnabledWidgets();
+  const { order, setOrder } = useDashboardWidgetOrder();
+
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = order.indexOf(String(active.id));
+    const newIndex = order.indexOf(String(over.id));
+    if (oldIndex === -1 || newIndex === -1) return;
+    setOrder(arrayMove(order, oldIndex, newIndex));
+  };
 
   // Gera (de forma idempotente) o lançamento pendente do mês corrente pra
   // cada conta fixa ativa, assim que o Dashboard é aberto.
@@ -187,28 +207,29 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 4 cards: Receitas, Despesas, Investido, Sobras — cada um pode ser ocultado em "Personalizar" */}
-      {(isEnabled('income') || isEnabled('expense') || isEnabled('invested') || isEnabled('leftovers')) && (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {isEnabled('income') && (
+      {/* Cada widget abaixo pode ser ocultado em "Personalizar" e reordenado
+          arrastando pelo ícone que aparece no canto ao passar o mouse. */}
+      {(() => {
+        const widgetContent: Record<string, ReactNode> = {
+          income: (
             <SummaryCard
               label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading}
               onClick={() => openDetail('INCOME')} changePct={data?.comparison?.incomeChangePct}
             />
-          )}
-          {isEnabled('expense') && (
+          ),
+          expense: (
             <SummaryCard
               label="Despesas" value={data?.totalExpense} icon={TrendingDown} tone="danger" isLoading={isLoading}
               onClick={() => openDetail('EXPENSE')} changePct={data?.comparison?.expenseChangePct} invertChangeTone
             />
-          )}
-          {isEnabled('invested') && (
+          ),
+          invested: (
             <SummaryCard
               label="Investido" value={data?.totalInvested} icon={PiggyBank} isLoading={isLoading}
               changePct={data?.comparison?.investedChangePct}
             />
-          )}
-          {isEnabled('leftovers') && (
+          ),
+          leftovers: (
             <SummaryCard
               label="Sobras"
               value={data?.leftovers}
@@ -217,12 +238,8 @@ export default function DashboardPage() {
               isLoading={isLoading}
               changePct={data?.comparison?.leftoversChangePct}
             />
-          )}
-        </div>
-      )}
-
-      {/* Pago x Em Aberto */}
-      {isEnabled('paymentsStatus') && (
+          ),
+          paymentsStatus: (
         <Card>
           <CardHeader>
             <CardTitle>Pago x Em Aberto</CardTitle>
@@ -293,10 +310,8 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      )}
-
-      {/* Resumo de Metas */}
-      {isEnabled('goalsSummary') && (
+          ),
+          goalsSummary: (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -369,13 +384,8 @@ export default function DashboardPage() {
             )}
           </CardContent>
         </Card>
-      )}
-
-      {/* Linha 2 — Balanço do Mês + Evolução Anual */}
-      {(isEnabled('balanceChart') || isEnabled('yearlyChart')) && (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ITEM 5 — Balanço do Mês com labels no topo das barras */}
-        {isEnabled('balanceChart') && (
+          ),
+          balanceChart: (
         <Card>
           <CardHeader>
             <CardTitle>Balanço do Mês</CardTitle>
@@ -424,10 +434,8 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        )}
-
-        {/* ITEM 4 — Evolução Anual com dados reais do backend */}
-        {isEnabled('yearlyChart') && (
+          ),
+          yearlyChart: (
         <Card>
           <CardHeader>
             <CardTitle>Evolução Anual {selectedYear}</CardTitle>
@@ -468,12 +476,8 @@ export default function DashboardPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-        )}
-      </div>
-      )}
-
-      {/* ITEM 7 — Gráfico de Despesas por Categoria */}
-      {isEnabled('categoryChart') && (
+          ),
+          categoryChart: (
       <Card>
         <CardHeader>
           <CardTitle>Despesas por Categoria</CardTitle>
@@ -532,7 +536,25 @@ export default function DashboardPage() {
           )}
         </CardContent>
       </Card>
-      )}
+          ),
+        };
+
+        const visibleOrder = order.filter((key) => widgetContent[key]);
+
+        return (
+          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={visibleOrder} strategy={rectSortingStrategy}>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                {visibleOrder.map((key) => (
+                  <SortableWidget key={key} id={key} span={WIDGET_SPANS[key]}>
+                    {widgetContent[key]}
+                  </SortableWidget>
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        );
+      })()}
 
       <TransactionDetailModal
         open={!!detailModal}

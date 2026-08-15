@@ -20,10 +20,52 @@ export const DASHBOARD_WIDGETS: { key: string; label: string }[] = [
 
 const ALL_KEYS = DASHBOARD_WIDGETS.map((w) => w.key);
 
+/**
+ * Quantas colunas cada widget ocupa numa grade `grid-cols-1 sm:grid-cols-2
+ * lg:grid-cols-4` — usado pelo Dashboard pra montar a grade arrastável
+ * mantendo o mesmo layout visual de hoje (tiles pequenos, gráficos
+ * grandes lado a lado, o resto largura total).
+ */
+export const WIDGET_SPANS: Record<string, string> = {
+  income: 'col-span-1',
+  expense: 'col-span-1',
+  invested: 'col-span-1',
+  leftovers: 'col-span-1',
+  paymentsStatus: 'sm:col-span-2 lg:col-span-4',
+  balanceChart: 'sm:col-span-2 lg:col-span-2',
+  yearlyChart: 'sm:col-span-2 lg:col-span-2',
+  categoryChart: 'sm:col-span-2 lg:col-span-4',
+  goalsSummary: 'sm:col-span-2 lg:col-span-4',
+};
+
 export function useEnabledWidgets(): { isEnabled: (key: string) => boolean; loaded: boolean } {
   const { data, isLoading } = useSettings();
   const enabled = data?.dashboardWidgets ?? ALL_KEYS;
   return { isEnabled: (key: string) => enabled.includes(key), loaded: !isLoading };
+}
+
+/**
+ * A ordem dos itens em `dashboardWidgets` é também a ordem de exibição —
+ * usado pelo Dashboard pra montar a grade arrastável e persistir uma nova
+ * ordem depois de soltar um card.
+ */
+export function useDashboardWidgetOrder(): {
+  order: string[];
+  setOrder: (next: string[]) => void;
+  loaded: boolean;
+} {
+  const { data, isLoading } = useSettings();
+  const queryClient = useQueryClient();
+  const order = data?.dashboardWidgets ?? ALL_KEYS;
+
+  const setOrder = (next: string[]) => {
+    queryClient.setQueryData(['settings'], (prev: any) => ({ ...prev, dashboardWidgets: next }));
+    api.patch('/settings', { dashboardWidgets: next }).catch(() => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    });
+  };
+
+  return { order, setOrder, loaded: !isLoading };
 }
 
 export function WidgetPicker() {
