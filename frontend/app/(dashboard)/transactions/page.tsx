@@ -2,7 +2,36 @@
 
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { X, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, TrendingUp } from 'lucide-react';
 import { api } from '@/services/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { formatCurrency } from '@/utils/currency';
+
+const selectClass =
+  'h-10 w-full rounded-md border border-border bg-background px-3 text-sm transition-theme focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+
+const TYPE_OPTIONS = [
+  { value: 'EXPENSE', label: 'Saída', icon: ArrowDownCircle, activeClass: 'bg-danger text-white shadow' },
+  { value: 'INCOME', label: 'Entrada', icon: ArrowUpCircle, activeClass: 'bg-success text-white shadow' },
+  { value: 'TRANSFER', label: 'Transferência', icon: ArrowLeftRight, activeClass: 'bg-purple-600 text-white shadow' },
+  { value: 'INVESTMENT', label: 'Investir', icon: TrendingUp, activeClass: 'bg-primary text-primary-foreground shadow' },
+] as const;
+
+const TYPE_FILTER_OPTIONS = [
+  { value: 'INCOME', label: 'Receitas' },
+  { value: 'EXPENSE', label: 'Despesas' },
+  { value: 'TRANSFER', label: 'Transferências' },
+  { value: 'INVESTMENT', label: 'Investimentos' },
+];
+
+const TYPE_HELP: Record<(typeof TYPE_OPTIONS)[number]['value'], string> = {
+  EXPENSE: 'Um gasto que saiu (ou vai sair) de uma conta.',
+  INCOME: 'Um valor que entrou (ou vai entrar) em uma conta.',
+  TRANSFER: 'Mover dinheiro de uma conta para outra.',
+  INVESTMENT: 'Um aporte que sai de uma conta e vai para uma conta de investimento.',
+};
 
 interface Transaction {
   id: string;
@@ -22,6 +51,7 @@ interface AccountOption {
   id: string;
   name: string;
   type: string;
+  currentBalance?: number | string;
 }
 
 interface CategoryOption {
@@ -61,7 +91,39 @@ function TransactionsPageContent() {
   const [startDate, setStartDate] = useState(() => searchParams.get('startDate') ?? currentMonthRange().start);
   const [endDate, setEndDate] = useState(() => searchParams.get('endDate') ?? currentMonthRange().end);
   const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('categoryId') ?? '');
-  const [typeFilter, setTypeFilter] = useState<'' | 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT'>('');
+  const [typeFilters, setTypeFilters] = useState<string[]>([]);
+  const [typeFilterOpen, setTypeFilterOpen] = useState(false);
+  const typeFilterRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (typeFilterRef.current && !typeFilterRef.current.contains(e.target as Node)) setTypeFilterOpen(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleTypeFilter = (value: string) => {
+    setTypeFilters((prev) => (prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]));
+    setPage(1);
+  };
+
+  // Descrição e valor filtram com um pequeno atraso (debounce) pra não
+  // disparar uma busca a cada tecla digitada.
+  const [descriptionInput, setDescriptionInput] = useState('');
+  const [descriptionFilter, setDescriptionFilter] = useState('');
+  const [amountInput, setAmountInput] = useState('');
+  const [amountFilter, setAmountFilter] = useState('');
+
+  useEffect(() => {
+    const t = setTimeout(() => { setDescriptionFilter(descriptionInput.trim()); setPage(1); }, 500);
+    return () => clearTimeout(t);
+  }, [descriptionInput]);
+
+  useEffect(() => {
+    const t = setTimeout(() => { setAmountFilter(amountInput.trim()); setPage(1); }, 500);
+    return () => clearTimeout(t);
+  }, [amountInput]);
 
   // Paginação
   const [page, setPage] = useState(1);
@@ -133,7 +195,9 @@ function TransactionsPageContent() {
       if (startDate) transactionsParams.startDate = startDate;
       if (endDate) transactionsParams.endDate = endDate;
       if (categoryFilter) transactionsParams.categoryId = categoryFilter;
-      if (typeFilter) transactionsParams.type = typeFilter;
+      if (typeFilters.length > 0) transactionsParams.type = typeFilters.join(',');
+      if (descriptionFilter) transactionsParams.search = descriptionFilter;
+      if (amountFilter) transactionsParams.amount = amountFilter;
 
       const [transRes, accRes, catRes] = await Promise.all([
         api.get('/transactions', { params: transactionsParams }).catch(() => ({ data: [] })),
@@ -165,7 +229,7 @@ function TransactionsPageContent() {
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [startDate, endDate, categoryFilter, typeFilter, page]);
+  }, [startDate, endDate, categoryFilter, typeFilters, descriptionFilter, amountFilter, page]);
 
   // Gera (de forma idempotente) o lançamento pendente do mês corrente pra
   // cada conta fixa ativa, assim que a tela é aberta.
@@ -324,6 +388,7 @@ function TransactionsPageContent() {
   };
 
   const investmentAccounts = accounts.filter(acc => acc.type === 'INVESTMENT');
+  const selectedAccount = accounts.find((acc) => acc.id === accountId);
 
   return (
     <div className="p-8">
@@ -334,18 +399,17 @@ function TransactionsPageContent() {
             Gerencie suas entradas, saídas e movimentações
           </p>
         </div>
-        <button
+        <Button
           onClick={() => {
             fetchData();
             handleOpenCreate();
           }}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium shadow transition"
         >
           + Nova Movimentação
-        </button>
+        </Button>
       </div>
 
-      {/* Filtro de período, tipo e categoria */}
+      {/* Filtro de período, tipo, categoria, descrição e valor */}
       <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-4 mb-6 flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">De</label>
@@ -365,19 +429,62 @@ function TransactionsPageContent() {
             className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
           />
         </div>
-        <div>
+        <div className="relative" ref={typeFilterRef}>
           <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tipo</label>
-          <select
-            value={typeFilter}
-            onChange={(e) => { setTypeFilter(e.target.value as typeof typeFilter); setPage(1); }}
-            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white text-sm"
+          <button
+            type="button"
+            onClick={() => setTypeFilterOpen((o) => !o)}
+            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white text-sm min-w-[10rem] text-left"
           >
-            <option value="">Todos os tipos</option>
-            <option value="INCOME">Receitas</option>
-            <option value="EXPENSE">Despesas</option>
-            <option value="TRANSFER">Transferências</option>
-            <option value="INVESTMENT">Investimentos</option>
-          </select>
+            {typeFilters.length === 0
+              ? 'Todos os tipos'
+              : TYPE_FILTER_OPTIONS.filter((o) => typeFilters.includes(o.value)).map((o) => o.label).join(', ')}
+          </button>
+          {typeFilterOpen && (
+            <div className="absolute z-40 mt-1 w-48 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 shadow-lg">
+              {TYPE_FILTER_OPTIONS.map((o) => (
+                <label key={o.value} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer dark:text-white">
+                  <input
+                    type="checkbox"
+                    checked={typeFilters.includes(o.value)}
+                    onChange={() => toggleTypeFilter(o.value)}
+                    className="h-4 w-4 rounded border-border"
+                  />
+                  {o.label}
+                </label>
+              ))}
+              {typeFilters.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { setTypeFilters([]); setPage(1); }}
+                  className="mt-1 w-full text-left text-xs text-blue-600 hover:underline px-2 py-1"
+                >
+                  Limpar tipos
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Descrição</label>
+          <input
+            type="text"
+            placeholder="Buscar por descrição..."
+            value={descriptionInput}
+            onChange={(e) => setDescriptionInput(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Valor</label>
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Ex: 100,00"
+            value={amountInput}
+            onChange={(e) => setAmountInput(e.target.value)}
+            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm w-32"
+          />
         </div>
         {(startDate || endDate) && (
           <button
@@ -385,6 +492,14 @@ function TransactionsPageContent() {
             className="text-sm text-blue-600 hover:underline pb-2"
           >
             Limpar período
+          </button>
+        )}
+        {(descriptionInput || amountInput) && (
+          <button
+            onClick={() => { setDescriptionInput(''); setAmountInput(''); setPage(1); }}
+            className="text-sm text-blue-600 hover:underline pb-2"
+          >
+            Limpar busca
           </button>
         )}
         {categoryFilter && (
@@ -425,16 +540,22 @@ function TransactionsPageContent() {
             <tbody>
               {transactions.map((t) => {
                 const isIncome = t.type === 'INCOME';
-                const isTransfer = t.type === 'TRANSFER';
+                // Investimento não é um TransactionType próprio — é uma TRANSFER cuja
+                // conta de destino é do tipo INVESTMENT (mesma regra usada no backend
+                // e no filtro de tipo). Sem esse check, todo investimento aparecia
+                // rotulado como "Transferência" na lista.
+                const isInvestment = t.type === 'TRANSFER' && t.transfer?.toAccount?.type === 'INVESTMENT';
+                const isTransfer = t.type === 'TRANSFER' && !isInvestment;
                 return (
                   <tr key={t.id} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50/50 dark:hover:bg-zinc-800/50 group">
                     <td className="p-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        isIncome ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
+                        isIncome ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                        : isInvestment ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
                         : isTransfer ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
                         : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
                       }`}>
-                        {isIncome ? '↑ Entrada' : isTransfer ? '⇄ Transf.' : '↓ Saída'}
+                        {isIncome ? '↑ Entrada' : isInvestment ? '📈 Investir' : isTransfer ? '⇄ Transf.' : '↓ Saída'}
                       </span>
                     </td>
                     <td className="p-4 dark:text-gray-200 font-medium">
@@ -460,10 +581,11 @@ function TransactionsPageContent() {
                       </span>
                     </td>
                     <td className={`p-4 text-right font-semibold text-lg ${
-                      isIncome ? 'text-green-600 dark:text-green-400' : 
+                      isIncome ? 'text-green-600 dark:text-green-400' :
+                      isInvestment ? 'text-blue-600 dark:text-blue-400' :
                       isTransfer ? 'text-purple-600 dark:text-purple-400' : 'text-red-600 dark:text-red-400'
                     }`}>
-                      {isIncome ? '+ ' : isTransfer ? '' : '- '}
+                      {isIncome ? '+ ' : isTransfer || isInvestment ? '' : '- '}
                       {Number(t.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </td>
                     <td className="p-4 text-center">
@@ -510,73 +632,104 @@ function TransactionsPageContent() {
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-200 dark:border-zinc-800">
-            <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold dark:text-white">
-                {editingId ? 'Editar Movimentação' : 'Nova Movimentação'}
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-700 font-bold text-lg">✕</button>
+          <div className="bg-card text-card-foreground rounded-xl shadow-xl w-full max-w-lg border border-border max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-border">
+              <div>
+                <h2 className="text-lg font-semibold">
+                  {editingId ? 'Editar Movimentação' : 'Nova Movimentação'}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-0.5">{TYPE_HELP[uiType]}</p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-muted-foreground hover:text-foreground transition shrink-0"
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              
+            <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-5">
+
               {!editingId && (
-                <div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-1 bg-gray-100 dark:bg-zinc-800 rounded-lg mb-4">
-                    <button type="button" onClick={() => setUiType('EXPENSE')} className={`py-2 text-xs font-semibold rounded transition ${uiType === 'EXPENSE' ? 'bg-red-600 text-white shadow' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}>↓ Saída</button>
-                    <button type="button" onClick={() => setUiType('INCOME')} className={`py-2 text-xs font-semibold rounded transition ${uiType === 'INCOME' ? 'bg-green-600 text-white shadow' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}>↑ Entrada</button>
-                    <button type="button" onClick={() => setUiType('TRANSFER')} className={`py-2 text-xs font-semibold rounded transition ${uiType === 'TRANSFER' ? 'bg-purple-600 text-white shadow' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}>⇄ Transf.</button>
-                    <button type="button" onClick={() => setUiType('INVESTMENT')} className={`py-2 text-xs font-semibold rounded transition ${uiType === 'INVESTMENT' ? 'bg-blue-600 text-white shadow' : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'}`}>📈 Investir</button>
-                  </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1 bg-muted rounded-lg">
+                  {TYPE_OPTIONS.map(({ value, label, icon: Icon, activeClass }) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setUiType(value)}
+                      className={`flex flex-col items-center gap-1 py-2.5 text-xs font-semibold rounded-md transition ${
+                        uiType === value ? activeClass : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      {label}
+                    </button>
+                  ))}
                 </div>
               )}
 
               {(uiType === 'TRANSFER' || uiType === 'INVESTMENT') ? (
-                <div className="grid grid-cols-2 gap-3 bg-gray-50 dark:bg-zinc-800/50 p-3 rounded-lg border border-gray-100 dark:border-zinc-700">
-                  <div>
-                    <label className="block text-xs font-medium dark:text-gray-300 mb-1">De (Conta Origem)</label>
-                    <select required value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full px-2 py-2 text-sm border border-gray-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-900 dark:text-white">
+                <div className="grid grid-cols-2 gap-3 bg-muted/50 p-3 rounded-lg border border-border">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>De (Conta Origem)</Label>
+                    <select required value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectClass}>
                       <option value="">Selecione...</option>
                       {accounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
                     </select>
+                    {/* Altura fixa reservada — evita o campo "pular" quando o saldo
+                        chega depois do fetch de contas (era o bug relatado). */}
+                    <p className="h-4 text-xs text-muted-foreground truncate">
+                      {selectedAccount?.currentBalance !== undefined ? `Saldo: ${formatCurrency(Number(selectedAccount.currentBalance))}` : ''}
+                    </p>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium dark:text-gray-300 mb-1">Para (Conta Destino)</label>
-                    <select required value={destinationAccountId} onChange={(e) => setDestinationAccountId(e.target.value)} className="w-full px-2 py-2 text-sm border border-gray-300 dark:border-zinc-600 rounded bg-white dark:bg-zinc-900 dark:text-white">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Para (Conta Destino)</Label>
+                    <select required value={destinationAccountId} onChange={(e) => setDestinationAccountId(e.target.value)} className={selectClass}>
                       <option value="">Selecione...</option>
-                      {uiType === 'INVESTMENT' 
+                      {uiType === 'INVESTMENT'
                         ? (investmentAccounts.length > 0 ? investmentAccounts.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>) : <option disabled>Crie uma conta de Investimento!</option>)
                         : accounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name}</option>)
                       }
                     </select>
+                    <p className="h-4" />
                   </div>
                 </div>
               ) : (
-                <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">Conta Bancária</label>
-                  <select required value={accountId} onChange={(e) => setAccountId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white">
+                <div className="flex flex-col gap-1.5">
+                  <Label>Conta Bancária</Label>
+                  <select required value={accountId} onChange={(e) => setAccountId(e.target.value)} className={selectClass}>
                     {accounts.map((acc) => <option key={acc.id} value={acc.id}>{acc.name}</option>)}
                   </select>
+                  <p className="h-4 text-xs text-muted-foreground truncate">
+                    {selectedAccount?.currentBalance !== undefined ? `Saldo atual: ${formatCurrency(Number(selectedAccount.currentBalance))}` : ''}
+                  </p>
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Descrição</label>
-                <input type="text" placeholder={uiType === 'INVESTMENT' ? 'Ex: Aporte CDB...' : 'Ex: Mercado...'} value={description} onChange={(e) => handleDescriptionChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white" />
+              <div className="flex flex-col gap-1.5">
+                <Label>Descrição</Label>
+                <Input
+                  type="text"
+                  placeholder={uiType === 'INVESTMENT' ? 'Ex: Aporte CDB...' : 'Ex: Mercado...'}
+                  value={description}
+                  onChange={(e) => handleDescriptionChange(e.target.value)}
+                />
               </div>
 
               {uiType !== 'TRANSFER' && uiType !== 'INVESTMENT' && (
-                <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                    Categoria {uiType === 'EXPENSE' && <span className="text-xs font-normal text-gray-400">(usada no gráfico do Dashboard)</span>}
+                <div className="flex flex-col gap-1.5">
+                  <Label className="flex flex-wrap items-center gap-1 font-medium">
+                    Categoria
+                    {uiType === 'EXPENSE' && <span className="text-xs font-normal text-muted-foreground">(usada no gráfico do Dashboard)</span>}
                     {categoryAutoSuggested && categoryId && (
-                      <span className="ml-1 text-xs font-normal text-blue-500">· sugerida</span>
+                      <span className="text-xs font-normal text-primary">· sugerida</span>
                     )}
-                  </label>
+                  </Label>
                   <select
                     value={categoryId}
                     onChange={(e) => handleCategoryChange(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white"
+                    className={selectClass}
                   >
                     <option value="">Sem categoria</option>
                     {categories.map((cat) => (
@@ -584,38 +737,57 @@ function TransactionsPageContent() {
                     ))}
                   </select>
                   {categories.length === 0 && (
-                    <p className="text-xs text-amber-500 mt-1">
+                    <p className="text-xs text-amber-500">
                       Nenhuma categoria encontrada. Saia e entre novamente na sua conta para criar as categorias padrão.
                     </p>
                   )}
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">Valor (R$)</label>
-                  <input type="number" step="0.01" required placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white" />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label>Valor (R$)</Label>
+                  <Input type="number" step="0.01" required placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 </div>
-                {uiType !== 'TRANSFER' && uiType !== 'INVESTMENT' && (
-                  <div>
-                    <label className="block text-sm font-medium dark:text-gray-300 mb-1">Status</label>
-                    <select value={status} onChange={(e: any) => setStatus(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white">
-                      <option value="PAID">{uiType === 'INCOME' ? 'Recebido' : 'Pago'}</option>
-                      <option value="PENDING">Pendente</option>
-                    </select>
-                  </div>
-                )}
-                <div className={(uiType === 'TRANSFER' || uiType === 'INVESTMENT') ? "col-span-1" : "col-span-2"}>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">Data</label>
-                  <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white" />
+                <div className="flex flex-col gap-1.5">
+                  <Label>Data</Label>
+                  <Input type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-gray-500 hover:underline">Cancelar</button>
-                <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-lg text-sm font-semibold text-white shadow bg-blue-600 hover:bg-blue-700">
-                  {isSubmitting ? 'Salvando...' : 'Confirmar'}
-                </button>
+              {uiType !== 'TRANSFER' && uiType !== 'INVESTMENT' && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>Status</Label>
+                  <div className="flex gap-2 p-1 bg-muted rounded-lg w-fit">
+                    <button
+                      type="button"
+                      onClick={() => setStatus('PAID')}
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-md transition ${
+                        status === 'PAID' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {uiType === 'INCOME' ? 'Recebido' : 'Pago'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatus('PENDING')}
+                      className={`px-4 py-1.5 text-xs font-semibold rounded-md transition ${
+                        status === 'PENDING' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Pendente
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-3 pt-2 border-t border-border">
+                <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="mt-3">
+                  Cancelar
+                </Button>
+                <Button type="submit" isLoading={isSubmitting} className="mt-3">
+                  {editingId ? 'Salvar alterações' : 'Lançar'}
+                </Button>
               </div>
             </form>
           </div>

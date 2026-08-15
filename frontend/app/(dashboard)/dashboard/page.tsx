@@ -8,14 +8,15 @@ import {
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend, LabelList,
 } from 'recharts';
 import {
-  DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
-  type DragEndEvent,
+  DndContext, DragOverlay, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
+  type DragEndEvent, type DragStartEvent,
 } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
+import { AiQuickAddCard } from '@/components/dashboard/ai-quick-add-card';
 import { WidgetPicker, useDashboardWidgetOrder, WIDGET_SPANS } from '@/components/dashboard/widget-picker';
 import { PaymentModal } from '@/components/cards/payment-modal';
 import {
@@ -27,6 +28,15 @@ import {
 import { PaymentsStatusItem } from '@/services/dashboard.service';
 import { formatCurrency } from '@/utils/currency';
 import { api } from '@/services/api';
+import { useAuthStore } from '@/stores/auth-store';
+
+// Saudação de acordo com o horário local do usuário
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Bom dia';
+  if (hour < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
 
 // Formata valores grandes de forma compacta (R$ 5 mil, R$ 1,2 mi) para caber no eixo Y
 function formatCompactCurrency(value: number) {
@@ -71,13 +81,30 @@ export default function DashboardPage() {
   } = useDashboardPaymentsStatus({ month: selectedMonth, year: selectedYear });
   const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
   const { order, setOrder } = useDashboardWidgetOrder();
+  const firstName = useAuthStore((s) => s.user?.name)?.split(' ')[0];
 
   const dragSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
+  // Enquanto um widget está sendo arrastado, o card original fica só como um
+  // "buraco" no lugar (ver SortableWidget) e um clone flutuante do mesmo
+  // tamanho (DragOverlay, abaixo) segue o cursor — é isso que evita o grid
+  // esticar/pular durante o arraste mesmo com cards de tamanhos bem diferentes,
+  // sem abrir mão do reordenar "empurrando" os outros (arrayMove) que é o
+  // comportamento intuitivo de arrastar-e-soltar.
+  const [activeWidgetId, setActiveWidgetId] = useState<string | null>(null);
+  const [activeWidgetWidth, setActiveWidgetWidth] = useState<number | null>(null);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveWidgetId(String(event.active.id));
+    setActiveWidgetWidth(event.active.rect.current.initial?.width ?? null);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveWidgetId(null);
+    setActiveWidgetWidth(null);
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const oldIndex = order.indexOf(String(active.id));
@@ -176,7 +203,9 @@ export default function DashboardPage() {
       {/* Cabeçalho + seletor de mês/ano */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Visão geral</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {getGreeting()}{firstName ? `, ${firstName}` : ''}
+          </h1>
           <p className="text-sm text-muted-foreground">Acompanhe suas finanças em tempo real.</p>
         </div>
 
@@ -211,6 +240,14 @@ export default function DashboardPage() {
           arrastando pelo ícone que aparece no canto ao passar o mouse. */}
       {(() => {
         const widgetContent: Record<string, ReactNode> = {
+          aiQuickAdd: (
+            <AiQuickAddCard
+              onSuccess={() => {
+                refetchPaymentsStatus();
+                refetchSummary();
+              }}
+            />
+          ),
           income: (
             <SummaryCard
               label="Receitas" value={data?.totalIncome} icon={TrendingUp} tone="success" isLoading={isLoading}
@@ -542,7 +579,12 @@ export default function DashboardPage() {
         const visibleOrder = order.filter((key) => widgetContent[key]);
 
         return (
-          <DndContext sensors={dragSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <DndContext
+            sensors={dragSensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
             <SortableContext items={visibleOrder} strategy={rectSortingStrategy}>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                 {visibleOrder.map((key) => (
@@ -552,6 +594,13 @@ export default function DashboardPage() {
                 ))}
               </div>
             </SortableContext>
+            <DragOverlay>
+              {activeWidgetId && (
+                <div style={activeWidgetWidth ? { width: activeWidgetWidth } : undefined}>
+                  {widgetContent[activeWidgetId]}
+                </div>
+              )}
+            </DragOverlay>
           </DndContext>
         );
       })()}

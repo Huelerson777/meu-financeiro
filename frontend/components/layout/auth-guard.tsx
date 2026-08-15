@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
+import { api } from '@/services/api';
 
 /**
  * Protege as rotas do grupo (dashboard). Aguarda o Zustand terminar de
@@ -14,12 +15,25 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
 
   useEffect(() => {
     if (hasHydrated && !accessToken) {
       router.replace('/login');
     }
   }, [hasHydrated, accessToken, router]);
+
+  // O login só grava os tokens (ver login/page.tsx) — o nome do usuário só
+  // fica disponível depois dessa busca, seja logo após o login ou ao
+  // recarregar uma sessão já existente.
+  useEffect(() => {
+    if (!hasHydrated || !accessToken || user) return;
+    api.get('/users/me').then((res) => {
+      const data = res.data?.data ?? res.data;
+      if (data?.name) setUser(data);
+    }).catch(() => {});
+  }, [hasHydrated, accessToken, user, setUser]);
 
   if (!hasHydrated || !accessToken) {
     return (

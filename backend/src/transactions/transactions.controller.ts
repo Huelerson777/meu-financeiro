@@ -1,14 +1,19 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { TransactionsService } from './transactions.service';
+import { TransactionParserService } from './transaction-parser.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
+import { ParseTransactionDto } from './dto/parse-transaction.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @UseGuards(JwtAuthGuard)
 @Controller('transactions')
 export class TransactionsController {
-  constructor(private readonly transactionsService: TransactionsService) {}
+  constructor(
+    private readonly transactionsService: TransactionsService,
+    private readonly transactionParserService: TransactionParserService,
+  ) {}
 
   @Get()
   findAll(
@@ -17,7 +22,8 @@ export class TransactionsController {
     @Query('endDate') endDate?: string,
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
-    @Query('type') type?: 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT',
+    @Query('type') type?: string,
+    @Query('amount') amount?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
   ) {
@@ -26,7 +32,8 @@ export class TransactionsController {
       endDate,
       search,
       categoryId,
-      type,
+      types: type ? (type.split(',') as ('INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT')[]) : undefined,
+      amount,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
     });
@@ -35,6 +42,11 @@ export class TransactionsController {
   @Get('suggest-category')
   suggestCategory(@CurrentUser() user: { id: string }, @Query('description') description?: string) {
     return this.transactionsService.suggestCategory(user.id, description ?? '');
+  }
+
+  @Post('parse')
+  parse(@CurrentUser() user: { id: string }, @Body() dto: ParseTransactionDto) {
+    return this.transactionParserService.parse(user.id, dto.text);
   }
 
   @Post()

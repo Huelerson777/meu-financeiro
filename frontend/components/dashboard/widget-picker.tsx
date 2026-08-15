@@ -7,6 +7,7 @@ import { api } from '@/services/api';
 import { useSettings } from '@/hooks/use-settings';
 
 export const DASHBOARD_WIDGETS: { key: string; label: string }[] = [
+  { key: 'aiQuickAdd', label: 'Lançamento por IA' },
   { key: 'income', label: 'Receitas' },
   { key: 'expense', label: 'Despesas' },
   { key: 'invested', label: 'Investido' },
@@ -27,6 +28,7 @@ const ALL_KEYS = DASHBOARD_WIDGETS.map((w) => w.key);
  * grandes lado a lado, o resto largura total).
  */
 export const WIDGET_SPANS: Record<string, string> = {
+  aiQuickAdd: 'sm:col-span-2 lg:col-span-4',
   income: 'col-span-1',
   expense: 'col-span-1',
   invested: 'col-span-1',

@@ -30,7 +30,7 @@ export function SortableWidget({ id, span, children }: SortableWidgetProps) {
     <div
       ref={setNodeRef}
       style={style}
-      className={cn('group relative', span, isDragging && 'z-10 opacity-70')}
+      className={cn('group relative', span, isDragging && 'opacity-30')}
     >
       <button
         type="button"

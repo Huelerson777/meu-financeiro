@@ -21,13 +21,20 @@ export class TransactionsService {
       // 'INVESTMENT' não existe como TransactionType — é uma TRANSFER cuja
       // conta de destino é do tipo INVESTMENT. 'TRANSFER' aqui significa
       // "transferência que não é investimento", pra bater com o que o
-      // formulário do frontend trata como tipos distintos (uiType).
-      type?: 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
+      // formulário do frontend trata como tipos distintos (uiType). Aceita
+      // vários tipos ao mesmo tempo (ex: receitas + despesas).
+      types?: ('INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT')[];
+      amount?: string;
       page?: number;
       limit?: number;
     },
   ) {
     const where: Prisma.TransactionWhereInput = { userId };
+    // Duas buscas diferentes (tipo e descrição/conta/categoria) cada uma
+    // combinando várias opções com OR — não dá pra usar where.OR duas vezes
+    // (a segunda sobrescreveria a primeira), por isso cada uma vira um item
+    // de where.AND.
+    const andConditions: Prisma.TransactionWhereInput[] = [];
 
     if (filters?.startDate || filters?.endDate) {
       where.date = {
@@ -40,22 +47,32 @@ export class TransactionsService {
       where.categoryId = filters.categoryId;
     }
 
-    if (filters?.type === 'INVESTMENT') {
-      where.type = 'TRANSFER';
-      where.transfer = { toAccount: { type: 'INVESTMENT' } };
-    } else if (filters?.type === 'TRANSFER') {
-      where.type = 'TRANSFER';
-      where.NOT = { transfer: { toAccount: { type: 'INVESTMENT' } } };
-    } else if (filters?.type) {
-      where.type = filters.type;
+    if (filters?.types && filters.types.length > 0) {
+      andConditions.push({ OR: filters.types.map((t) => this.typeCondition(t)) });
     }
 
     if (filters?.search) {
-      where.OR = [
-        { description: { contains: filters.search, mode: 'insensitive' } },
-        { category: { name: { contains: filters.search, mode: 'insensitive' } } },
-        { account: { name: { contains: filters.search, mode: 'insensitive' } } },
-      ];
+      andConditions.push({
+        OR: [
+          { description: { contains: filters.search, mode: 'insensitive' } },
+          { category: { name: { contains: filters.search, mode: 'insensitive' } } },
+          { account: { name: { contains: filters.search, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    if (andConditions.length > 0) {
+      where.AND = andConditions;
+    }
+
+    // Busca por "contém" no valor (ex: "15" acha 15, 315, 1500...) — amount é
+    // Decimal, então o Prisma não tem um filtro "contains" pronto pra ele;
+    // resolve buscando os ids que batem via SQL bruto e filtrando por eles.
+    if (filters?.amount) {
+      const matches = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM transactions WHERE user_id = ${userId} AND amount::text LIKE ${'%' + filters.amount + '%'}
+      `;
+      where.id = { in: matches.map((m) => m.id) };
     }
 
     const page = filters?.page && filters.page > 0 ? filters.page : 1;
@@ -246,6 +263,12 @@ export class TransactionsService {
     }
 
     return empty;
+  }
+
+  private typeCondition(type: 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT'): Prisma.TransactionWhereInput {
+    if (type === 'INVESTMENT') return { type: 'TRANSFER', transfer: { toAccount: { type: 'INVESTMENT' } } };
+    if (type === 'TRANSFER') return { type: 'TRANSFER', NOT: { transfer: { toAccount: { type: 'INVESTMENT' } } } };
+    return { type };
   }
 
   private async ensureAccountOwnership(accountId: string, userId: string) {
