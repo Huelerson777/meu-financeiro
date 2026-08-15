@@ -12,6 +12,7 @@ import {
   Settings,
   Wallet,
   FileBarChart,
+  Repeat,
   X,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -21,6 +22,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/accounts', label: 'Contas', icon: Landmark },
   { href: '/transactions', label: 'Transações', icon: ArrowLeftRight },
+  { href: '/recurring-bills', label: 'Contas Fixas', icon: Repeat },
   { href: '/cards', label: 'Cartões', icon: CreditCard },
   { href: '/investments', label: 'Investimentos', icon: TrendingUp },
   { href: '/goals', label: 'Metas', icon: Target },

@@ -32,6 +32,11 @@ export class TransactionsController {
     });
   }
 
+  @Get('suggest-category')
+  suggestCategory(@CurrentUser() user: { id: string }, @Query('description') description?: string) {
+    return this.transactionsService.suggestCategory(user.id, description ?? '');
+  }
+
   @Post()
   create(@CurrentUser() user: { id: string }, @Body() createTransactionDto: CreateTransactionDto) {
     return this.transactionsService.create(user.id, createTransactionDto);

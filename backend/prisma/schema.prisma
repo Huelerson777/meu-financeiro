@@ -99,6 +99,7 @@ model User {
   refreshTokens   RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   logs            Log[]
+  recurringBills  RecurringBill[]
 
   @@map("users")
   @@index([email])
@@ -169,6 +170,7 @@ model Account {
   transfersFrom   Transfer[]  @relation("TransferFromAccount")
   transfersTo     Transfer[]  @relation("TransferToAccount")
   paidInstallments Installment[]
+  recurringBills  RecurringBill[]
 
   @@map("accounts")
   @@index([userId])
@@ -209,6 +211,7 @@ model Category {
   children     Category[]    @relation("CategoryHierarchy")
   transactions Transaction[]
   budgets      Budget[]
+  recurringBills RecurringBill[]
 
   @@map("categories")
   @@index([userId])
@@ -240,6 +243,8 @@ model Transaction {
 
   transferId String? @unique @map("transfer_id")
 
+  recurringBillId String? @map("recurring_bill_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -249,6 +254,7 @@ model Transaction {
   card         Card?         @relation(fields: [cardId], references: [id], onDelete: SetNull)
   transfer     Transfer?     @relation(fields: [transferId], references: [id], onDelete: Cascade)
   installments Installment[]
+  recurringBill RecurringBill? @relation(fields: [recurringBillId], references: [id], onDelete: SetNull)
 
   @@map("transactions")
   @@index([userId])
@@ -257,6 +263,32 @@ model Transaction {
   @@index([cardId])
   @@index([date])
   @@index([status])
+  @@index([recurringBillId])
+}
+
+// ============================================================================
+// RECURRING BILLS (Contas fixas mensais: aluguel, internet, energia, etc.)
+// ============================================================================
+
+model RecurringBill {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  categoryId    String?  @map("category_id")
+  accountId     String?  @map("account_id")
+  description   String
+  defaultAmount Decimal? @map("default_amount") @db.Decimal(14, 2)
+  dueDay        Int      @map("due_day")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  account      Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@map("recurring_bills")
+  @@index([userId])
 }
 
 model Installment {

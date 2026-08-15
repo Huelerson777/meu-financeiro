@@ -3,6 +3,7 @@ import { Prisma, TransactionStatus, TransactionType } from '@prisma/client';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { CATEGORY_KEYWORDS, normalize } from './category-keywords';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -191,6 +192,60 @@ export class TransactionsService {
       });
     }
     // TRANSFER não é tratado aqui — ver AccountsRepository.createTransfer
+  }
+
+  /**
+   * Sugere uma categoria pra descrição digitada, sem custo de API externa:
+   * 1) procura no próprio histórico do usuário uma descrição parecida e usa
+   *    a categoria mais usada nela; 2) se não achar nada, cai num dicionário
+   *    de palavras-chave fixo (ver category-keywords.ts).
+   */
+  async suggestCategory(userId: string, description: string) {
+    const empty = { categoryId: null, categoryName: null, source: null as null };
+    const query = normalize(description);
+    if (!query) return empty;
+
+    const history = await this.prisma.transaction.findMany({
+      where: { userId, categoryId: { not: null }, type: { in: ['INCOME', 'EXPENSE'] } },
+      select: { description: true, categoryId: true },
+      orderBy: { date: 'desc' },
+      take: 500,
+    });
+
+    const scoreByCategory = new Map<string, number>();
+    const queryWords = new Set(query.split(/\s+/).filter((w) => w.length > 2));
+
+    for (const t of history) {
+      const desc = normalize(t.description);
+      if (!desc) continue;
+
+      let score = 0;
+      if (desc === query) score = 100;
+      else if (desc.includes(query) || query.includes(desc)) score = 60;
+      else {
+        const overlap = desc.split(/\s+/).filter((w) => w.length > 2 && queryWords.has(w)).length;
+        score = overlap * 20;
+      }
+
+      if (score > 0) {
+        scoreByCategory.set(t.categoryId!, (scoreByCategory.get(t.categoryId!) ?? 0) + score);
+      }
+    }
+
+    if (scoreByCategory.size > 0) {
+      const [bestCategoryId] = [...scoreByCategory.entries()].sort((a, b) => b[1] - a[1])[0];
+      const category = await this.prisma.category.findUnique({ where: { id: bestCategoryId } });
+      if (category) return { categoryId: category.id, categoryName: category.name, source: 'history' as const };
+    }
+
+    for (const [keyword, categoryName] of Object.entries(CATEGORY_KEYWORDS)) {
+      if (query.includes(normalize(keyword))) {
+        const category = await this.prisma.category.findFirst({ where: { userId, name: categoryName } });
+        if (category) return { categoryId: category.id, categoryName: category.name, source: 'keyword' as const };
+      }
+    }
+
+    return empty;
   }
 
   private async ensureAccountOwnership(accountId: string, userId: string) {

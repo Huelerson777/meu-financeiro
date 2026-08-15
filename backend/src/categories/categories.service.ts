@@ -5,7 +5,8 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 // Categorias padrão criadas automaticamente para cada novo usuário,
 // já cobrindo a lista pedida para o gráfico de despesas por categoria.
 export const DEFAULT_CATEGORIES = [
-  { name: 'Mercado', color: '#16A34A', icon: 'shopping-cart' },
+  { name: 'Mercado/Alimentação', color: '#16A34A', icon: 'shopping-cart' },
+  { name: 'Moradia', color: '#B45309', icon: 'home' },
   { name: 'Cartão', color: '#7C3AED', icon: 'credit-card' },
   { name: 'Roupas', color: '#DB2777', icon: 'shirt' },
   { name: 'Carro', color: '#0EA5E9', icon: 'car' },
@@ -15,6 +16,8 @@ export const DEFAULT_CATEGORIES = [
   { name: 'Salão/Barbearia', color: '#8B5CF6', icon: 'scissors' },
   { name: 'Cuidados Pessoais', color: '#F472B6', icon: 'sparkles' },
   { name: 'Compras Supérfluas', color: '#F97316', icon: 'shopping-bag' },
+  { name: 'Telefone', color: '#0891B2', icon: 'phone' },
+  { name: 'Internet', color: '#6366F1', icon: 'wifi' },
 ];
 
 @Injectable()

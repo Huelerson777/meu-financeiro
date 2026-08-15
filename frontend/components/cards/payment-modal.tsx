@@ -13,9 +13,11 @@ interface PaymentModalProps {
   title: string;
   description?: string;
   amount: number;
+  category?: { name: string; color: string } | null;
+  amountEditable?: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  onConfirm: (accountId: string, date: string) => Promise<void>;
+  onConfirm: (accountId: string, date: string, amount: number) => Promise<void>;
 }
 
 const extractList = (raw: any): AccountOption[] => {
@@ -26,10 +28,20 @@ const extractList = (raw: any): AccountOption[] => {
   return [];
 };
 
-export function PaymentModal({ title, description, amount, onClose, onSuccess, onConfirm }: PaymentModalProps) {
+export function PaymentModal({
+  title,
+  description,
+  amount,
+  category,
+  amountEditable,
+  onClose,
+  onSuccess,
+  onConfirm,
+}: PaymentModalProps) {
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [accountId, setAccountId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [amountValue, setAmountValue] = useState(amount.toString());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -46,9 +58,14 @@ export function PaymentModal({ title, description, amount, onClose, onSuccess, o
       alert('Selecione a conta de onde vai sair o pagamento.');
       return;
     }
+    const parsedAmount = parseFloat(amountValue);
+    if (!parsedAmount || parsedAmount <= 0) {
+      alert('Informe um valor válido.');
+      return;
+    }
     setIsSubmitting(true);
     try {
-      await onConfirm(accountId, date);
+      await onConfirm(accountId, date, parsedAmount);
       onSuccess();
     } catch (err: any) {
       const msg = err.response?.data?.message;
@@ -67,13 +84,32 @@ export function PaymentModal({ title, description, amount, onClose, onSuccess, o
             ✕
           </button>
         </div>
-        {description && <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">{description}</p>}
+        {description && <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">{description}</p>}
+        {category && (
+          <span
+            className="inline-flex w-fit items-center text-xs font-normal px-2 py-0.5 rounded-full mb-4"
+            style={{ backgroundColor: `${category.color}20`, color: category.color }}
+          >
+            {category.name}
+          </span>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-          <div className="bg-gray-50 dark:bg-zinc-800/50 rounded-lg p-3 flex justify-between items-center">
-            <span className="text-sm text-gray-500 dark:text-gray-400">Valor a pagar</span>
-            <span className="text-lg font-bold dark:text-white">{formatCurrency(amount)}</span>
-          </div>
+          {amountEditable ? (
+            <div>
+              <label className="block text-sm font-medium dark:text-gray-300 mb-1">Valor a pagar (R$)</label>
+              <input
+                type="number" step="0.01" required
+                value={amountValue} onChange={(e) => setAmountValue(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+              />
+            </div>
+          ) : (
+            <div className="bg-gray-50 dark:bg-zinc-800/50 rounded-lg p-3 flex justify-between items-center">
+              <span className="text-sm text-gray-500 dark:text-gray-400">Valor a pagar</span>
+              <span className="text-lg font-bold dark:text-white">{formatCurrency(amount)}</span>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium dark:text-gray-300 mb-1">Pagar com a conta</label>

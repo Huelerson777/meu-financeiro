@@ -16,6 +16,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { SettingsModule } from './settings/settings.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { RecurringBillsModule } from './recurring-bills/recurring-bills.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     ReportsModule,
     SettingsModule,
     NotificationsModule,
+    RecurringBillsModule,
   ],
   providers: [
     {

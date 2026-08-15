@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { TrendingUp, TrendingDown, PiggyBank, Target, CircleCheck, CircleDashed, Wallet } from 'lucide-react';
 import {
@@ -68,6 +68,16 @@ export default function DashboardPage() {
   const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
   const { isEnabled } = useEnabledWidgets();
 
+  // Gera (de forma idempotente) o lançamento pendente do mês corrente pra
+  // cada conta fixa ativa, assim que o Dashboard é aberto.
+  useEffect(() => {
+    api.post('/recurring-bills/sync').then(() => {
+      refetchPaymentsStatus();
+      refetchSummary();
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Clique numa barra do gráfico de categoria leva pra Transações já filtrado
   const goToCategoryTransactions = (categoryId: string | null) => {
     if (!categoryId) return;
@@ -122,14 +132,15 @@ export default function DashboardPage() {
   // Pagar/receber um item em aberto direto pela lista de "Pago x Em Aberto"
   const [payingItem, setPayingItem] = useState<PaymentsStatusItem | null>(null);
 
-  const handleConfirmPayment = async (accountId: string, date: string) => {
+  const handleConfirmPayment = async (accountId: string, date: string, amount: number) => {
     if (!payingItem) return;
     if (payingItem.kind === 'installment') {
       await api.patch(`/cards/installments/${payingItem.id}/pay`, { accountId, date });
     } else {
       // Transação avulsa: só troca o status — a data original é mantida
       // pra não "mudar de mês" o que já foi lançado em fevereiro, por exemplo.
-      await api.patch(`/transactions/${payingItem.id}`, { status: 'PAID', accountId });
+      // O valor pode ser ajustado aqui (útil pra contas fixas que variam mês a mês).
+      await api.patch(`/transactions/${payingItem.id}`, { status: 'PAID', accountId, amount });
     }
   };
 
@@ -258,6 +269,14 @@ export default function DashboardPage() {
                       <p className="text-xs text-muted-foreground">
                         {item.source} · vence em {new Date(item.dueDate).toLocaleDateString('pt-BR')}
                       </p>
+                      {item.category && (
+                        <span
+                          className="mt-1 inline-flex w-fit items-center text-xs font-normal px-2 py-0.5 rounded-full"
+                          style={{ backgroundColor: `${item.category.color}20`, color: item.category.color }}
+                        >
+                          {item.category.name}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <span className={`text-sm font-semibold ${item.type === 'INCOME' ? 'text-success' : 'text-foreground'}`}>
@@ -456,6 +475,8 @@ export default function DashboardPage() {
           title={payingItem.type === 'INCOME' ? 'Confirmar recebimento' : 'Pagar conta'}
           description={payingItem.description}
           amount={payingItem.amount}
+          category={payingItem.category}
+          amountEditable={payingItem.kind === 'transaction'}
           onClose={() => setPayingItem(null)}
           onSuccess={handlePaymentSuccess}
           onConfirm={handleConfirmPayment}

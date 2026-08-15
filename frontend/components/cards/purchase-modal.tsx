@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 
@@ -41,7 +41,9 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
   const [installmentsCount, setInstallmentsCount] = useState(editingPurchase?.installmentsCount.toString() ?? '1');
   const [purchaseDate, setPurchaseDate] = useState(editingPurchase?.purchaseDate ?? new Date().toISOString().split('T')[0]);
   const [categoryId, setCategoryId] = useState(editingPurchase?.categoryId ?? '');
+  const [categoryAutoSuggested, setCategoryAutoSuggested] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const suggestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     api.get('/categories').then((res) => {
@@ -50,6 +52,30 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
       setCategories(list);
     }).catch(() => setCategories([]));
   }, []);
+
+  const handleDescriptionChange = (value: string) => {
+    setDescription(value);
+    if (suggestTimeoutRef.current) clearTimeout(suggestTimeoutRef.current);
+    if (editingPurchase || value.trim().length < 3) return;
+
+    suggestTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await api.get('/transactions/suggest-category', { params: { description: value } });
+        const suggestion = res.data?.data ?? res.data;
+        if (suggestion?.categoryId && (categoryId === '' || categoryAutoSuggested)) {
+          setCategoryId(suggestion.categoryId);
+          setCategoryAutoSuggested(true);
+        }
+      } catch {
+        // silencioso — sugestão é um "nice to have", não pode travar o formulário
+      }
+    }, 500);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategoryId(value);
+    setCategoryAutoSuggested(false);
+  };
 
   const availableLimit = Number(card.limitAmount) - Number(card.usedLimit);
   const parsedAmount = parseFloat(amountValue || '0');
@@ -101,7 +127,7 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
             <label className="block text-sm font-medium dark:text-gray-300 mb-1">Descrição</label>
             <input
               type="text" required placeholder="Ex: Notebook novo"
-              value={description} onChange={(e) => setDescription(e.target.value)}
+              value={description} onChange={(e) => handleDescriptionChange(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
             />
           </div>
@@ -160,9 +186,14 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
           </div>
 
           <div>
-            <label className="block text-sm font-medium dark:text-gray-300 mb-1">Categoria</label>
+            <label className="block text-sm font-medium dark:text-gray-300 mb-1">
+              Categoria
+              {categoryAutoSuggested && categoryId && (
+                <span className="ml-1 text-xs font-normal text-blue-500">· sugerida</span>
+              )}
+            </label>
             <select
-              value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
+              value={categoryId} onChange={(e) => handleCategoryChange(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white"
             >
               <option value="">Sem categoria</option>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { api } from '@/services/api';
 
@@ -79,6 +79,36 @@ function TransactionsPageContent() {
   const [status, setStatus] = useState<'PAID' | 'PENDING'>('PAID');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
+  // Sugestão automática de categoria: só sobrescreve o campo enquanto o
+  // valor ali dentro ainda for uma sugestão (não uma escolha manual do usuário).
+  const [categoryAutoSuggested, setCategoryAutoSuggested] = useState(false);
+  const suggestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDescriptionChange = (value: string) => {
+    setDescription(value);
+    if (suggestTimeoutRef.current) clearTimeout(suggestTimeoutRef.current);
+
+    if ((uiType !== 'EXPENSE' && uiType !== 'INCOME') || value.trim().length < 3) return;
+
+    suggestTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await api.get('/transactions/suggest-category', { params: { description: value } });
+        const suggestion = res.data?.data ?? res.data;
+        if (suggestion?.categoryId && (categoryId === '' || categoryAutoSuggested)) {
+          setCategoryId(suggestion.categoryId);
+          setCategoryAutoSuggested(true);
+        }
+      } catch {
+        // silencioso — sugestão é um "nice to have", não pode travar o formulário
+      }
+    }, 500);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategoryId(value);
+    setCategoryAutoSuggested(false);
+  };
+
   const extractList = (rawResponse: any) => {
     if (!rawResponse) return [];
     if (Array.isArray(rawResponse)) return rawResponse;
@@ -137,6 +167,13 @@ function TransactionsPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate, categoryFilter, typeFilter, page]);
 
+  // Gera (de forma idempotente) o lançamento pendente do mês corrente pra
+  // cada conta fixa ativa, assim que a tela é aberta.
+  useEffect(() => {
+    api.post('/recurring-bills/sync').then(() => fetchData()).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleOpenCreate = () => {
     setEditingId(null);
     setEditingTransferId(null);
@@ -145,6 +182,7 @@ function TransactionsPageContent() {
     setUiType('EXPENSE');
     setStatus('PAID');
     setCategoryId('');
+    setCategoryAutoSuggested(false);
     setDestinationAccountId('');
     setDate(new Date().toISOString().split('T')[0]);
     if (accounts.length > 0) setAccountId(accounts[0].id);
@@ -170,6 +208,7 @@ function TransactionsPageContent() {
       if (t.accountId) setAccountId(t.accountId);
       setDestinationAccountId(t.transfer.toId);
       setCategoryId('');
+      setCategoryAutoSuggested(false);
       setIsModalOpen(true);
       return;
     }
@@ -183,6 +222,7 @@ function TransactionsPageContent() {
     setDate(new Date(t.date).toISOString().split('T')[0]);
     if (t.accountId) setAccountId(t.accountId);
     setCategoryId(t.categoryId || '');
+    setCategoryAutoSuggested(false);
     setIsModalOpen(true);
   };
 
@@ -522,17 +562,20 @@ function TransactionsPageContent() {
 
               <div>
                 <label className="block text-sm font-medium dark:text-gray-300 mb-1">Descrição</label>
-                <input type="text" placeholder={uiType === 'INVESTMENT' ? 'Ex: Aporte CDB...' : 'Ex: Mercado...'} value={description} onChange={(e) => setDescription(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white" />
+                <input type="text" placeholder={uiType === 'INVESTMENT' ? 'Ex: Aporte CDB...' : 'Ex: Mercado...'} value={description} onChange={(e) => handleDescriptionChange(e.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white" />
               </div>
 
               {uiType !== 'TRANSFER' && uiType !== 'INVESTMENT' && (
                 <div>
                   <label className="block text-sm font-medium dark:text-gray-300 mb-1">
                     Categoria {uiType === 'EXPENSE' && <span className="text-xs font-normal text-gray-400">(usada no gráfico do Dashboard)</span>}
+                    {categoryAutoSuggested && categoryId && (
+                      <span className="ml-1 text-xs font-normal text-blue-500">· sugerida</span>
+                    )}
                   </label>
                   <select
                     value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
+                    onChange={(e) => handleCategoryChange(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white"
                   >
                     <option value="">Sem categoria</option>
