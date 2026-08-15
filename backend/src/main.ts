@@ -9,7 +9,10 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody:true expõe req.rawBody — necessário pra validar a assinatura
+  // HMAC que a Meta manda no webhook do WhatsApp (precisa do corpo bruto,
+  // antes do parse de JSON).
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   // Segurança
   app.use(helmet());

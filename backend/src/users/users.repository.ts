@@ -14,6 +14,10 @@ export class UsersRepository {
     return this.prisma.user.findUnique({ where: { email } });
   }
 
+  findByWhatsappNumber(whatsappNumber: string) {
+    return this.prisma.user.findUnique({ where: { whatsappNumber } });
+  }
+
   update(id: string, data: UpdateUserDto) {
     return this.prisma.user.update({ where: { id }, data });
   }

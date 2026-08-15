@@ -22,6 +22,12 @@ export class UsersService {
         throw new BadRequestException('Este e-mail já está em uso');
       }
     }
+    if (dto.whatsappNumber) {
+      const existing = await this.usersRepository.findByWhatsappNumber(dto.whatsappNumber);
+      if (existing && existing.id !== userId) {
+        throw new BadRequestException('Este número de WhatsApp já está vinculado a outra conta');
+      }
+    }
     const updated = await this.usersRepository.update(userId, dto);
     const { passwordHash, ...safeUser } = updated;
     return safeUser;

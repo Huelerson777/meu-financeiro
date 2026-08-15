@@ -80,6 +80,7 @@ model User {
   email         String   @unique
   passwordHash  String   @map("password_hash")
   avatarUrl     String?  @map("avatar_url")
+  whatsappNumber String? @unique @map("whatsapp_number")
   role          Role     @default(USER)
   plan          PlanType @default(FREE)
   isActive      Boolean  @default(true) @map("is_active")
@@ -100,6 +101,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   logs            Log[]
   recurringBills  RecurringBill[]
+  whatsappSessions WhatsappSession[]
 
   @@map("users")
   @@index([email])
@@ -443,4 +445,23 @@ model Log {
 
   @@map("logs")
   @@index([userId])
+}
+
+// ============================================================================
+// WHATSAPP (lançamento de transações via mensagem)
+// ============================================================================
+
+model WhatsappSession {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  phoneNumber String   @map("phone_number")
+  messages    Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_sessions")
+  @@index([userId])
+  @@index([phoneNumber])
 }

@@ -17,6 +17,7 @@ import { ReportsModule } from './reports/reports.module';
 import { SettingsModule } from './settings/settings.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { RecurringBillsModule } from './recurring-bills/recurring-bills.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { RecurringBillsModule } from './recurring-bills/recurring-bills.module';
     SettingsModule,
     NotificationsModule,
     RecurringBillsModule,
+    WhatsappModule,
   ],
   providers: [
     {

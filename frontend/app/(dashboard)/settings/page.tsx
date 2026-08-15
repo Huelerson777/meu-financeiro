@@ -13,6 +13,7 @@ export default function SettingsPage() {
   // Perfil
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [whatsappNumber, setWhatsappNumber] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
 
   // Senha
@@ -34,6 +35,7 @@ export default function SettingsPage() {
       const user = res.data?.data ?? res.data;
       setName(user.name ?? '');
       setEmail(user.email ?? '');
+      setWhatsappNumber(user.whatsappNumber ?? '');
     }).catch(() => {});
 
     api.get('/settings').then((res) => {
@@ -47,7 +49,7 @@ export default function SettingsPage() {
     e.preventDefault();
     setProfileSaving(true);
     try {
-      await api.patch('/users/me', { name, email });
+      await api.patch('/users/me', { name, email, whatsappNumber: whatsappNumber || undefined });
       alert('Perfil atualizado com sucesso!');
     } catch (err: any) {
       const msg = err.response?.data?.message;
@@ -124,6 +126,16 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium dark:text-gray-300 mb-1">E-mail</label>
               <input
                 type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium dark:text-gray-300 mb-1">
+                WhatsApp <span className="text-xs font-normal text-gray-400">(pra lançar transações por mensagem)</span>
+              </label>
+              <input
+                type="tel" placeholder="Ex: 5548999999999 (DDI+DDD+número, só dígitos)"
+                value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, ''))}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
               />
             </div>
