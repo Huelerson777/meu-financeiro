@@ -5,6 +5,7 @@ import { CreateCardDto } from './dto/create-card.dto';
 import { UpdateCardDto } from './dto/update-card.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { PayInstallmentDto } from './dto/pay-installment.dto';
+import { PayInstallmentsBatchDto } from './dto/pay-installments-batch.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
 
 @Injectable()
@@ -235,6 +236,54 @@ export class CardsService {
         data: { paid: false, paidFromAccountId: null, paidAt: null },
       });
     });
+  }
+
+  /**
+   * Paga de uma vez um conjunto de parcelas escolhidas pelo usuário (seleção
+   * múltipla na fatura): mesma lógica do pagamento individual, mas em lote.
+   */
+  async payInstallmentsBatch(userId: string, dto: PayInstallmentsBatchDto) {
+    const uniqueIds = Array.from(new Set(dto.installmentIds));
+
+    const installments = await this.prisma.installment.findMany({
+      where: { id: { in: uniqueIds } },
+      include: { transaction: { select: { userId: true } } },
+    });
+
+    if (installments.length !== uniqueIds.length) {
+      throw new NotFoundException('Uma ou mais parcelas não foram encontradas');
+    }
+    if (installments.some((i) => i.transaction.userId !== userId)) {
+      throw new ForbiddenException('Uma ou mais parcelas não pertencem a você');
+    }
+    if (installments.some((i) => i.paid)) {
+      throw new BadRequestException('Uma ou mais parcelas selecionadas já estão pagas');
+    }
+
+    const account = await this.prisma.account.findFirst({ where: { id: dto.accountId, userId } });
+    if (!account) throw new NotFoundException('Conta não encontrada');
+
+    const total = installments.reduce((acc, i) => acc + Number(i.amount), 0);
+    const paidAt = dto.date ? new Date(dto.date) : new Date();
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.account.update({
+        where: { id: dto.accountId },
+        data: { currentBalance: { decrement: total } },
+      });
+
+      await tx.transaction.updateMany({
+        where: { id: { in: installments.map((i) => i.transactionId) } },
+        data: { status: 'PAID' },
+      });
+
+      await tx.installment.updateMany({
+        where: { id: { in: uniqueIds } },
+        data: { paid: true, paidFromAccountId: dto.accountId, paidAt },
+      });
+    });
+
+    return { paidCount: installments.length, totalPaid: total };
   }
 
   /**

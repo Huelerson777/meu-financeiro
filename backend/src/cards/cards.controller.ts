@@ -7,6 +7,7 @@ import { CreateCardDto } from './dto/create-card.dto';
 import { UpdateCardDto } from './dto/update-card.dto';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { PayInstallmentDto } from './dto/pay-installment.dto';
+import { PayInstallmentsBatchDto } from './dto/pay-installments-batch.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
 
 @ApiTags('Cards')
@@ -68,6 +69,11 @@ export class CardsController {
   @Delete('purchases/:groupId')
   deletePurchase(@CurrentUser() user: { id: string }, @Param('groupId') groupId: string) {
     return this.cardsService.deletePurchase(groupId, user.id);
+  }
+
+  @Patch('installments/pay-batch')
+  payInstallmentsBatch(@CurrentUser() user: { id: string }, @Body() dto: PayInstallmentsBatchDto) {
+    return this.cardsService.payInstallmentsBatch(user.id, dto);
   }
 
   @Patch('installments/:id/pay')

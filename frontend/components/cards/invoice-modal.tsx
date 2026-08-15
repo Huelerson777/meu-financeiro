@@ -97,6 +97,22 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
 
   const [payingItem, setPayingItem] = useState<InvoiceItem | null>(null);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [payingSelection, setPayingSelection] = useState(false);
+
+  const toggleSelected = (installmentId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(installmentId)) next.delete(installmentId);
+      else next.add(installmentId);
+      return next;
+    });
+  };
+
+  const handleSelectMonth = (month: string) => {
+    setSelectedMonth(month);
+    setSelectedIds(new Set());
+  };
 
   const handleToggleClick = async (item: InvoiceItem) => {
     if (!item.installmentId) return;
@@ -146,6 +162,14 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
   };
 
   const currentInvoice = invoices.find((inv) => inv.month === selectedMonth);
+  const openItems = currentInvoice?.items.filter((item) => item.installmentId && !item.paid) ?? [];
+  const selectedItems = openItems.filter((item) => selectedIds.has(item.installmentId!));
+  const selectedTotal = selectedItems.reduce((acc, item) => acc + item.amount, 0);
+  const allOpenSelected = openItems.length > 0 && selectedIds.size === openItems.length;
+
+  const toggleSelectAllOpen = () => {
+    setSelectedIds(allOpenSelected ? new Set() : new Set(openItems.map((item) => item.installmentId!)));
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -173,7 +197,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
               {invoices.map((inv) => (
                 <button
                   key={inv.month}
-                  onClick={() => setSelectedMonth(inv.month)}
+                  onClick={() => handleSelectMonth(inv.month)}
                   className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition ${
                     selectedMonth === inv.month
                       ? 'bg-blue-600 text-white'
@@ -187,6 +211,17 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
 
             {/* Lista de parcelas do mês selecionado */}
             <div className="overflow-y-auto flex-1 p-6 pt-4">
+              {openItems.length > 0 && (
+                <div className="flex justify-end mb-2">
+                  <button
+                    type="button"
+                    onClick={toggleSelectAllOpen}
+                    className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {allOpenSelected ? 'Limpar seleção' : 'Selecionar todas em aberto'}
+                  </button>
+                </div>
+              )}
               {currentInvoice?.items.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
                   Nenhum lançamento neste mês.
@@ -198,6 +233,15 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                     return (
                       <div key={item.id} className="flex items-center justify-between gap-3 pb-3 border-b border-gray-50 dark:border-zinc-800 last:border-0 group">
                         <div className="flex items-center gap-3 min-w-0">
+                          {item.installmentId && !item.paid && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(item.installmentId)}
+                              onChange={() => toggleSelected(item.installmentId!)}
+                              title="Selecionar para pagar em lote"
+                              className="flex-shrink-0 h-4 w-4 rounded border-gray-300 dark:border-zinc-600"
+                            />
+                          )}
                           {item.installmentId && (
                             <button
                               type="button"
@@ -267,6 +311,21 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
               )}
             </div>
 
+            {/* Barra de ação para pagamento em lote */}
+            {selectedIds.size > 0 && (
+              <div className="flex items-center justify-between gap-3 px-6 py-3 border-t border-gray-100 dark:border-zinc-800 bg-blue-50 dark:bg-blue-950/30">
+                <span className="text-sm text-gray-700 dark:text-gray-200">
+                  {selectedItems.length} selecionada{selectedItems.length > 1 ? 's' : ''} · {formatCurrency(selectedTotal)}
+                </span>
+                <button
+                  onClick={() => setPayingSelection(true)}
+                  className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+                >
+                  Pagar selecionadas
+                </button>
+              </div>
+            )}
+
             {/* Total da fatura do mês */}
             <div className="flex flex-col gap-3 p-6 pt-4 border-t border-gray-100 dark:border-zinc-800">
               <div className="flex justify-between items-center">
@@ -330,6 +389,27 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
           }}
           onConfirm={(accountId, date) =>
             api.post(`/cards/${card.id}/invoices/pay`, { accountId, date, month: payingInvoice.month }).then(() => {})
+          }
+        />
+      )}
+
+      {payingSelection && (
+        <PaymentModal
+          title="Pagar selecionadas"
+          description={`${selectedItems.length} lançamento${selectedItems.length > 1 ? 's' : ''} selecionado${selectedItems.length > 1 ? 's' : ''}`}
+          amount={selectedTotal}
+          onClose={() => setPayingSelection(false)}
+          onSuccess={() => {
+            setPayingSelection(false);
+            setSelectedIds(new Set());
+            fetchInvoices();
+          }}
+          onConfirm={(accountId, date) =>
+            api.patch('/cards/installments/pay-batch', {
+              installmentIds: selectedItems.map((item) => item.installmentId!),
+              accountId,
+              date,
+            }).then(() => {})
           }
         />
       )}
