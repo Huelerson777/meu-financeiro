@@ -95,7 +95,6 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
     }
   };
 
-  const [payingItem, setPayingItem] = useState<InvoiceItem | null>(null);
   const [payingInvoice, setPayingInvoice] = useState<Invoice | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [payingSelection, setPayingSelection] = useState(false);
@@ -114,12 +113,14 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
     setSelectedIds(new Set());
   };
 
-  const handleToggleClick = async (item: InvoiceItem) => {
+  // Clique no botão redondo: parcela paga desfaz o pagamento; parcela em
+  // aberto entra/sai da seleção pra pagar (via barra de pagamento em lote,
+  // que funciona tanto para 1 quanto para várias parcelas de uma vez).
+  const handleCircleClick = async (item: InvoiceItem) => {
     if (!item.installmentId) return;
 
     if (!item.paid) {
-      // Marcar como paga sempre abre a janela de pagamento (precisa da conta de origem)
-      setPayingItem(item);
+      toggleSelected(item.installmentId);
       return;
     }
 
@@ -138,9 +139,12 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
 
   const handleEditClick = async (item: InvoiceItem) => {
     try {
-      const res = await api.get('/transactions');
+      const res = await api.get('/transactions', { params: { type: 'EXPENSE', limit: 100 } });
       const raw = res.data;
-      const all = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+      const all = Array.isArray(raw?.data?.items) ? raw.data.items
+        : Array.isArray(raw?.items) ? raw.items
+        : Array.isArray(raw) ? raw
+        : [];
       const group = all.filter((t: any) => t.installmentGroupId === item.installmentGroupId);
       if (group.length === 0) return;
 
@@ -233,24 +237,23 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                     return (
                       <div key={item.id} className="flex items-center justify-between gap-3 pb-3 border-b border-gray-50 dark:border-zinc-800 last:border-0 group">
                         <div className="flex items-center gap-3 min-w-0">
-                          {item.installmentId && !item.paid && (
-                            <input
-                              type="checkbox"
-                              checked={selectedIds.has(item.installmentId)}
-                              onChange={() => toggleSelected(item.installmentId!)}
-                              title="Selecionar para pagar em lote"
-                              className="flex-shrink-0 h-4 w-4 rounded border-gray-300 dark:border-zinc-600"
-                            />
-                          )}
                           {item.installmentId && (
                             <button
                               type="button"
-                              onClick={() => handleToggleClick(item)}
-                              title={item.paid ? 'Desfazer pagamento' : 'Pagar esta parcela'}
+                              onClick={() => handleCircleClick(item)}
+                              title={
+                                item.paid
+                                  ? 'Desfazer pagamento'
+                                  : selectedIds.has(item.installmentId)
+                                    ? 'Remover da seleção'
+                                    : 'Selecionar para pagar'
+                              }
                               className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition ${
                                 item.paid
                                   ? 'bg-green-500 border-green-500 text-white'
-                                  : 'border-gray-300 dark:border-zinc-600 text-transparent hover:border-green-400'
+                                  : selectedIds.has(item.installmentId)
+                                    ? 'bg-blue-600 border-blue-600 text-white'
+                                    : 'border-gray-300 dark:border-zinc-600 text-transparent hover:border-blue-400'
                               }`}
                             >
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3 h-3">
@@ -321,7 +324,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                   onClick={() => setPayingSelection(true)}
                   className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
                 >
-                  Pagar selecionadas
+                  {selectedItems.length > 1 ? 'Pagar selecionadas' : 'Pagar selecionada'}
                 </button>
               </div>
             )}
@@ -361,22 +364,6 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
         />
       )}
 
-      {payingItem && (
-        <PaymentModal
-          title="Pagar parcela"
-          description={parseInstallmentLabel(payingItem.description).name}
-          amount={payingItem.amount}
-          onClose={() => setPayingItem(null)}
-          onSuccess={() => {
-            setPayingItem(null);
-            fetchInvoices();
-          }}
-          onConfirm={(accountId, date) =>
-            api.patch(`/cards/installments/${payingItem.installmentId}/pay`, { accountId, date }).then(() => {})
-          }
-        />
-      )}
-
       {payingInvoice && (
         <PaymentModal
           title="Pagar fatura total"
@@ -395,7 +382,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
 
       {payingSelection && (
         <PaymentModal
-          title="Pagar selecionadas"
+          title={selectedItems.length > 1 ? 'Pagar selecionadas' : 'Pagar selecionada'}
           description={`${selectedItems.length} lançamento${selectedItems.length > 1 ? 's' : ''} selecionado${selectedItems.length > 1 ? 's' : ''}`}
           amount={selectedTotal}
           onClose={() => setPayingSelection(false)}

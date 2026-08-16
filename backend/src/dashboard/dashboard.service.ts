@@ -25,7 +25,7 @@ export class DashboardService {
     const prevStartDate = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
     const prevEndDate = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 1);
 
-    const [balanceAgg, { totalIncome: currentIncome, totalExpense: currentExpense }, investedAgg, previousTotals, previousInvestedAgg] =
+    const [balanceAgg, { totalIncome: currentIncome, totalExpense: currentExpense }, previousTotals, previousInvestedAgg] =
       await Promise.all([
         // ITEM 1/6 - Saldo geral filtra por includeInDashboard
         this.prisma.account.aggregate({
@@ -33,18 +33,6 @@ export class DashboardService {
           _sum: { currentBalance: true },
         }),
         this.getIncomeExpenseTotals(userId, dateFilter, investmentAccountIds),
-        // ITEM 2 - Investimentos = transferências recebidas em contas do tipo INVESTMENT no mês
-        investmentAccountIds.length > 0
-          ? this.prisma.transaction.aggregate({
-              where: {
-                userId,
-                type: 'TRANSFER',
-                status: 'PAID',
-                date: dateFilter,
-              },
-              _sum: { amount: true },
-            })
-          : Promise.resolve({ _sum: { amount: null } }),
         // Totais do mês anterior, só pra comparação de variação (▲/▼) nos cards
         this.getIncomeExpenseTotals(userId, { gte: prevStartDate, lt: prevEndDate }, investmentAccountIds),
         // Investido no mês anterior, mesma lógica de comparação
@@ -72,6 +60,10 @@ export class DashboardService {
     const currentBalance = Number(balanceAgg._sum.currentBalance ?? 0);
     const totalIncome = currentIncome;
     const totalExpense = currentExpense;
+    // Sobras = renda do mês que ainda não virou despesa nem investimento —
+    // continua contando mesmo que o usuário tenha movido esse dinheiro pra
+    // outra conta (ex: uma transferência manual pra uma "reserva"), já que
+    // ele não foi gasto nem investido.
     const leftovers = totalIncome - totalExpense - totalInvested;
 
     // Variação percentual vs. mês anterior — usada nos cards do dashboard
@@ -96,11 +88,19 @@ export class DashboardService {
       where: {
         userId,
         status: 'PAID',
+        cardId: null,
         date: { gte: yearStart, lt: yearEnd },
         type: { in: ['INCOME', 'EXPENSE'] },
         OR: [{ account: { includeInDashboard: true } }, { accountId: null }],
       },
       select: { amount: true, type: true, date: true },
+    });
+
+    // Parcelas de cartão pagas no ano — contam pelo mês em que foram
+    // efetivamente pagas (paidAt), não pelo mês de vencimento na fatura.
+    const yearCardInstallments = await this.prisma.installment.findMany({
+      where: { paid: true, paidAt: { gte: yearStart, lt: yearEnd }, transaction: { userId, cardId: { not: null } } },
+      select: { amount: true, paidAt: true },
     });
 
     const monthlyFlow = Array.from({ length: 12 }, (_, i) => ({
@@ -115,6 +115,10 @@ export class DashboardService {
       const val = Number(t.amount);
       if (t.type === 'INCOME') monthlyFlow[mIndex].receitas += val;
       if (t.type === 'EXPENSE') monthlyFlow[mIndex].despesas += val;
+    });
+
+    yearCardInstallments.forEach((i) => {
+      monthlyFlow[i.paidAt!.getMonth()].despesas += Number(i.amount);
     });
 
     // Linha de Investido — aportes (Transfer) recebidos por contas INVESTMENT no ano
@@ -144,13 +148,19 @@ export class DashboardService {
    * inclusão usado no card "Despesas do mês" (respeita includeInDashboard e
    * exclui aportes em contas de investimento — de forma NULL-safe, já que
    * compras de cartão não têm accountId).
+   *
+   * Compras de cartão (cardId != null) não entram pela data da transação —
+   * essa data é o vencimento da parcela na fatura, não quando o dinheiro
+   * realmente saiu da conta. Elas contam pra este período pela data em que a
+   * parcela foi efetivamente paga (installment.paidAt), já que é possível
+   * pagar uma parcela antes da fatura fechar.
    */
   private async getIncomeExpenseTotals(
     userId: string,
     dateFilter: { gte: Date; lt: Date },
     investmentAccountIds: string[],
   ) {
-    const [incomeAgg, expenseAgg] = await Promise.all([
+    const [incomeAgg, nonCardExpenseAgg, cardExpenseAgg] = await Promise.all([
       this.prisma.transaction.aggregate({
         where: { userId, type: 'INCOME', status: 'PAID', date: dateFilter, account: { includeInDashboard: true } },
         _sum: { amount: true },
@@ -160,6 +170,7 @@ export class DashboardService {
           userId,
           type: 'EXPENSE',
           status: 'PAID',
+          cardId: null,
           date: dateFilter,
           AND: [
             { OR: [{ account: { includeInDashboard: true } }, { accountId: null }] },
@@ -170,11 +181,15 @@ export class DashboardService {
         },
         _sum: { amount: true },
       }),
+      this.prisma.installment.aggregate({
+        where: { paid: true, paidAt: dateFilter, transaction: { userId, cardId: { not: null } } },
+        _sum: { amount: true },
+      }),
     ]);
 
     return {
       totalIncome: Number(incomeAgg._sum.amount ?? 0),
-      totalExpense: Number(expenseAgg._sum.amount ?? 0),
+      totalExpense: Number(nonCardExpenseAgg._sum.amount ?? 0) + Number(cardExpenseAgg._sum.amount ?? 0),
     };
   }
 
@@ -194,11 +209,19 @@ export class DashboardService {
       where: {
         userId,
         status: 'PAID',
+        cardId: null,
         date: { gte: yearStart, lt: yearEnd },
         type: { in: ['INCOME', 'EXPENSE'] },
         OR: [{ account: { includeInDashboard: true } }, { accountId: null }],
       },
       select: { amount: true, type: true, date: true },
+    });
+
+    // Parcelas de cartão pagas no ano — contam pelo mês em que foram
+    // efetivamente pagas (paidAt), não pelo mês de vencimento na fatura.
+    const cardInstallments = await this.prisma.installment.findMany({
+      where: { paid: true, paidAt: { gte: yearStart, lt: yearEnd }, transaction: { userId, cardId: { not: null } } },
+      select: { amount: true, paidAt: true },
     });
 
     const monthlyFlow = Array.from({ length: 12 }, (_, i) => ({
@@ -213,6 +236,10 @@ export class DashboardService {
       const val = Number(t.amount);
       if (t.type === 'INCOME') monthlyFlow[mIndex].receitas += val;
       if (t.type === 'EXPENSE') monthlyFlow[mIndex].despesas += val;
+    });
+
+    cardInstallments.forEach((i) => {
+      monthlyFlow[i.paidAt!.getMonth()].despesas += Number(i.amount);
     });
 
     if (investmentAccountIds.length > 0) {
@@ -236,25 +263,42 @@ export class DashboardService {
     const startDate = new Date(targetYear, targetMonth - 1, 1);
     const endDate = new Date(targetYear, targetMonth, 1);
 
-    const grouped = await this.prisma.transaction.groupBy({
-      by: ['categoryId'],
-      where: {
-        userId,
-        type: 'EXPENSE',
-        status: 'PAID',
-        date: { gte: startDate, lt: endDate },
-        categoryId: { not: null },
-        OR: [{ account: { includeInDashboard: true } }, { accountId: null }],
-      },
-      _sum: { amount: true },
-      orderBy: { _sum: { amount: 'desc' } },
+    const [grouped, cardInstallments] = await Promise.all([
+      this.prisma.transaction.groupBy({
+        by: ['categoryId'],
+        where: {
+          userId,
+          type: 'EXPENSE',
+          status: 'PAID',
+          cardId: null,
+          date: { gte: startDate, lt: endDate },
+          categoryId: { not: null },
+          OR: [{ account: { includeInDashboard: true } }, { accountId: null }],
+        },
+        _sum: { amount: true },
+      }),
+      // Parcelas de cartão pagas no mês — contam pela data em que foram
+      // efetivamente pagas (paidAt), não pelo vencimento na fatura.
+      this.prisma.installment.findMany({
+        where: {
+          paid: true,
+          paidAt: { gte: startDate, lt: endDate },
+          transaction: { userId, cardId: { not: null }, categoryId: { not: null } },
+        },
+        select: { amount: true, transaction: { select: { categoryId: true } } },
+      }),
+    ]);
+
+    const totals = new Map<string, number>();
+    grouped.forEach((g) => totals.set(g.categoryId!, (totals.get(g.categoryId!) ?? 0) + Number(g._sum.amount ?? 0)));
+    cardInstallments.forEach((i) => {
+      const categoryId = i.transaction.categoryId!;
+      totals.set(categoryId, (totals.get(categoryId) ?? 0) + Number(i.amount));
     });
 
-    if (grouped.length === 0) return [];
+    if (totals.size === 0) return [];
 
-    const categoryIds = grouped
-      .map((g) => g.categoryId)
-      .filter(Boolean) as string[];
+    const categoryIds = Array.from(totals.keys());
 
     const categories = await this.prisma.category.findMany({
       where: { id: { in: categoryIds } },
@@ -263,16 +307,18 @@ export class DashboardService {
 
     const catMap = new Map(categories.map((c) => [c.id, c]));
 
-    return grouped.map((g) => {
-      const cat = catMap.get(g.categoryId!);
-      return {
-        categoryId: g.categoryId,
-        name: cat?.name ?? 'Sem categoria',
-        color: cat?.color ?? '#64748B',
-        icon: cat?.icon ?? 'tag',
-        total: Number(g._sum.amount ?? 0),
-      };
-    });
+    return Array.from(totals.entries())
+      .map(([categoryId, total]) => {
+        const cat = catMap.get(categoryId);
+        return {
+          categoryId,
+          name: cat?.name ?? 'Sem categoria',
+          color: cat?.color ?? '#64748B',
+          icon: cat?.icon ?? 'tag',
+          total,
+        };
+      })
+      .sort((a, b) => b.total - a.total);
   }
 
   async getUpcomingBills(userId: string) {
@@ -298,13 +344,25 @@ export class DashboardService {
     const endDate = new Date(targetYear, targetMonth, 1);
     const today = new Date(new Date().setHours(0, 0, 0, 0));
 
-    const [paidAgg, pendingTransactions, openInstallments] = await Promise.all([
-      // O status da Transaction agora reflete o pagamento real também pra
-      // compras de cartão (fica PENDING até a parcela ser paga, PAID quando
-      // for) — então essa soma já cobre tudo, cartão incluso.
+    const [paidAgg, paidCardAgg, pendingTransactions, openInstallments] = await Promise.all([
+      // Compras de cartão ficam de fora daqui (cardId: null) — a data delas é
+      // o vencimento na fatura, não quando o pagamento saiu da conta. Ver
+      // paidCardAgg logo abaixo, que soma pela data real do pagamento.
       this.prisma.transaction.groupBy({
         by: ['type'],
-        where: { userId, status: 'PAID', date: { gte: startDate, lt: endDate }, type: { in: ['INCOME', 'EXPENSE'] } },
+        where: {
+          userId,
+          status: 'PAID',
+          cardId: null,
+          date: { gte: startDate, lt: endDate },
+          type: { in: ['INCOME', 'EXPENSE'] },
+        },
+        _sum: { amount: true },
+      }),
+      // Parcelas de cartão pagas neste mês, pela data real do pagamento
+      // (paidAt) — uma parcela pode ser paga antes da fatura fechar.
+      this.prisma.installment.aggregate({
+        where: { paid: true, paidAt: { gte: startDate, lt: endDate }, transaction: { userId, cardId: { not: null } } },
         _sum: { amount: true },
       }),
       // cardId: null aqui pra não duplicar: compras de cartão pendentes já
@@ -335,7 +393,8 @@ export class DashboardService {
       }),
     ]);
 
-    const paidExpenseTotal = Number(paidAgg.find((g) => g.type === 'EXPENSE')?._sum.amount ?? 0);
+    const paidExpenseTotal =
+      Number(paidAgg.find((g) => g.type === 'EXPENSE')?._sum.amount ?? 0) + Number(paidCardAgg._sum.amount ?? 0);
     const paidIncomeTotal = Number(paidAgg.find((g) => g.type === 'INCOME')?._sum.amount ?? 0);
 
     const pendingItems = pendingTransactions.map((t) => ({

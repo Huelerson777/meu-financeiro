@@ -1,4 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { TransactionStatus } from '@prisma/client';
 import { TransactionsService } from './transactions.service';
 import { TransactionParserService } from './transaction-parser.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
@@ -23,6 +24,7 @@ export class TransactionsController {
     @Query('search') search?: string,
     @Query('categoryId') categoryId?: string,
     @Query('type') type?: string,
+    @Query('status') status?: TransactionStatus,
     @Query('amount') amount?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -33,6 +35,7 @@ export class TransactionsController {
       search,
       categoryId,
       types: type ? (type.split(',') as ('INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT')[]) : undefined,
+      status,
       amount,
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,

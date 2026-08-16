@@ -152,10 +152,16 @@ export default function DashboardPage() {
     setDetailModal({ type });
     setTransactionsLoading(true);
     try {
-      const res = await api.get('/transactions');
+      const monthStr = String(selectedMonth).padStart(2, '0');
+      const startDate = `${selectedYear}-${monthStr}-01`;
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      const res = await api.get('/transactions', {
+        params: { type, status: 'PAID', startDate, endDate, limit: 100 },
+      });
       const raw = res.data;
-      const list = Array.isArray(raw) ? raw
-        : Array.isArray(raw?.data) ? raw.data
+      const list = Array.isArray(raw?.data?.items) ? raw.data.items
+        : Array.isArray(raw?.items) ? raw.items
+        : Array.isArray(raw) ? raw
         : [];
       setAllTransactions(list);
     } catch {
@@ -165,14 +171,8 @@ export default function DashboardPage() {
     }
   };
 
-  // Filtra só as transações do tipo e do mês/ano selecionados no Dashboard
-  const detailTransactions = detailModal
-    ? allTransactions.filter((t) => {
-        if (t.type !== detailModal.type) return false;
-        const d = new Date(t.date);
-        return d.getMonth() + 1 === selectedMonth && d.getFullYear() === selectedYear;
-      })
-    : [];
+  // A API já filtra por tipo e mês/ano selecionados no Dashboard
+  const detailTransactions = detailModal ? allTransactions : [];
 
   // Pagar/receber um item em aberto direto pela lista de "Pago x Em Aberto"
   const [payingItem, setPayingItem] = useState<PaymentsStatusItem | null>(null);

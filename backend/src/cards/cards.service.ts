@@ -12,10 +12,44 @@ import { PayInvoiceDto } from './dto/pay-invoice.dto';
 export class CardsService {
   constructor(private prisma: PrismaService) {}
 
-  findAll(userId: string) {
-    return this.prisma.card.findMany({
+  /**
+   * Lista os cartões já com o valor em aberto da próxima fatura de cada um
+   * (evita uma chamada extra por cartão só pra mostrar isso na listagem).
+   * A 1ª parcela de uma compra sempre cai no mês seguinte ao da compra (ver
+   * calculateInstallmentDueDate), então "fatura do mês corrente" quase nunca
+   * teria nada — o que interessa é a fatura mais próxima que ainda tem saldo
+   * em aberto (a próxima que o usuário precisa pagar), não literalmente o
+   * mês do calendário atual.
+   */
+  async findAll(userId: string) {
+    const cards = await this.prisma.card.findMany({
       where: { userId, isArchived: false },
       orderBy: { name: 'asc' },
+    });
+    if (cards.length === 0) return cards;
+
+    const openInstallments = await this.prisma.installment.findMany({
+      where: { paid: false, transaction: { userId, cardId: { in: cards.map((c) => c.id) } } },
+      select: { amount: true, dueDate: true, transaction: { select: { cardId: true } } },
+    });
+
+    // Por cartão, soma o saldo em aberto agrupado por mês de vencimento
+    const byCard = new Map<string, Map<string, number>>();
+    openInstallments.forEach((i) => {
+      const cardId = i.transaction.cardId!;
+      const monthKey = `${i.dueDate.getFullYear()}-${String(i.dueDate.getMonth() + 1).padStart(2, '0')}`;
+      const monthMap = byCard.get(cardId) ?? new Map<string, number>();
+      monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + Number(i.amount));
+      byCard.set(cardId, monthMap);
+    });
+
+    return cards.map((c) => {
+      const monthMap = byCard.get(c.id);
+      const earliestMonth = monthMap && monthMap.size > 0 ? Array.from(monthMap.keys()).sort()[0] : null;
+      return {
+        ...c,
+        currentInvoiceOpenTotal: earliestMonth ? monthMap!.get(earliestMonth)! : 0,
+      };
     });
   }
 

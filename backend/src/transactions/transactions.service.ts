@@ -24,6 +24,7 @@ export class TransactionsService {
       // formulário do frontend trata como tipos distintos (uiType). Aceita
       // vários tipos ao mesmo tempo (ex: receitas + despesas).
       types?: ('INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT')[];
+      status?: TransactionStatus;
       amount?: string;
       page?: number;
       limit?: number;
@@ -37,14 +38,28 @@ export class TransactionsService {
     const andConditions: Prisma.TransactionWhereInput[] = [];
 
     if (filters?.startDate || filters?.endDate) {
-      where.date = {
+      const dateRange = {
         ...(filters.startDate ? { gte: new Date(`${filters.startDate}T00:00:00.000Z`) } : {}),
         ...(filters.endDate ? { lte: new Date(`${filters.endDate}T23:59:59.999Z`) } : {}),
       };
+      // Compras de cartão guardam em `date` o vencimento da parcela na
+      // fatura, não quando o dinheiro saiu da conta — dá pra pagar uma
+      // parcela antes da fatura fechar. Uma vez paga, ela conta pro período
+      // pela data real do pagamento (installment.paidAt).
+      andConditions.push({
+        OR: [
+          { cardId: null, date: dateRange },
+          { cardId: { not: null }, installments: { some: { paid: true, paidAt: dateRange } } },
+        ],
+      });
     }
 
     if (filters?.categoryId) {
       where.categoryId = filters.categoryId;
+    }
+
+    if (filters?.status) {
+      where.status = filters.status;
     }
 
     if (filters?.types && filters.types.length > 0) {
