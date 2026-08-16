@@ -152,12 +152,17 @@ export default function DashboardPage() {
     setDetailModal({ type });
     setTransactionsLoading(true);
     try {
-      const res = await api.get('/transactions');
+      const monthStr = String(selectedMonth).padStart(2, '0');
+      const startDate = `${selectedYear}-${monthStr}-01`;
+      const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      // Mesmo critério dos cards de Receitas/Despesas: só lançamentos pagos.
+      const res = await api.get('/transactions', { params: { type, startDate, endDate, limit: 100 } });
       const raw = res.data;
       const list = Array.isArray(raw) ? raw
         : Array.isArray(raw?.data) ? raw.data
+        : Array.isArray(raw?.data?.items) ? raw.data.items
         : [];
-      setAllTransactions(list);
+      setAllTransactions(list.filter((t: any) => t.status === 'PAID'));
     } catch {
       setAllTransactions([]);
     } finally {
@@ -165,14 +170,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Filtra só as transações do tipo e do mês/ano selecionados no Dashboard
-  const detailTransactions = detailModal
-    ? allTransactions.filter((t) => {
-        if (t.type !== detailModal.type) return false;
-        const d = new Date(t.date);
-        return d.getMonth() + 1 === selectedMonth && d.getFullYear() === selectedYear;
-      })
-    : [];
+  const detailTransactions = detailModal ? allTransactions : [];
 
   // Pagar/receber um item em aberto direto pela lista de "Pago x Em Aberto"
   const [payingItem, setPayingItem] = useState<PaymentsStatusItem | null>(null);

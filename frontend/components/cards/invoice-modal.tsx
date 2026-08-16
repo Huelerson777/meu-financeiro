@@ -140,7 +140,10 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
     try {
       const res = await api.get('/transactions');
       const raw = res.data;
-      const all = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+      const all = Array.isArray(raw) ? raw
+        : Array.isArray(raw?.data) ? raw.data
+        : Array.isArray(raw?.data?.items) ? raw.data.items
+        : [];
       const group = all.filter((t: any) => t.installmentGroupId === item.installmentGroupId);
       if (group.length === 0) return;
 
