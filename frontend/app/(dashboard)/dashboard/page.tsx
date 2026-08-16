@@ -155,6 +155,8 @@ export default function DashboardPage() {
       const monthStr = String(selectedMonth).padStart(2, '0');
       const startDate = `${selectedYear}-${monthStr}-01`;
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
+      // A API já filtra por tipo, status pago e mês/ano selecionados no
+      // Dashboard; o filtro de status abaixo é só uma rede de segurança.
       const res = await api.get('/transactions', {
         params: { type, status: 'PAID', startDate, endDate, limit: 100 },
       });
@@ -163,7 +165,7 @@ export default function DashboardPage() {
         : Array.isArray(raw?.items) ? raw.items
         : Array.isArray(raw) ? raw
         : [];
-      setAllTransactions(list);
+      setAllTransactions(list.filter((t: any) => t.status === 'PAID'));
     } catch {
       setAllTransactions([]);
     } finally {
@@ -171,7 +173,6 @@ export default function DashboardPage() {
     }
   };
 
-  // A API já filtra por tipo e mês/ano selecionados no Dashboard
   const detailTransactions = detailModal ? allTransactions : [];
 
   // Pagar/receber um item em aberto direto pela lista de "Pago x Em Aberto"
