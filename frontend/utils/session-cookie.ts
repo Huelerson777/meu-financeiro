@@ -8,12 +8,19 @@
 // não existir ou o refresh falhar, o AuthGuard desloga de verdade
 // (limpando esse cookie também). Ver `frontend/middleware.ts`.
 const SESSION_COOKIE_NAME = 'ff_session';
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // teto generoso; quem expira de fato é o refresh token
 
-export function setSessionCookie() {
+// Mesmos números do refresh token no backend (ver REFRESH_EXPIRES_DAYS em
+// backend/src/auth/auth.service.ts) — sem "lembrar de mim" o refresh já
+// expira em 7 dias reais; manter o cookie mais generoso que isso só faz o
+// dashboard "abrir e falhar" por mais tempo antes do logout de verdade.
+const DEFAULT_MAX_AGE_DAYS = 7;
+const REMEMBER_ME_MAX_AGE_DAYS = 28;
+
+export function setSessionCookie(rememberMe = false) {
   if (typeof document === 'undefined') return;
+  const days = rememberMe ? REMEMBER_ME_MAX_AGE_DAYS : DEFAULT_MAX_AGE_DAYS;
   const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
-  document.cookie = `${SESSION_COOKIE_NAME}=1; Path=/; Max-Age=${MAX_AGE_SECONDS}; SameSite=Lax${secure}`;
+  document.cookie = `${SESSION_COOKIE_NAME}=1; Path=/; Max-Age=${days * 24 * 60 * 60}; SameSite=Lax${secure}`;
 }
 
 export function clearSessionCookie() {

@@ -43,7 +43,7 @@ export default function LoginPage() {
         values.password,
         values.rememberMe,
       );
-      setTokens(accessToken, refreshToken);
+      setTokens(accessToken, refreshToken, values.rememberMe);
       toast.success('Login realizado com sucesso');
       router.push('/dashboard');
     } catch (error: any) {

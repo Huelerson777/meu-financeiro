@@ -8,9 +8,10 @@ interface AuthState {
   user: User | null;
   accessToken: string | null;
   refreshToken: string | null;
+  rememberMe: boolean;
   hasHydrated: boolean;
   setUser: (user: User) => void;
-  setTokens: (accessToken: string, refreshToken: string) => void;
+  setTokens: (accessToken: string, refreshToken: string, rememberMe?: boolean) => void;
   logout: () => void;
   setHasHydrated: (value: boolean) => void;
 }
@@ -26,20 +27,21 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       accessToken: null,
       refreshToken: null,
+      rememberMe: false,
       hasHydrated: false,
       setUser: (user) => set({ user }),
-      setTokens: (accessToken, refreshToken) => {
-        setSessionCookie();
+      setTokens: (accessToken, refreshToken, rememberMe = false) => {
+        setSessionCookie(rememberMe);
         // Um login/registro bem-sucedido conta como atividade — sem isso,
         // um timestamp velho de uma sessão anterior (de horas atrás, já
         // além dos 15min) sobrevive no localStorage e o logoff por
         // inatividade dispara na cara de quem tinha acabado de entrar.
         useLastActivityStore.getState().touch();
-        set({ accessToken, refreshToken });
+        set({ accessToken, refreshToken, rememberMe });
       },
       logout: () => {
         clearSessionCookie();
-        set({ user: null, accessToken: null, refreshToken: null });
+        set({ user: null, accessToken: null, refreshToken: null, rememberMe: false });
       },
       setHasHydrated: (value) => set({ hasHydrated: value }),
     }),
@@ -50,7 +52,7 @@ export const useAuthStore = create<AuthState>()(
         // — cobre o caso raro de alguém limpar só os cookies do navegador e
         // manter o localStorage intacto (sem isso, o middleware acharia que
         // não há sessão e prenderia o usuário em /login mesmo autenticado).
-        if (state?.accessToken) setSessionCookie();
+        if (state?.accessToken) setSessionCookie(state.rememberMe);
         state?.setHasHydrated(true);
       },
     },
