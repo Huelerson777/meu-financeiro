@@ -11,7 +11,7 @@ Sistema web de gestão financeira pessoal: contas, transações, cartões, inves
 | Frontend   | Next.js (App Router), React, TypeScript, Tailwind CSS, shadcn/ui-style components, React Hook Form + Zod, TanStack Query, Zustand, Recharts, Axios |
 | Backend    | NestJS, TypeScript, Prisma ORM, PostgreSQL |
 | Auth       | JWT (access + refresh rotativo), bcrypt, Guards, Roles |
-| Infra      | Docker, Docker Compose, Vercel (frontend), Railway (backend), Supabase PostgreSQL |
+| Infra      | Vercel (frontend), Render (backend), Neon PostgreSQL |
 
 ## Estrutura
 
@@ -43,23 +43,10 @@ gestao-financeira-saas/
 │   │   └── (dashboard)/dashboard  # ✅ Página funcional conectada à API
 │   ├── components/{ui,layout,dashboard}
 │   ├── hooks/  services/  stores/  types/  utils/
-├── docs/              # Documentação detalhada
-└── docker-compose.yml
+└── docs/              # Documentação detalhada
 ```
 
 ## Rodando localmente
-
-### Opção 1 — Docker Compose (recomendado)
-
-```bash
-docker compose up --build
-```
-
-- Frontend: http://localhost:3000
-- API: http://localhost:3001/api
-- Swagger: http://localhost:3001/docs
-
-### Opção 2 — Manual
 
 **Backend**
 ```bash
@@ -85,7 +72,7 @@ Login de demonstração (criado pelo seed): `demo@financeflow.com` / `123456`
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — arquitetura, padrões e como implementar um novo módulo
 - [`docs/DATABASE.md`](docs/DATABASE.md) — modelagem do banco de dados
-- [`docs/DEPLOY.md`](docs/DEPLOY.md) — deploy em Vercel + Railway + Supabase
+- [`docs/DEPLOY.md`](docs/DEPLOY.md) — deploy em Vercel + Render + Neon
 - [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) — variáveis de ambiente
 
 ## Licença

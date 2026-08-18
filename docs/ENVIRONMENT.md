@@ -4,7 +4,7 @@
 
 | Variável | Descrição | Exemplo |
 |---|---|---|
-| `DATABASE_URL` | Connection string do PostgreSQL (Supabase em produção) | `postgresql://user:pass@host:5432/db?schema=public` |
+| `DATABASE_URL` | Connection string do PostgreSQL (Neon em produção) | `postgresql://user:pass@host:5432/db?schema=public` |
 | `JWT_SECRET` | Segredo para assinar o access token | string aleatória forte |
 | `JWT_EXPIRES_IN` | Duração do access token | `15m` |
 | `JWT_REFRESH_SECRET` | Segredo adicional reservado para uso futuro em estratégias de refresh assinado | string aleatória forte |
