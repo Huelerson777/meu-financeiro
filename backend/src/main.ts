@@ -4,7 +4,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
-import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
@@ -13,6 +12,10 @@ async function bootstrap() {
   // HMAC que a Meta manda no webhook do WhatsApp (precisa do corpo bruto,
   // antes do parse de JSON).
   const app = await NestFactory.create(AppModule, { rawBody: true });
+
+  // Atrás do proxy do Render, sem isso `req.ip` retorna o IP interno do
+  // proxy em vez do IP real do cliente — usado no log de auditoria.
+  app.getHttpAdapter().getInstance().set('trust proxy', 1);
 
   // Segurança
   app.use(helmet());
@@ -34,8 +37,9 @@ async function bootstrap() {
     }),
   );
 
-  // Filtros e interceptors globais
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // HttpExceptionFilter e AuditInterceptor são globais via APP_FILTER/
+  // APP_INTERCEPTOR em app.module.ts (precisam de DI pra injetar o
+  // LogsService) — aqui só os que não dependem de nada.
   app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
 
   app.setGlobalPrefix('api');
