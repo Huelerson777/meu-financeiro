@@ -2,7 +2,7 @@
 
 Sistema web de gestão financeira pessoal: contas, transações, cartões, investimentos, metas, orçamentos e relatórios, com dashboard em tempo real.
 
-> **Status deste repositório:** fundação de produção real (backend + frontend + banco + auth funcionam de ponta a ponta), com o módulo **Accounts** implementado por completo como referência de padrão. Os demais módulos de domínio (`transactions`, `cards`, `investments`, `goals`, `budgets`, `reports`, `settings`, `notifications`) estão como esqueletos (`*.module.ts` / `*.controller.ts` / `*.service.ts`) prontos para receber a mesma implementação — ver `docs/ARCHITECTURE.md` → "Como implementar um novo módulo".
+> **Status deste repositório:** em produção real, de ponta a ponta (backend + frontend + banco + auth). A maioria dos módulos de domínio já está implementada — `accounts`, `categories`, `transactions`, `cards`, `investments`, `goals`, `dashboard`, `reports`, `settings`, `notifications`, `recurring-bills` e a integração `whatsapp` (lançamento de transações por mensagem, interpretado via Anthropic). Só `budgets` segue como esqueleto (`*.module.ts` / `*.controller.ts` / `*.service.ts`), pronto para receber a implementação — ver `docs/ARCHITECTURE.md` → "Como implementar um novo módulo".
 
 ## Stack
 
@@ -19,29 +19,33 @@ Sistema web de gestão financeira pessoal: contas, transações, cartões, inves
 gestao-financeira-saas/
 ├── backend/           # API NestJS
 │   ├── src/
-│   │   ├── auth/          # JWT, refresh token, guards, strategies
-│   │   ├── users/         # Perfil, troca de senha, exclusão de conta
-│   │   ├── accounts/      # ✅ Módulo completo (referência de padrão)
-│   │   ├── categories/    # Esqueleto
-│   │   ├── transactions/  # Esqueleto
-│   │   ├── cards/         # Esqueleto
-│   │   ├── investments/   # Esqueleto
-│   │   ├── goals/         # Esqueleto
-│   │   ├── budgets/       # Esqueleto
-│   │   ├── dashboard/     # ✅ Agregações reais para os cards e gráficos
-│   │   ├── reports/       # Esqueleto
-│   │   ├── settings/      # Esqueleto
-│   │   ├── notifications/ # Esqueleto
-│   │   └── common/        # Prisma service, filtros, interceptors, guards, DTOs
+│   │   ├── auth/            # JWT, refresh token, guards, strategies
+│   │   ├── users/           # Perfil, troca de senha, exclusão de conta
+│   │   ├── accounts/        # ✅ Contas e transferências entre contas
+│   │   ├── categories/      # ✅ Categorias de transação
+│   │   ├── transactions/    # ✅ Lançamentos (receita/despesa/transferência)
+│   │   ├── cards/           # ✅ Cartões, faturas, parcelamento e pagamento em lote
+│   │   ├── investments/     # ✅ Aportes e acompanhamento de investimentos
+│   │   ├── goals/           # ✅ Metas financeiras com progresso
+│   │   ├── budgets/         # Esqueleto — TODO
+│   │   ├── dashboard/       # ✅ Agregações reais para os cards e gráficos
+│   │   ├── reports/         # ✅ Fluxo de caixa, extrato, exportação
+│   │   ├── settings/        # ✅ Preferências do usuário (tema, widgets do dashboard...)
+│   │   ├── notifications/   # ✅ Central de notificações
+│   │   ├── recurring-bills/ # ✅ Contas fixas recorrentes
+│   │   ├── whatsapp/        # ✅ Lançamento de transações via WhatsApp (texto/foto, interpretado por IA)
+│   │   └── common/          # Prisma service, filtros, interceptors, guards, DTOs
 │   ├── prisma/
 │   │   ├── schema.prisma  # Todas as tabelas, relacionamentos e índices
 │   │   └── seed.ts
 │   └── test/
 ├── frontend/          # App Next.js
 │   ├── app/
-│   │   ├── (auth)/login       # ✅ Página funcional
-│   │   └── (dashboard)/dashboard  # ✅ Página funcional conectada à API
-│   ├── components/{ui,layout,dashboard}
+│   │   ├── (auth)/         # login, registro, esqueci/redefinir senha
+│   │   └── (dashboard)/    # dashboard, contas, transações, cartões,
+│   │                       # investimentos, metas, contas fixas, relatórios, config
+│   ├── middleware.ts       # roteamento de sessão no edge (ver docs/ARCHITECTURE.md)
+│   ├── components/{ui,layout,dashboard,cards}
 │   ├── hooks/  services/  stores/  types/  utils/
 └── docs/              # Documentação detalhada
 ```

@@ -27,13 +27,13 @@ Controller → Service → Repository → PrismaService → PostgreSQL
 
 Essa separação está implementada de ponta a ponta no módulo `accounts/` — use-o como gabarito.
 
-### Como implementar um novo módulo (ex.: `transactions`)
+### Como implementar um novo módulo (ex.: `budgets`)
 
-O esqueleto já existe em `backend/src/transactions/`. Para completá-lo:
+O esqueleto já existe em `backend/src/budgets/` — é o único módulo de domínio ainda não implementado (todos os outros já seguem o padrão abaixo). Para completá-lo:
 
-1. **DTOs** (`transactions/dto/`): `create-transaction.dto.ts`, `update-transaction.dto.ts`, cada campo com decorators do `class-validator` (veja `accounts/dto/create-account.dto.ts` como exemplo).
-2. **Repository** (`transactions.repository.ts`): métodos `create`, `findManyPaginated`, `findById`, `update`, `delete`, sempre recebendo `userId` e filtrando por ele (nunca confie em IDs vindos do client sem checar posse).
-3. **Service** (`transactions.service.ts`): injete o repository, implemente as regras (ex.: transação parcelada gera N registros em `Installment`; transação recorrente agenda a próxima ocorrência). Lance `NotFoundException` / `ForbiddenException` / `BadRequestException` conforme o caso.
+1. **DTOs** (`budgets/dto/`): `create-budget.dto.ts`, `update-budget.dto.ts`, cada campo com decorators do `class-validator` (veja `accounts/dto/create-account.dto.ts` como exemplo).
+2. **Repository** (`budgets.repository.ts`): métodos `create`, `findManyPaginated`, `findById`, `update`, `delete`, sempre recebendo `userId` e filtrando por ele (nunca confie em IDs vindos do client sem checar posse).
+3. **Service** (`budgets.service.ts`): injete o repository, implemente as regras (ex.: limite por categoria/mês, cálculo do quanto já foi gasto comparando com as `transactions` do período). Lance `NotFoundException` / `ForbiddenException` / `BadRequestException` conforme o caso.
 4. **Controller**: endpoints REST padrão (`POST /`, `GET /` paginado, `GET /:id`, `PATCH /:id`, `DELETE /:id`), protegidos com `@UseGuards(JwtAuthGuard)` e usando `@CurrentUser()` para obter o usuário autenticado.
 5. **Module**: registre `Controller`, `Service` e `Repository` nos arrays `controllers`/`providers`.
 6. **Testes**: replique `accounts/accounts.service.spec.ts` mockando o repository.
@@ -65,6 +65,17 @@ O padrão de paginação/pesquisa/ordenação já está pronto e reutilizável e
 3. Toda requisição subsequente injeta `Authorization: Bearer <accessToken>` via interceptor do Axios.
 4. Se a API responder 401 (token expirado), o interceptor chama `POST /api/auth/refresh` automaticamente, obtém um novo par de tokens e refaz a requisição original — o usuário não percebe a renovação.
 5. Se o refresh também falhar (refresh token revogado/expirado), o usuário é deslogado (`useAuthStore.logout()`), enviando-o de volta ao login.
+6. Um logoff automático por inatividade (`hooks/use-idle-logout.ts`) desloga depois de 15 min sem interação — e essa checagem sobrevive a fechar a aba, já que a última atividade fica marcada em `stores/last-activity-store.ts` e é conferida de novo ao reabrir o app.
+
+### Roteamento de sessão no edge (`frontend/middleware.ts`)
+
+Junto com os tokens, `useAuthStore.setTokens()` seta um cookie leve (`ff_session`, só um marcador — nunca o token) via `utils/session-cookie.ts`, com validade igual à do refresh token real (7 dias, ou 28 se "lembrar de mim"). O `middleware.ts` lê só a presença desse cookie, sem chamar o backend, pra decidir no edge, antes de qualquer render:
+
+- `/` → manda pra `/dashboard` (com cookie) ou `/login` (sem).
+- Qualquer rota fora de `/login`, `/register`, `/forgot-password`, `/reset-password` → exige o cookie, senão redireciona pra `/login`.
+- `/login`/`/register` com cookie presente → redireciona pra `/dashboard` (evita mostrar o formulário de novo pra quem já está logado).
+
+Isso é só uma camada de UX/roteamento — **não substitui** a autenticação real. O `AuthGuard` client-side e o JWT validado pelo backend continuam sendo a autoridade final; se o token/refresh for inválido, a chamada de API falha, `logout()` roda (limpando o cookie também) e o usuário é enviado ao login mesmo que o cookie ainda existisse.
 
 ## Extensibilidade futura (sem reescrever a arquitetura)
 
