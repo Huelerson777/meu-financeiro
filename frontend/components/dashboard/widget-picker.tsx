@@ -16,6 +16,7 @@ export const DASHBOARD_WIDGETS: { key: string; label: string }[] = [
   { key: 'balanceChart', label: 'Balanço do Mês' },
   { key: 'yearlyChart', label: 'Evolução Anual' },
   { key: 'categoryChart', label: 'Despesas por Categoria' },
+  { key: 'accountBalances', label: 'Saldo por Conta' },
   { key: 'goalsSummary', label: 'Resumo de Metas' },
 ];
 
@@ -37,6 +38,7 @@ export const WIDGET_SPANS: Record<string, string> = {
   balanceChart: 'sm:col-span-2 lg:col-span-2',
   yearlyChart: 'sm:col-span-2 lg:col-span-2',
   categoryChart: 'sm:col-span-2 lg:col-span-4',
+  accountBalances: 'sm:col-span-2 lg:col-span-4',
   goalsSummary: 'sm:col-span-2 lg:col-span-4',
 };
 

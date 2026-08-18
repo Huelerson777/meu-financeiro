@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { api } from '@/services/api';
+import { formatCurrency } from '@/utils/currency';
 
 interface Account {
   id: string;
@@ -138,9 +139,6 @@ export default function AccountsPage() {
       setIsSubmitting(false);
     }
   };
-
-  const formatCurrency = (val: number | string | undefined) =>
-    Number(val ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
     <div className="p-8">

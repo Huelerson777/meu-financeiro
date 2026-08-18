@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { api } from '@/services/api';
+import { useIdleLogout } from '@/hooks/use-idle-logout';
 
 /**
  * Protege as rotas do grupo (dashboard). Aguarda o Zustand terminar de
@@ -23,6 +24,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       router.replace('/login');
     }
   }, [hasHydrated, accessToken, router]);
+
+  useIdleLogout(hasHydrated && !!accessToken);
 
   // O login só grava os tokens (ver login/page.tsx) — o nome do usuário só
   // fica disponível depois dessa busca, seja logo após o login ou ao

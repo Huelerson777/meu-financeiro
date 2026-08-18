@@ -586,7 +586,7 @@ function TransactionsPageContent() {
                       isTransfer ? 'text-purple-600 dark:text-purple-400' : 'text-red-600 dark:text-red-400'
                     }`}>
                       {isIncome ? '+ ' : isTransfer || isInvestment ? '' : '- '}
-                      {Number(t.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      {formatCurrency(t.amount)}
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">

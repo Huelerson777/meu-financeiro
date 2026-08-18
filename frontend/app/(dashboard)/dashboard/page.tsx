@@ -25,6 +25,7 @@ import {
   useDashboardPaymentsStatus,
   useGoalsSummary,
 } from '@/hooks/use-dashboard';
+import { useAccounts } from '@/hooks/use-accounts';
 import { PaymentsStatusItem } from '@/services/dashboard.service';
 import { formatCurrency } from '@/utils/currency';
 import { api } from '@/services/api';
@@ -65,6 +66,12 @@ export default function DashboardPage() {
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 
+  // Sempre calculado a partir do ano atual (não mais uma lista fixa) — assim
+  // quando o ano virar (ex: 2026 -> 2027) a opção do novo ano já aparece
+  // sozinha no seletor, sem precisar lembrar de atualizar isso a cada virada.
+  const thisYear = currentDate.getFullYear();
+  const yearOptions = Array.from(new Set([thisYear - 2, thisYear - 1, thisYear, thisYear + 1, selectedYear])).sort();
+
   // ITEM 4 — passa month/year para que o hook realmente filtre no backend
   const { data, isLoading, refetch: refetchSummary } = useDashboardSummary({
     month: selectedMonth,
@@ -80,6 +87,7 @@ export default function DashboardPage() {
     refetch: refetchPaymentsStatus,
   } = useDashboardPaymentsStatus({ month: selectedMonth, year: selectedYear });
   const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
+  const { data: accountsData, isLoading: accountsLoading } = useAccounts();
   const { order, setOrder } = useDashboardWidgetOrder();
   const firstName = useAuthStore((s) => s.user?.name)?.split(' ')[0];
 
@@ -198,6 +206,9 @@ export default function DashboardPage() {
 
   const monthlyFlow = data?.monthlyFlow ?? [];
   const sortedCategoryData = categoryData ? [...categoryData].sort((a, b) => b.total - a.total) : [];
+  const sortedAccountBalances = accountsData
+    ? [...accountsData.items].sort((a, b) => Number(b.currentBalance) - Number(a.currentBalance))
+    : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -228,7 +239,7 @@ export default function DashboardPage() {
             onChange={(e) => setSelectedYear(Number(e.target.value))}
             className="flex h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
-            {[2024, 2025, 2026].map((y) => (
+            {yearOptions.map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
           </select>
@@ -560,6 +571,69 @@ export default function DashboardPage() {
                   >
                     {sortedCategoryData.map((entry, index) => (
                       <Cell key={`cat-cell-${index}`} fill={entry.color} />
+                    ))}
+                    <LabelList
+                      dataKey="total"
+                      position="right"
+                      formatter={(val: number) => formatCurrency(val)}
+                      style={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 600 }}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+          ),
+          accountBalances: (
+      <Card>
+        <CardHeader>
+          <CardTitle>Saldo por Conta</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {accountsLoading ? (
+            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
+              Carregando...
+            </div>
+          ) : sortedAccountBalances.length === 0 ? (
+            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
+              Nenhuma conta cadastrada.
+            </div>
+          ) : (
+            // Mesmo padrão visual do gráfico de categorias: barras horizontais
+            // ordenadas da maior pra menor, com o valor exato no final da barra.
+            <div style={{ height: Math.max(64 * sortedAccountBalances.length, 240) }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  layout="vertical"
+                  data={sortedAccountBalances.map((acc) => ({
+                    name: acc.name,
+                    total: Number(acc.currentBalance),
+                  }))}
+                  margin={{ left: 20, right: 60 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    width={150}
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <RechartsTooltip content={<CategoryTooltip />} />
+                  <Bar
+                    dataKey="total"
+                    radius={[0, 4, 4, 0]}
+                    barSize={22}
+                    cursor="pointer"
+                    onClick={() => router.push('/accounts')}
+                  >
+                    {sortedAccountBalances.map((acc, index) => (
+                      <Cell key={`acc-cell-${index}`} fill={acc.color || '#64748B'} />
                     ))}
                     <LabelList
                       dataKey="total"
