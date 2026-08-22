@@ -165,7 +165,7 @@ export class CardsService {
           select: { id: true, paid: true, dueDate: true, paidAt: true, paidFromAccount: { select: { name: true } } },
         },
       },
-      orderBy: { date: 'asc' },
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
     });
 
     const invoicesMap = new Map<string, { month: string; total: number; openTotal: number; items: any[] }>();
@@ -186,6 +186,7 @@ export class CardsService {
         description: t.description,
         amount,
         date: t.date,
+        createdAt: t.createdAt,
         category: t.category,
         categoryId: t.categoryId,
         installmentGroupId: t.installmentGroupId,

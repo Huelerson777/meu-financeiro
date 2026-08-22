@@ -12,6 +12,7 @@ interface InvoiceItem {
   description: string;
   amount: number;
   date: string;
+  createdAt: string;
   category?: { name: string; color: string } | null;
   categoryId?: string | null;
   installmentGroupId: string;
@@ -56,6 +57,28 @@ function parseInstallmentLabel(description: string) {
   if (!match) return { installmentLabel: null, name: description };
   const [, name, current, total] = match;
   return { installmentLabel: `${current}/${total}`, name };
+}
+
+function formatDay(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Agrupa os itens (já ordenados pelo backend) em blocos consecutivos do mesmo dia de
+// lançamento. Usa createdAt (dia em que a compra foi registrada) em vez de "date"
+// (data de vencimento da parcela), que é sempre o mesmo dia do mês pra toda a fatura.
+function groupItemsByDay(items: InvoiceItem[]) {
+  const groups: { day: string; items: InvoiceItem[] }[] = [];
+  for (const item of items) {
+    const day = formatDay(item.createdAt);
+    const last = groups[groups.length - 1];
+    if (last && last.day === day) {
+      last.items.push(item);
+    } else {
+      groups.push({ day, items: [item] });
+    }
+  }
+  return groups;
 }
 
 export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
@@ -178,7 +201,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col border border-gray-200 dark:border-zinc-800">
-        <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-100 dark:border-zinc-800">
+        <div className="flex-shrink-0 flex justify-between items-center p-6 pb-4 border-b border-gray-100 dark:border-zinc-800">
           <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
             <span className="w-3 h-3 rounded-full" style={{ backgroundColor: card.color || '#8B5CF6' }} />
             {card.name}
@@ -197,7 +220,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
         ) : (
           <>
             {/* Abas de mês */}
-            <div className="flex gap-2 px-6 py-3 overflow-x-auto border-b border-gray-100 dark:border-zinc-800">
+            <div className="flex-shrink-0 flex gap-2 px-6 py-3 overflow-x-auto border-b border-gray-100 dark:border-zinc-800">
               {invoices.map((inv) => (
                 <button
                   key={inv.month}
@@ -231,8 +254,16 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                   Nenhum lançamento neste mês.
                 </p>
               ) : (
-                <div className="flex flex-col gap-3">
-                  {currentInvoice?.items.map((item) => {
+                <div className="flex flex-col gap-4">
+                  {groupItemsByDay(currentInvoice?.items ?? []).map((group) => (
+                    <div key={group.day} className="flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                          {group.day}
+                        </span>
+                        <div className="flex-1 h-px bg-gray-200 dark:bg-zinc-700" />
+                      </div>
+                      {group.items.map((item) => {
                     const { installmentLabel, name } = parseInstallmentLabel(item.description);
                     return (
                       <div key={item.id} className="flex items-center justify-between gap-3 pb-3 border-b border-gray-50 dark:border-zinc-800 last:border-0 group">
@@ -309,14 +340,16 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                         </div>
                       </div>
                     );
-                  })}
+                      })}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
 
             {/* Barra de ação para pagamento em lote */}
             {selectedIds.size > 0 && (
-              <div className="flex items-center justify-between gap-3 px-6 py-3 border-t border-gray-100 dark:border-zinc-800 bg-blue-50 dark:bg-blue-950/30">
+              <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-3 border-t border-gray-100 dark:border-zinc-800 bg-blue-50 dark:bg-blue-950/30">
                 <span className="text-sm text-gray-700 dark:text-gray-200">
                   {selectedItems.length} selecionada{selectedItems.length > 1 ? 's' : ''} · {formatCurrency(selectedTotal)}
                 </span>
@@ -330,7 +363,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
             )}
 
             {/* Total da fatura do mês */}
-            <div className="flex flex-col gap-3 p-6 pt-4 border-t border-gray-100 dark:border-zinc-800">
+            <div className="flex-shrink-0 flex flex-col gap-3 p-6 pt-4 border-t border-gray-100 dark:border-zinc-800">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Total da fatura {currentInvoice ? formatMonth(currentInvoice.month) : ''}
