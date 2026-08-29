@@ -31,7 +31,7 @@ const navItems = [
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-1 flex-col gap-0.5 px-3 py-2">
@@ -42,13 +42,15 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             key={href}
             href={href}
             onClick={onNavigate}
+            title={collapsed ? label : undefined}
             className={cn(
               'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-theme hover:bg-muted hover:text-foreground',
+              collapsed && 'justify-center px-0',
               isActive && 'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary',
             )}
           >
-            <Icon className="h-4 w-4" />
-            {label}
+            <Icon className="h-4 w-4 shrink-0" />
+            {!collapsed && label}
           </Link>
         );
       })}
@@ -56,13 +58,13 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-function Logo() {
+function Logo({ collapsed }: { collapsed?: boolean }) {
   return (
-    <div className="flex h-16 items-center gap-2 px-6">
-      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
+    <div className={cn('flex h-16 items-center gap-2 px-6', collapsed && 'justify-center px-0')}>
+      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary shrink-0">
         <Wallet className="h-4 w-4 text-primary-foreground" />
       </div>
-      <span className="text-base font-semibold tracking-tight">FinanceFlow</span>
+      {!collapsed && <span className="text-base font-semibold tracking-tight">FinanceFlow</span>}
     </div>
   );
 }
@@ -74,13 +76,17 @@ export function Sidebar() {
 
   return (
     <>
-      {/* Versão fixa para telas grandes (desktop) — pode ser ocultada pelo botão na topbar */}
-      {!collapsed && (
-        <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
-          <Logo />
-          <NavLinks />
-        </aside>
-      )}
+      {/* Versão fixa para telas grandes (desktop) — o botão na topbar alterna entre
+          expandida e uma "trilha" só com os ícones (nomes ficam ocultos) */}
+      <aside
+        className={cn(
+          'hidden shrink-0 border-r border-border bg-card lg:flex lg:flex-col transition-[width] duration-150',
+          collapsed ? 'w-16' : 'w-64',
+        )}
+      >
+        <Logo collapsed={collapsed} />
+        <NavLinks collapsed={collapsed} />
+      </aside>
 
       {/* Versão "gaveta" para celular/tablet — só existe quando aberta */}
       {isOpen && (

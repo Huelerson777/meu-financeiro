@@ -28,8 +28,8 @@ export function Topbar() {
 
       <button
         onClick={toggleSidebar}
-        title={sidebarCollapsed ? 'Mostrar menu lateral' : 'Ocultar menu lateral'}
-        aria-label={sidebarCollapsed ? 'Mostrar menu lateral' : 'Ocultar menu lateral'}
+        title={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+        aria-label={sidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
         className="hidden lg:flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-theme"
       >
         {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
