@@ -7,6 +7,7 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { PayInstallmentDto } from './dto/pay-installment.dto';
 import { PayInstallmentsBatchDto } from './dto/pay-installments-batch.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
+import { CreateCreditDto } from './dto/create-credit.dto';
 
 @Injectable()
 export class CardsService {
@@ -33,6 +34,13 @@ export class CardsService {
       select: { amount: true, dueDate: true, transaction: { select: { cardId: true } } },
     });
 
+    // Créditos/estornos (transações sem parcela, valor negativo) também abatem
+    // o saldo em aberto da fatura do mês em que caem.
+    const credits = await this.prisma.transaction.findMany({
+      where: { userId, cardId: { in: cards.map((c) => c.id) }, isInstallment: false, amount: { lt: 0 } },
+      select: { amount: true, date: true, cardId: true },
+    });
+
     // Por cartão, soma o saldo em aberto agrupado por mês de vencimento
     const byCard = new Map<string, Map<string, number>>();
     openInstallments.forEach((i) => {
@@ -40,6 +48,13 @@ export class CardsService {
       const monthKey = `${i.dueDate.getFullYear()}-${String(i.dueDate.getMonth() + 1).padStart(2, '0')}`;
       const monthMap = byCard.get(cardId) ?? new Map<string, number>();
       monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + Number(i.amount));
+      byCard.set(cardId, monthMap);
+    });
+    credits.forEach((c) => {
+      const cardId = c.cardId!;
+      const monthKey = `${c.date.getFullYear()}-${String(c.date.getMonth() + 1).padStart(2, '0')}`;
+      const monthMap = byCard.get(cardId) ?? new Map<string, number>();
+      monthMap.set(monthKey, (monthMap.get(monthKey) ?? 0) + Number(c.amount));
       byCard.set(cardId, monthMap);
     });
 
@@ -103,7 +118,7 @@ export class CardsService {
     }
 
     const installmentAmounts = this.splitAmount(dto.totalAmount, dto.installmentsCount);
-    const purchaseDate = new Date(dto.purchaseDate);
+    const purchaseDate = this.parseDateOnly(dto.purchaseDate);
     const installmentGroupId = randomUUID();
 
     return this.prisma.$transaction(async (tx) => {
@@ -151,6 +166,66 @@ export class CardsService {
   }
 
   /**
+   * Lança um crédito/estorno na fatura: uma transação avulsa (sem parcela)
+   * de valor negativo, que abate diretamente o total e o saldo em aberto do
+   * mês em que cai (definido por dto.date) — é assim que operadoras mostram
+   * a devolução de uma compra cancelada. Libera limite de volta ao cartão,
+   * já que a compra original tinha consumido esse limite.
+   */
+  async createCredit(cardId: string, userId: string, dto: CreateCreditDto) {
+    const card = await this.prisma.card.findUnique({ where: { id: cardId } });
+    if (!card) throw new NotFoundException('Cartão não encontrado');
+    if (card.userId !== userId) throw new ForbiddenException('Este cartão não pertence a você');
+    if (card.isArchived) throw new BadRequestException('Este cartão está arquivado');
+
+    return this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.transaction.create({
+        data: {
+          userId,
+          cardId,
+          categoryId: dto.categoryId,
+          type: 'EXPENSE',
+          status: 'PAID',
+          description: dto.description,
+          amount: -Math.abs(dto.amount),
+          date: this.parseDateOnly(dto.date),
+          isInstallment: false,
+        },
+      });
+
+      await tx.card.update({
+        where: { id: cardId },
+        data: { usedLimit: { decrement: dto.amount } },
+      });
+
+      return transaction;
+    });
+  }
+
+  /**
+   * Remove um crédito/estorno lançado na fatura, devolvendo o valor ao
+   * limite usado do cartão (a compra original continua valendo).
+   */
+  async deleteCredit(transactionId: string, userId: string) {
+    const transaction = await this.prisma.transaction.findUnique({ where: { id: transactionId } });
+    if (!transaction) throw new NotFoundException('Crédito não encontrado');
+    if (transaction.userId !== userId) throw new ForbiddenException('Este crédito não pertence a você');
+    if (transaction.isInstallment || Number(transaction.amount) >= 0 || !transaction.cardId) {
+      throw new BadRequestException('Esta transação não é um crédito de fatura');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.transaction.delete({ where: { id: transactionId } });
+      await tx.card.update({
+        where: { id: transaction.cardId! },
+        data: { usedLimit: { increment: Math.abs(Number(transaction.amount)) } },
+      });
+    });
+
+    return { deleted: true };
+  }
+
+  /**
    * Agrupa todas as parcelas do cartão por mês de vencimento — a "fatura"
    * de cada mês, com o total e os itens que a compõem.
    */
@@ -194,6 +269,7 @@ export class CardsService {
         paid,
         paidAt: installment?.paidAt ?? null,
         paidFromAccountName: installment?.paidFromAccount?.name ?? null,
+        isCredit: !t.isInstallment && amount < 0,
       });
     });
 
@@ -233,7 +309,7 @@ export class CardsService {
 
       return tx.installment.update({
         where: { id: installmentId },
-        data: { paid: true, paidFromAccountId: dto.accountId, paidAt: dto.date ? new Date(dto.date) : new Date() },
+        data: { paid: true, paidFromAccountId: dto.accountId, paidAt: dto.date ? this.parseDateOnly(dto.date) : new Date() },
       });
     });
   }
@@ -299,7 +375,7 @@ export class CardsService {
     if (!account) throw new NotFoundException('Conta não encontrada');
 
     const total = installments.reduce((acc, i) => acc + Number(i.amount), 0);
-    const paidAt = dto.date ? new Date(dto.date) : new Date();
+    const paidAt = dto.date ? this.parseDateOnly(dto.date) : new Date();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.account.update({
@@ -345,7 +421,7 @@ export class CardsService {
     }
 
     const total = openInstallments.reduce((acc, i) => acc + Number(i.amount), 0);
-    const paidAt = dto.date ? new Date(dto.date) : new Date();
+    const paidAt = dto.date ? this.parseDateOnly(dto.date) : new Date();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.account.update({
@@ -444,7 +520,7 @@ export class CardsService {
     }
 
     const installmentAmounts = this.splitAmount(dto.totalAmount, dto.installmentsCount);
-    const purchaseDate = new Date(dto.purchaseDate);
+    const purchaseDate = this.parseDateOnly(dto.purchaseDate);
     const newGroupId = randomUUID();
 
     return this.prisma.$transaction(async (tx) => {
@@ -519,5 +595,18 @@ export class CardsService {
     const card = await this.prisma.card.findUnique({ where: { id } });
     if (!card) throw new NotFoundException('Cartão não encontrado');
     if (card.userId !== userId) throw new ForbiddenException('Este cartão não pertence a você');
+  }
+
+  /**
+   * Converte um "YYYY-MM-DD" (o formato que <input type="date"> manda) pro
+   * dia local certo. `new Date('YYYY-MM-DD')` é interpretado como meia-noite
+   * UTC — em fusos negativos (ex: Brasil, UTC-3) isso vira 21h do dia
+   * anterior no horário local, o que troca o mês quando a data é dia 1º.
+   */
+  private parseDateOnly(value: string): Date {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return new Date(value);
+    const [, year, month, day] = match;
+    return new Date(Number(year), Number(month) - 1, Number(day));
   }
 }

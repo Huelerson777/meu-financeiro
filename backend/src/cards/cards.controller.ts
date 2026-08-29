@@ -9,6 +9,7 @@ import { CreatePurchaseDto } from './dto/create-purchase.dto';
 import { PayInstallmentDto } from './dto/pay-installment.dto';
 import { PayInstallmentsBatchDto } from './dto/pay-installments-batch.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
+import { CreateCreditDto } from './dto/create-credit.dto';
 
 @ApiTags('Cards')
 @ApiBearerAuth()
@@ -55,6 +56,20 @@ export class CardsController {
   @Get(':id/invoices')
   getInvoices(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.cardsService.getInvoices(id, user.id);
+  }
+
+  @Post(':id/credits')
+  createCredit(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: CreateCreditDto,
+  ) {
+    return this.cardsService.createCredit(id, user.id, dto);
+  }
+
+  @Delete('credits/:transactionId')
+  deleteCredit(@CurrentUser() user: { id: string }, @Param('transactionId') transactionId: string) {
+    return this.cardsService.deleteCredit(transactionId, user.id);
   }
 
   @Patch('purchases/:groupId')

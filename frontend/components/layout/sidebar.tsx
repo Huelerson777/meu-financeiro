@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useMobileNavStore } from '@/stores/mobile-nav-store';
+import { useSidebarStore } from '@/stores/sidebar-store';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -69,14 +70,17 @@ function Logo() {
 export function Sidebar() {
   const isOpen = useMobileNavStore((s) => s.isOpen);
   const close = useMobileNavStore((s) => s.close);
+  const collapsed = useSidebarStore((s) => s.collapsed);
 
   return (
     <>
-      {/* Versão fixa para telas grandes (desktop) */}
-      <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
-        <Logo />
-        <NavLinks />
-      </aside>
+      {/* Versão fixa para telas grandes (desktop) — pode ser ocultada pelo botão na topbar */}
+      {!collapsed && (
+        <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
+          <Logo />
+          <NavLinks />
+        </aside>
+      )}
 
       {/* Versão "gaveta" para celular/tablet — só existe quando aberta */}
       {isOpen && (

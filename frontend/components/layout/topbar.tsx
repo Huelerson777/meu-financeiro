@@ -1,17 +1,20 @@
 'use client';
 
-import { Menu, Eye, EyeOff } from 'lucide-react';
+import { Menu, Eye, EyeOff, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { ThemeToggle } from './theme-toggle';
 import { UserMenu } from './user-menu';
 import { SearchBox } from './search-box';
 import { NotificationBell } from './notification-bell';
 import { useMobileNavStore } from '@/stores/mobile-nav-store';
 import { useValuesVisibilityStore } from '@/stores/values-visibility-store';
+import { useSidebarStore } from '@/stores/sidebar-store';
 
 export function Topbar() {
   const toggleMobileNav = useMobileNavStore((s) => s.toggle);
   const hidden = useValuesVisibilityStore((s) => s.hidden);
   const toggleHidden = useValuesVisibilityStore((s) => s.toggle);
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  const toggleSidebar = useSidebarStore((s) => s.toggle);
 
   return (
     <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-4 sm:px-6 gap-3">
@@ -21,6 +24,15 @@ export function Topbar() {
         className="lg:hidden flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <Menu className="h-5 w-5" />
+      </button>
+
+      <button
+        onClick={toggleSidebar}
+        title={sidebarCollapsed ? 'Mostrar menu lateral' : 'Ocultar menu lateral'}
+        aria-label={sidebarCollapsed ? 'Mostrar menu lateral' : 'Ocultar menu lateral'}
+        className="hidden lg:flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-theme"
+      >
+        {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
       </button>
 
       <SearchBox />

@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Pencil, Trash2 } from 'lucide-react';
+import { X, Pencil, Trash2, MinusCircle } from 'lucide-react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { PurchaseModal } from './purchase-modal';
 import { PaymentModal } from './payment-modal';
+import { CreditModal } from './credit-modal';
 
 interface InvoiceItem {
   id: string;
@@ -15,11 +16,12 @@ interface InvoiceItem {
   createdAt: string;
   category?: { name: string; color: string } | null;
   categoryId?: string | null;
-  installmentGroupId: string;
+  installmentGroupId: string | null;
   installmentId: string | null;
   paid: boolean;
   paidAt?: string | null;
   paidFromAccountName?: string | null;
+  isCredit: boolean;
 }
 
 interface Invoice {
@@ -108,6 +110,17 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
   }, [card.id]);
 
   const handleDelete = async (item: InvoiceItem) => {
+    if (item.isCredit) {
+      if (!window.confirm(`Excluir o crédito "${item.description}"?`)) return;
+      try {
+        await api.delete(`/cards/credits/${item.id}`);
+        fetchInvoices();
+      } catch (err: any) {
+        alert('Erro ao excluir crédito.');
+      }
+      return;
+    }
+
     const { name } = parseInstallmentLabel(item.description);
     if (!window.confirm(`Excluir TODAS as parcelas de "${name}"? Essa ação não pode ser desfeita.`)) return;
     try {
@@ -159,6 +172,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
   };
 
   const [purchaseToEdit, setPurchaseToEdit] = useState<any>(null);
+  const [showCreditModal, setShowCreditModal] = useState(false);
 
   const handleEditClick = async (item: InvoiceItem) => {
     try {
@@ -268,7 +282,9 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                     return (
                       <div key={item.id} className="flex items-center justify-between gap-3 pb-3 border-b border-gray-50 dark:border-zinc-800 last:border-0 group">
                         <div className="flex items-center gap-3 min-w-0">
-                          {item.installmentId && (
+                          {item.isCredit ? (
+                            <MinusCircle className="flex-shrink-0 w-5 h-5 text-green-500" />
+                          ) : item.installmentId && (
                             <button
                               type="button"
                               onClick={() => handleCircleClick(item)}
@@ -293,7 +309,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                             </button>
                           )}
                           <div className="flex flex-col min-w-0">
-                            <span className={`text-sm font-medium truncate ${item.paid ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
+                            <span className={`text-sm font-medium truncate ${item.isCredit ? 'text-green-600 dark:text-green-400' : item.paid ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
                               {installmentLabel && (
                                 <span className="text-blue-600 dark:text-blue-400 font-semibold mr-1.5">
                                   {installmentLabel}
@@ -318,20 +334,22 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
-                          <span className={`text-sm font-semibold whitespace-nowrap ${item.paid ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
+                          <span className={`text-sm font-semibold whitespace-nowrap ${item.isCredit ? 'text-green-600 dark:text-green-400' : item.paid ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
                             {formatCurrency(item.amount)}
                           </span>
                           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={() => handleEditClick(item)}
-                              title="Editar todas as parcelas desta compra"
-                              className="text-gray-400 hover:text-blue-500"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
+                            {!item.isCredit && (
+                              <button
+                                onClick={() => handleEditClick(item)}
+                                title="Editar todas as parcelas desta compra"
+                                className="text-gray-400 hover:text-blue-500"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
                               onClick={() => handleDelete(item)}
-                              title="Excluir todas as parcelas desta compra"
+                              title={item.isCredit ? 'Excluir este crédito' : 'Excluir todas as parcelas desta compra'}
                               className="text-gray-400 hover:text-red-500"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -364,6 +382,14 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
 
             {/* Total da fatura do mês */}
             <div className="flex-shrink-0 flex flex-col gap-3 p-6 pt-4 border-t border-gray-100 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setShowCreditModal(true)}
+                disabled={!selectedMonth}
+                className="self-start text-xs font-medium text-green-600 dark:text-green-400 hover:underline disabled:opacity-50"
+              >
+                + Lançar crédito / estorno nesta fatura
+              </button>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-500 dark:text-gray-400">
                   Total da fatura {currentInvoice ? formatMonth(currentInvoice.month) : ''}
@@ -384,6 +410,18 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
           </>
         )}
       </div>
+
+      {showCreditModal && selectedMonth && (
+        <CreditModal
+          card={card}
+          defaultDate={`${selectedMonth}-01`}
+          onClose={() => setShowCreditModal(false)}
+          onSuccess={() => {
+            setShowCreditModal(false);
+            fetchInvoices();
+          }}
+        />
+      )}
 
       {purchaseToEdit && (
         <PurchaseModal
