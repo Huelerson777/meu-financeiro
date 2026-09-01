@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 @ApiTags('Categories')
 @ApiBearerAuth()
@@ -28,5 +29,17 @@ export class CategoriesController {
   @ApiOperation({ summary: 'Cria as categorias padrão caso o usuário ainda não tenha nenhuma' })
   ensureDefaults(@CurrentUser() user: { id: string }) {
     return this.categoriesService.ensureDefaults(user.id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Edita uma categoria (nome, cor, ícone)' })
+  update(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: UpdateCategoryDto) {
+    return this.categoriesService.update(id, user.id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Exclui definitivamente uma categoria (transações vinculadas mantêm o lançamento, só perdem a categoria)' })
+  remove(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.categoriesService.remove(id, user.id);
   }
 }

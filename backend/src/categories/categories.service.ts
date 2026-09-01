@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryDto } from './dto/update-category.dto';
 
 // Categorias padrão criadas automaticamente para cada novo usuário,
 // já cobrindo a lista pedida para o gráfico de despesas por categoria.
@@ -55,5 +56,37 @@ export class CategoriesService {
     await this.prisma.category.createMany({
       data: DEFAULT_CATEGORIES.map((c) => ({ ...c, userId })),
     });
+  }
+
+  async update(id: string, userId: string, dto: UpdateCategoryDto) {
+    await this.ensureOwnership(id, userId);
+
+    return this.prisma.category.update({
+      where: { id },
+      data: {
+        name: dto.name,
+        color: dto.color,
+        icon: dto.icon,
+        parentId: dto.parentId,
+      },
+    });
+  }
+
+  /**
+   * Exclui a categoria definitivamente. Transações e contas fixas que a
+   * usavam mantêm o lançamento, só perdem a categoria (categoryId vira null
+   * via onDelete: SetNull) — nada é apagado além da própria categoria.
+   */
+  async remove(id: string, userId: string) {
+    await this.ensureOwnership(id, userId);
+
+    await this.prisma.category.delete({ where: { id } });
+    return { id };
+  }
+
+  private async ensureOwnership(id: string, userId: string) {
+    const category = await this.prisma.category.findUnique({ where: { id } });
+    if (!category) throw new NotFoundException('Categoria não encontrada');
+    if (category.userId !== userId) throw new ForbiddenException('Esta categoria não pertence a você');
   }
 }
