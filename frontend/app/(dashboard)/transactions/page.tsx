@@ -569,7 +569,11 @@ function TransactionsPageContent() {
                         </span>
                       )}
                     </td>
-                    <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">{t.account?.name || '-'}</td>
+                    <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">
+                      {isTransfer || isInvestment
+                        ? `${t.account?.name || '—'} → ${t.transfer?.toAccount?.name || '—'}`
+                        : t.account?.name || '-'}
+                    </td>
                     <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
                     <td className="p-4">
                       <span className={`text-xs font-bold px-2 py-1 rounded ${
