@@ -100,6 +100,7 @@ model User {
   refreshTokens   RefreshToken[]
   passwordResetTokens PasswordResetToken[]
   logs            Log[]
+  feedbacks       Feedback[]
   recurringBills  RecurringBill[]
   whatsappSessions WhatsappSession[]
 
@@ -445,6 +446,27 @@ model Log {
 
   @@map("logs")
   @@index([userId])
+}
+
+model Feedback {
+  id        String         @id @default(uuid())
+  userId    String         @map("user_id")
+  screen    String
+  message   String
+  status    FeedbackStatus @default(OPEN)
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("feedbacks")
+  @@index([userId])
+  @@index([status])
+}
+
+enum FeedbackStatus {
+  OPEN
+  RESOLVED
 }
 
 // ============================================================================

@@ -5,6 +5,7 @@ import { ThemeToggle } from './theme-toggle';
 import { UserMenu } from './user-menu';
 import { SearchBox } from './search-box';
 import { NotificationBell } from './notification-bell';
+import { FeedbackButton } from './feedback-button';
 import { useMobileNavStore } from '@/stores/mobile-nav-store';
 import { useValuesVisibilityStore } from '@/stores/values-visibility-store';
 
@@ -34,6 +35,7 @@ export function Topbar() {
         >
           {hidden ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
         </button>
+        <FeedbackButton />
         <NotificationBell />
         <ThemeToggle />
         <UserMenu />

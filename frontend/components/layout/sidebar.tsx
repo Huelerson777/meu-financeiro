@@ -16,10 +16,12 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  MessageSquareWarning,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useMobileNavStore } from '@/stores/mobile-nav-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
+import { useAuthStore } from '@/stores/auth-store';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -33,11 +35,15 @@ const navItems = [
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
+const adminNavItem = { href: '/feedback', label: 'Feedbacks', icon: MessageSquareWarning };
+
 function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapsed?: boolean }) {
   const pathname = usePathname();
+  const isAdmin = useAuthStore((s) => s.user?.role === 'ADMIN');
+  const items = isAdmin ? [...navItems, adminNavItem] : navItems;
   return (
     <nav className="flex flex-1 flex-col gap-0.5 px-3 py-2">
-      {navItems.map(({ href, label, icon: Icon }) => {
+      {items.map(({ href, label, icon: Icon }) => {
         const isActive = pathname === href;
         return (
           <Link

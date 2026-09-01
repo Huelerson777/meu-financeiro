@@ -17,6 +17,7 @@ export interface User {
   email: string;
   avatarUrl?: string;
   plan: 'FREE' | 'PREMIUM';
+  role?: 'USER' | 'ADMIN';
 }
 
 export interface DashboardSummary {

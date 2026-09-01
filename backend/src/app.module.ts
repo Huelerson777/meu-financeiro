@@ -22,6 +22,7 @@ import { RecurringBillsModule } from './recurring-bills/recurring-bills.module';
 import { InstallmentPurchasesModule } from './installment-purchases/installment-purchases.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { LogsModule } from './logs/logs.module';
+import { FeedbackModule } from './feedback/feedback.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { LogsModule } from './logs/logs.module';
     InstallmentPurchasesModule,
     WhatsappModule,
     LogsModule,
+    FeedbackModule,
   ],
   providers: [
     {
