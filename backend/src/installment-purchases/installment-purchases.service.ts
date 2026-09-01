@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateInstallmentPurchaseDto } from './dto/create-installment-purchase.dto';
@@ -16,55 +17,110 @@ export class InstallmentPurchasesService {
   constructor(private prisma: PrismaService) {}
 
   async create(userId: string, dto: CreateInstallmentPurchaseDto) {
-    const startInstallment = dto.startInstallment ?? 1;
-    if (startInstallment > dto.totalInstallments) {
-      throw new BadRequestException('A parcela inicial não pode ser maior que o total de parcelas');
-    }
+    this.assertStartInstallment(dto);
+    if (dto.categoryId) await this.ensureCategoryOwnership(dto.categoryId, userId);
+    if (dto.accountId) await this.ensureAccountOwnership(dto.accountId, userId);
+
+    const installmentGroupId = randomUUID();
+    return this.prisma.$transaction(async (tx) => {
+      const transactions = await this.createInstallments(tx, userId, dto, installmentGroupId);
+      return { installmentGroupId, transactions };
+    });
+  }
+
+  /**
+   * Edita um parcelamento inteiro: devolve o valor das parcelas já pagas
+   * pra conta de onde saiu, apaga tudo e recria do zero com os novos dados
+   * (mesma estratégia mais simples e segura já usada em
+   * CardsService.updatePurchase, em vez de tentar ajustar parcela por
+   * parcela quando o total ou a parcela inicial podem mudar).
+   */
+  async update(installmentGroupId: string, userId: string, dto: CreateInstallmentPurchaseDto) {
+    this.assertStartInstallment(dto);
+
+    const existing = await this.prisma.transaction.findMany({
+      where: { installmentGroupId, userId, cardId: null },
+      include: { installments: true },
+    });
+    if (existing.length === 0) throw new NotFoundException('Parcelamento não encontrado');
 
     if (dto.categoryId) await this.ensureCategoryOwnership(dto.categoryId, userId);
     if (dto.accountId) await this.ensureAccountOwnership(dto.accountId, userId);
 
-    const firstDueDate = this.parseDateOnly(dto.firstDueDate);
-    const installmentGroupId = randomUUID();
-
-    return this.prisma.$transaction(async (tx) => {
-      const createdTransactions = [];
-
-      for (let number = startInstallment; number <= dto.totalInstallments; number++) {
-        const offset = number - startInstallment;
-        const dueDate = this.addMonths(firstDueDate, offset);
-
-        const transaction = await tx.transaction.create({
-          data: {
-            userId,
-            accountId: dto.accountId,
-            categoryId: dto.categoryId,
-            type: 'EXPENSE',
-            status: 'PENDING',
-            description: `${dto.description} (${number}/${dto.totalInstallments})`,
-            amount: dto.installmentAmount,
-            date: dueDate,
-            isInstallment: true,
-            installmentGroupId,
-          },
-        });
-
-        await tx.installment.create({
-          data: {
-            transactionId: transaction.id,
-            number,
-            totalCount: dto.totalInstallments,
-            amount: dto.installmentAmount,
-            dueDate,
-            paid: false,
-          },
-        });
-
-        createdTransactions.push(transaction);
+    const refunds = new Map<string, number>();
+    existing.forEach((t) => {
+      const installment = t.installments[0];
+      if (installment?.paid && installment.paidFromAccountId) {
+        refunds.set(
+          installment.paidFromAccountId,
+          (refunds.get(installment.paidFromAccountId) ?? 0) + Number(installment.amount),
+        );
       }
-
-      return { installmentGroupId, transactions: createdTransactions };
     });
+
+    const newGroupId = randomUUID();
+    return this.prisma.$transaction(async (tx) => {
+      for (const [accountId, amount] of refunds) {
+        await tx.account.update({ where: { id: accountId }, data: { currentBalance: { increment: amount } } });
+      }
+      await tx.transaction.deleteMany({ where: { installmentGroupId, userId } });
+
+      const transactions = await this.createInstallments(tx, userId, dto, newGroupId);
+      return { installmentGroupId: newGroupId, transactions };
+    });
+  }
+
+  private assertStartInstallment(dto: CreateInstallmentPurchaseDto) {
+    const startInstallment = dto.startInstallment ?? 1;
+    if (startInstallment > dto.totalInstallments) {
+      throw new BadRequestException('A parcela inicial não pode ser maior que o total de parcelas');
+    }
+  }
+
+  private async createInstallments(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    dto: CreateInstallmentPurchaseDto,
+    installmentGroupId: string,
+  ) {
+    const startInstallment = dto.startInstallment ?? 1;
+    const firstDueDate = this.parseDateOnly(dto.firstDueDate);
+    const createdTransactions = [];
+
+    for (let number = startInstallment; number <= dto.totalInstallments; number++) {
+      const offset = number - startInstallment;
+      const dueDate = this.addMonths(firstDueDate, offset);
+
+      const transaction = await tx.transaction.create({
+        data: {
+          userId,
+          accountId: dto.accountId,
+          categoryId: dto.categoryId,
+          type: 'EXPENSE',
+          status: 'PENDING',
+          description: `${dto.description} (${number}/${dto.totalInstallments})`,
+          amount: dto.installmentAmount,
+          date: dueDate,
+          isInstallment: true,
+          installmentGroupId,
+        },
+      });
+
+      await tx.installment.create({
+        data: {
+          transactionId: transaction.id,
+          number,
+          totalCount: dto.totalInstallments,
+          amount: dto.installmentAmount,
+          dueDate,
+          paid: false,
+        },
+      });
+
+      createdTransactions.push(transaction);
+    }
+
+    return createdTransactions;
   }
 
   /**
@@ -114,12 +170,17 @@ export class InstallmentPurchasesService {
     });
 
     return Array.from(groups.values()).map((g) => {
-      const paidCount = g.items.filter((i: any) => i.paid).length;
+      // A parcela inicial pode ser > 1 (ex: começou a acompanhar na 5ª,
+      // porque as 4 anteriores já tinham sido pagas fora do sistema) — essas
+      // contam como pagas no progresso, mesmo sem ter uma Installment aqui.
+      const firstNumber = g.items.length > 0 ? Math.min(...g.items.map((i: any) => i.number ?? 1)) : 1;
+      const paidBeforeTracking = firstNumber - 1;
+      const paidCount = paidBeforeTracking + g.items.filter((i: any) => i.paid).length;
       const nextOpen = g.items.find((i: any) => !i.paid) ?? null;
       return {
         ...g,
         paidCount,
-        remainingCount: g.items.length - paidCount,
+        remainingCount: g.totalCount - paidCount,
         nextDueDate: nextOpen?.dueDate ?? null,
       };
     });

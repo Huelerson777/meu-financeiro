@@ -88,6 +88,7 @@ export default function RecurringBillsPage() {
   // Modal: compra parcelada
   const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [isSubmittingInstallment, setIsSubmittingInstallment] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [instDescription, setInstDescription] = useState('');
   const [instCategoryId, setInstCategoryId] = useState('');
   const [instAccountId, setInstAccountId] = useState('');
@@ -214,6 +215,7 @@ export default function RecurringBillsPage() {
   };
 
   const handleOpenCreateInstallment = () => {
+    setEditingGroupId(null);
     setInstDescription('');
     setInstCategoryId('');
     setInstAccountId('');
@@ -221,6 +223,26 @@ export default function RecurringBillsPage() {
     setInstTotalCount('');
     setInstStartNumber('1');
     setInstFirstDueDate('');
+    setIsInstallmentModalOpen(true);
+  };
+
+  const handleEditPurchase = (p: InstallmentPurchase) => {
+    // A edição recria as parcelas do zero (as já pagas são reembolsadas antes),
+    // então o padrão é retomar exatamente de onde está: a próxima parcela em
+    // aberto. Se não sobrou nenhuma em aberto, não tem o que editar.
+    const nextOpen = p.items.find((i) => !i.paid);
+    if (!nextOpen) {
+      alert('Este parcelamento já está totalmente quitado, não há parcelas em aberto pra editar.');
+      return;
+    }
+    setEditingGroupId(p.installmentGroupId);
+    setInstDescription(p.description);
+    setInstCategoryId(p.categoryId || '');
+    setInstAccountId(p.accountId || '');
+    setInstAmount(String(p.installmentAmount));
+    setInstTotalCount(String(p.totalCount));
+    setInstStartNumber(String(nextOpen.number ?? p.paidCount + 1));
+    setInstFirstDueDate(nextOpen.dueDate.slice(0, 10));
     setIsInstallmentModalOpen(true);
   };
 
@@ -238,7 +260,7 @@ export default function RecurringBillsPage() {
     e.preventDefault();
     setIsSubmittingInstallment(true);
     try {
-      await api.post('/installment-purchases', {
+      const payload = {
         description: instDescription,
         categoryId: instCategoryId || undefined,
         accountId: instAccountId || undefined,
@@ -246,7 +268,14 @@ export default function RecurringBillsPage() {
         totalInstallments: parseInt(instTotalCount, 10),
         startInstallment: instStartNumber ? parseInt(instStartNumber, 10) : undefined,
         firstDueDate: instFirstDueDate,
-      });
+      };
+
+      if (editingGroupId) {
+        await api.patch(`/installment-purchases/${editingGroupId}`, payload);
+      } else {
+        await api.post('/installment-purchases', payload);
+      }
+
       setIsInstallmentModalOpen(false);
       fetchData();
     } catch (err: any) {
@@ -414,6 +443,9 @@ export default function RecurringBillsPage() {
                   </td>
                   <td className="p-4 text-center">
                     <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleEditPurchase(p)} className="text-blue-500 hover:text-blue-700 text-sm font-medium">
+                        Editar
+                      </button>
                       <button onClick={() => handleDeletePurchase(p)} className="text-red-500 hover:text-red-700 text-sm font-medium">
                         Excluir
                       </button>
@@ -518,7 +550,9 @@ export default function RecurringBillsPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-200 dark:border-zinc-800">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold dark:text-white">Nova Compra Parcelada</h2>
+              <h2 className="text-xl font-bold dark:text-white">
+                {editingGroupId ? 'Editar Compra Parcelada' : 'Nova Compra Parcelada'}
+              </h2>
               <button onClick={() => setIsInstallmentModalOpen(false)} className="text-gray-500 hover:text-gray-700 font-bold text-lg">✕</button>
             </div>
 
@@ -590,7 +624,9 @@ export default function RecurringBillsPage() {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
                   />
                   <p className="text-xs text-gray-400 mt-1">
-                    Já está pagando? Coloque o nº da parcela atual (ex: 5)
+                    {editingGroupId
+                      ? 'Pré-preenchido com a próxima parcela em aberto — ajuste se precisar.'
+                      : 'Já está pagando? Coloque o nº da parcela atual (ex: 5)'}
                   </p>
                 </div>
                 <div>

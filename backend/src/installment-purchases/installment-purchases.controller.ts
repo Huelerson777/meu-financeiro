@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -22,6 +22,16 @@ export class InstallmentPurchasesController {
   @ApiOperation({ summary: 'Cadastra um parcelamento fora do cartão, podendo começar a partir de uma parcela específica' })
   create(@CurrentUser() user: { id: string }, @Body() dto: CreateInstallmentPurchaseDto) {
     return this.service.create(user.id, dto);
+  }
+
+  @Patch(':groupId')
+  @ApiOperation({ summary: 'Edita um parcelamento inteiro (recria as parcelas; as já pagas são reembolsadas antes)' })
+  update(
+    @CurrentUser() user: { id: string },
+    @Param('groupId') groupId: string,
+    @Body() dto: CreateInstallmentPurchaseDto,
+  ) {
+    return this.service.update(groupId, user.id, dto);
   }
 
   @Delete(':groupId')
