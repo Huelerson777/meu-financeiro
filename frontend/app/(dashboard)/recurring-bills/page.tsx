@@ -92,7 +92,9 @@ export default function RecurringBillsPage() {
   const [instDescription, setInstDescription] = useState('');
   const [instCategoryId, setInstCategoryId] = useState('');
   const [instAccountId, setInstAccountId] = useState('');
+  const [instValueMode, setInstValueMode] = useState<'installment' | 'total'>('installment');
   const [instAmount, setInstAmount] = useState('');
+  const [instTotalAmount, setInstTotalAmount] = useState('');
   const [instTotalCount, setInstTotalCount] = useState('');
   const [instStartNumber, setInstStartNumber] = useState('1');
   const [instFirstDueDate, setInstFirstDueDate] = useState('');
@@ -219,7 +221,9 @@ export default function RecurringBillsPage() {
     setInstDescription('');
     setInstCategoryId('');
     setInstAccountId('');
+    setInstValueMode('installment');
     setInstAmount('');
+    setInstTotalAmount('');
     setInstTotalCount('');
     setInstStartNumber('1');
     setInstFirstDueDate('');
@@ -239,7 +243,9 @@ export default function RecurringBillsPage() {
     setInstDescription(p.description);
     setInstCategoryId(p.categoryId || '');
     setInstAccountId(p.accountId || '');
+    setInstValueMode('installment');
     setInstAmount(String(p.installmentAmount));
+    setInstTotalAmount('');
     setInstTotalCount(String(p.totalCount));
     setInstStartNumber(String(nextOpen.number ?? p.paidCount + 1));
     setInstFirstDueDate(nextOpen.dueDate.slice(0, 10));
@@ -256,15 +262,24 @@ export default function RecurringBillsPage() {
     }
   };
 
+  const totalInstallmentsNumber = parseInt(instTotalCount, 10);
+  const computedInstallmentAmount =
+    instValueMode === 'total' && instTotalAmount && totalInstallmentsNumber > 0
+      ? Math.round((parseFloat(instTotalAmount) / totalInstallmentsNumber) * 100) / 100
+      : null;
+
   const handleSubmitInstallment = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmittingInstallment(true);
     try {
+      const installmentAmount =
+        instValueMode === 'total' ? computedInstallmentAmount ?? 0 : parseFloat(instAmount);
+
       const payload = {
         description: instDescription,
         categoryId: instCategoryId || undefined,
         accountId: instAccountId || undefined,
-        installmentAmount: parseFloat(instAmount),
+        installmentAmount,
         totalInstallments: parseInt(instTotalCount, 10),
         startInstallment: instStartNumber ? parseInt(instStartNumber, 10) : undefined,
         firstDueDate: instFirstDueDate,
@@ -594,15 +609,36 @@ export default function RecurringBillsPage() {
                 </select>
               </div>
 
+              <div className="flex justify-end -mb-1">
+                <button
+                  type="button"
+                  onClick={() => setInstValueMode(instValueMode === 'total' ? 'installment' : 'total')}
+                  className="text-xs font-medium text-blue-500 hover:text-blue-700"
+                >
+                  {instValueMode === 'total' ? 'Lançar pelo valor da parcela' : 'Lançar pelo valor total da compra'}
+                </button>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium dark:text-gray-300 mb-1">Valor da parcela</label>
-                  <input
-                    type="number" step="0.01" required placeholder="Ex: 850,00"
-                    value={instAmount} onChange={(e) => setInstAmount(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
-                  />
-                </div>
+                {instValueMode === 'total' ? (
+                  <div>
+                    <label className="block text-sm font-medium dark:text-gray-300 mb-1">Valor total da compra</label>
+                    <input
+                      type="number" step="0.01" required placeholder="Ex: 51000,00"
+                      value={instTotalAmount} onChange={(e) => setInstTotalAmount(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium dark:text-gray-300 mb-1">Valor da parcela</label>
+                    <input
+                      type="number" step="0.01" required placeholder="Ex: 850,00"
+                      value={instAmount} onChange={(e) => setInstAmount(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium dark:text-gray-300 mb-1">Total de parcelas</label>
                   <input
@@ -610,6 +646,13 @@ export default function RecurringBillsPage() {
                     value={instTotalCount} onChange={(e) => setInstTotalCount(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
                   />
+                  {instValueMode === 'total' && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      {computedInstallmentAmount != null
+                        ? `= ${formatCurrency(computedInstallmentAmount)}/parcela`
+                        : ' '}
+                    </p>
+                  )}
                 </div>
               </div>
 
