@@ -27,8 +27,12 @@ interface CardResult {
 }
 
 function extractList(raw: any): any[] {
+  if (!raw) return [];
   if (Array.isArray(raw)) return raw;
-  if (Array.isArray(raw?.data)) return raw.data;
+  if (Array.isArray(raw.data)) return raw.data;
+  if (Array.isArray(raw.items)) return raw.items;
+  if (Array.isArray(raw.data?.items)) return raw.data.items;
+  if (Array.isArray(raw.data?.data)) return raw.data.data;
   return [];
 }
 
@@ -63,17 +67,13 @@ export function SearchBox() {
       setLoading(true);
       try {
         const [transRes, accRes, cardRes] = await Promise.all([
-          api.get('/transactions', { params: { search: term } }).catch(() => ({ data: [] })),
-          api.get('/accounts').catch(() => ({ data: [] })),
+          api.get('/transactions', { params: { search: term, limit: 5 } }).catch(() => ({ data: [] })),
+          api.get('/accounts', { params: { search: term, limit: 5 } }).catch(() => ({ data: [] })),
           api.get('/cards').catch(() => ({ data: [] })),
         ]);
 
         setTransactions(extractList(transRes.data).slice(0, 5));
-        setAccounts(
-          extractList(accRes.data)
-            .filter((a: AccountResult) => a.name.toLowerCase().includes(term.toLowerCase()))
-            .slice(0, 5),
-        );
+        setAccounts(extractList(accRes.data).slice(0, 5));
         setCards(
           extractList(cardRes.data)
             .filter((c: CardResult) => c.name.toLowerCase().includes(term.toLowerCase()))
