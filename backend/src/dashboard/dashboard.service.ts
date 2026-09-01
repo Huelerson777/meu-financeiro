@@ -21,6 +21,16 @@ export class DashboardService {
     });
     const investmentAccountIds = investmentAccounts.map((a) => a.id);
 
+    // Contas "de caixa" do dashboard (não-investimento, includeInDashboard) —
+    // base pra reconstruir quanto sobrou em qualquer mês passado (ver
+    // getCashBalanceAsOf).
+    const cashAccounts = await this.prisma.account.findMany({
+      where: { userId, isArchived: false, includeInDashboard: true, type: { not: 'INVESTMENT' } },
+      select: { id: true, currentBalance: true },
+    });
+    const cashAccountIds = cashAccounts.map((a) => a.id);
+    const cashCurrentTotal = cashAccounts.reduce((acc, a) => acc + Number(a.currentBalance), 0);
+
     const prevMonthDate = new Date(targetYear, targetMonth - 2, 1);
     const prevStartDate = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
     const prevEndDate = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 1);
@@ -30,8 +40,8 @@ export class DashboardService {
       { totalIncome: currentIncome, totalExpense: currentExpense },
       previousTotals,
       previousInvestedAgg,
-      cumulativeTotals,
-      previousCumulativeTotals,
+      leftovers,
+      previousLeftovers,
     ] = await Promise.all([
         // ITEM 1/6 - Saldo geral filtra por includeInDashboard
         this.prisma.account.aggregate({
@@ -48,49 +58,26 @@ export class DashboardService {
               _sum: { amount: true },
             })
           : Promise.resolve({ _sum: { amount: null } }),
-        // Sobras acumuladas: soma de todo o histórico até o fim do mês selecionado —
-        // dinheiro que entrou e nunca virou despesa nem investimento continua
-        // "sobrando" nos meses seguintes, não zera a cada virada de mês.
-        this.getIncomeExpenseTotals(userId, { lt: endDate }, investmentAccountIds),
-        // Mesmo cálculo até o fim do mês anterior, pra comparação de variação
-        this.getIncomeExpenseTotals(userId, { lt: startDate }, investmentAccountIds),
+        // Sobras no fim do mês selecionado — reconstruído a partir do saldo
+        // real de hoje (ver getCashBalanceAsOf), não zera a cada virada de mês.
+        this.getCashBalanceAsOf(userId, cashAccountIds, cashCurrentTotal, endDate),
+        // Mesmo cálculo no fim do mês anterior, pra comparação de variação
+        this.getCashBalanceAsOf(userId, cashAccountIds, cashCurrentTotal, startDate),
       ]);
 
     // ITEM 2 — cálculo correto de investimentos via tabela Transfer (transação atômica)
     let totalInvested = 0;
-    let cumulativeInvested = 0;
-    let previousCumulativeInvested = 0;
     if (investmentAccountIds.length > 0) {
-      const [transfersToInvestment, cumulativeInvestedAgg, previousCumulativeInvestedAgg] = await Promise.all([
-        this.prisma.transfer.aggregate({
-          where: { toId: { in: investmentAccountIds }, date: dateFilter },
-          _sum: { amount: true },
-        }),
-        // Investido acumulado até o fim do mês selecionado (mesma lógica das sobras)
-        this.prisma.transfer.aggregate({
-          where: { toId: { in: investmentAccountIds }, date: { lt: endDate } },
-          _sum: { amount: true },
-        }),
-        this.prisma.transfer.aggregate({
-          where: { toId: { in: investmentAccountIds }, date: { lt: startDate } },
-          _sum: { amount: true },
-        }),
-      ]);
+      const transfersToInvestment = await this.prisma.transfer.aggregate({
+        where: { toId: { in: investmentAccountIds }, date: dateFilter },
+        _sum: { amount: true },
+      });
       totalInvested = Number(transfersToInvestment._sum.amount ?? 0);
-      cumulativeInvested = Number(cumulativeInvestedAgg._sum.amount ?? 0);
-      previousCumulativeInvested = Number(previousCumulativeInvestedAgg._sum.amount ?? 0);
     }
 
     const currentBalance = Number(balanceAgg._sum.currentBalance ?? 0);
     const totalIncome = currentIncome;
     const totalExpense = currentExpense;
-    // Sobras = saldo acumulado de toda renda (desde o início do histórico até
-    // o fim do mês selecionado) que ainda não virou despesa nem investimento —
-    // carrega de um mês pro outro em vez de zerar, já que esse dinheiro
-    // continua nas contas. Continua contando mesmo que o usuário tenha movido
-    // pra outra conta (ex: transferência manual pra uma "reserva"), já que ele
-    // não foi gasto nem investido.
-    const leftovers = cumulativeTotals.totalIncome - cumulativeTotals.totalExpense - cumulativeInvested;
 
     // Variação percentual vs. mês anterior — usada nos cards do dashboard
     const pctChange = (current: number, previous: number): number | null => {
@@ -98,8 +85,6 @@ export class DashboardService {
       return Math.round(((current - previous) / previous) * 1000) / 10;
     };
     const previousInvested = Number(previousInvestedAgg._sum.amount ?? 0);
-    const previousLeftovers =
-      previousCumulativeTotals.totalIncome - previousCumulativeTotals.totalExpense - previousCumulativeInvested;
     const comparison = {
       incomeChangePct: pctChange(totalIncome, previousTotals.totalIncome),
       expenseChangePct: pctChange(totalExpense, previousTotals.totalExpense),
@@ -171,6 +156,72 @@ export class DashboardService {
   }
 
   /**
+   * Reconstrói o saldo somado das contas de caixa do dashboard (não-
+   * investimento) num ponto no passado: parte do saldo real de HOJE
+   * (currentBalance, sempre correto — mantido pelo próprio app a cada
+   * receita, despesa, transferência ou pagamento de fatura) e desfaz o
+   * efeito líquido de tudo que aconteceu DEPOIS do corte.
+   *
+   * Evita reconstruir a partir de somas de receita/despesa/investido mês a
+   * mês: essa soma diverge da realidade quando há transferências entre
+   * contas ou despesas pagas direto de uma conta de investimento, porque
+   * nem todo evento que muda o saldo de uma conta é uma transação do tipo
+   * INCOME/EXPENSE. Partir do saldo real elimina essa categoria de erro.
+   */
+  private async getCashBalanceAsOf(
+    userId: string,
+    cashAccountIds: string[],
+    cashCurrentTotal: number,
+    cutoff: Date,
+  ): Promise<number> {
+    if (cashAccountIds.length === 0) return 0;
+
+    const [txAfter, installmentsAfter, transfersAfter] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: {
+          userId,
+          status: 'PAID',
+          cardId: null,
+          type: { in: ['INCOME', 'EXPENSE'] },
+          accountId: { in: cashAccountIds },
+          date: { gte: cutoff },
+        },
+        select: { amount: true, type: true },
+      }),
+      // Parcelas de cartão pagas a partir de uma conta de caixa também saem
+      // do saldo dela, mesmo a compra em si não tendo accountId.
+      this.prisma.installment.findMany({
+        where: { paid: true, paidFromAccountId: { in: cashAccountIds }, paidAt: { gte: cutoff } },
+        select: { amount: true },
+      }),
+      // Transferências que cruzam a fronteira do conjunto de contas de caixa
+      // (pra dentro soma, pra fora subtrai; entre duas contas de caixa se
+      // cancela, como deve ser — não muda o total do conjunto).
+      this.prisma.transfer.findMany({
+        where: {
+          OR: [{ fromId: { in: cashAccountIds } }, { toId: { in: cashAccountIds } }],
+          date: { gte: cutoff },
+        },
+        select: { fromId: true, toId: true, amount: true },
+      }),
+    ]);
+
+    const cashSet = new Set(cashAccountIds);
+    let effectAfter = txAfter.reduce(
+      (acc, t) => acc + (t.type === 'INCOME' ? Number(t.amount) : -Number(t.amount)),
+      0,
+    );
+    effectAfter -= installmentsAfter.reduce((acc, i) => acc + Number(i.amount), 0);
+    transfersAfter.forEach((t) => {
+      const amount = Number(t.amount);
+      if (cashSet.has(t.toId)) effectAfter += amount;
+      if (cashSet.has(t.fromId)) effectAfter -= amount;
+    });
+
+    return cashCurrentTotal - effectAfter;
+  }
+
+  /**
    * Soma receitas/despesas pagas num período, com o mesmo critério de
    * inclusão usado no card "Despesas do mês" (respeita includeInDashboard e
    * exclui aportes em contas de investimento — de forma NULL-safe, já que
@@ -184,7 +235,7 @@ export class DashboardService {
    */
   private async getIncomeExpenseTotals(
     userId: string,
-    dateFilter: { gte?: Date; lt: Date },
+    dateFilter: { gte: Date; lt: Date },
     investmentAccountIds: string[],
   ) {
     const [incomeAgg, nonCardExpenseAgg, cardExpenseAgg] = await Promise.all([
