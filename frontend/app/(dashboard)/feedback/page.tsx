@@ -22,10 +22,12 @@ const extractList = (raw: any): FeedbackItem[] => {
   return [];
 };
 
-const formatDateTime = (value: string) => {
-  const d = new Date(value);
-  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-};
+// createdAt é um instante real (não uma data "só dia" como um vencimento),
+// então aqui o certo é converter pro fuso local de quem está vendo — ao
+// contrário de datas de vencimento, que devem ficar fixas independente do
+// fuso (ver formatDate no restante do app).
+const formatDateTime = (value: string) =>
+  `${new Date(value).toLocaleDateString('pt-BR')} ${new Date(value).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
 
 export default function FeedbackPage() {
   const [items, setItems] = useState<FeedbackItem[]>([]);
