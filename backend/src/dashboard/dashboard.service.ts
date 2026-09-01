@@ -25,8 +25,14 @@ export class DashboardService {
     const prevStartDate = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
     const prevEndDate = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 1);
 
-    const [balanceAgg, { totalIncome: currentIncome, totalExpense: currentExpense }, previousTotals, previousInvestedAgg] =
-      await Promise.all([
+    const [
+      balanceAgg,
+      { totalIncome: currentIncome, totalExpense: currentExpense },
+      previousTotals,
+      previousInvestedAgg,
+      cumulativeTotals,
+      previousCumulativeTotals,
+    ] = await Promise.all([
         // ITEM 1/6 - Saldo geral filtra por includeInDashboard
         this.prisma.account.aggregate({
           where: { userId, isArchived: false, includeInDashboard: true },
@@ -42,29 +48,49 @@ export class DashboardService {
               _sum: { amount: true },
             })
           : Promise.resolve({ _sum: { amount: null } }),
+        // Sobras acumuladas: soma de todo o histórico até o fim do mês selecionado —
+        // dinheiro que entrou e nunca virou despesa nem investimento continua
+        // "sobrando" nos meses seguintes, não zera a cada virada de mês.
+        this.getIncomeExpenseTotals(userId, { lt: endDate }, investmentAccountIds),
+        // Mesmo cálculo até o fim do mês anterior, pra comparação de variação
+        this.getIncomeExpenseTotals(userId, { lt: startDate }, investmentAccountIds),
       ]);
 
     // ITEM 2 — cálculo correto de investimentos via tabela Transfer (transação atômica)
     let totalInvested = 0;
+    let cumulativeInvested = 0;
+    let previousCumulativeInvested = 0;
     if (investmentAccountIds.length > 0) {
-      const transfersToInvestment = await this.prisma.transfer.aggregate({
-        where: {
-          toId: { in: investmentAccountIds },
-          date: dateFilter,
-        },
-        _sum: { amount: true },
-      });
+      const [transfersToInvestment, cumulativeInvestedAgg, previousCumulativeInvestedAgg] = await Promise.all([
+        this.prisma.transfer.aggregate({
+          where: { toId: { in: investmentAccountIds }, date: dateFilter },
+          _sum: { amount: true },
+        }),
+        // Investido acumulado até o fim do mês selecionado (mesma lógica das sobras)
+        this.prisma.transfer.aggregate({
+          where: { toId: { in: investmentAccountIds }, date: { lt: endDate } },
+          _sum: { amount: true },
+        }),
+        this.prisma.transfer.aggregate({
+          where: { toId: { in: investmentAccountIds }, date: { lt: startDate } },
+          _sum: { amount: true },
+        }),
+      ]);
       totalInvested = Number(transfersToInvestment._sum.amount ?? 0);
+      cumulativeInvested = Number(cumulativeInvestedAgg._sum.amount ?? 0);
+      previousCumulativeInvested = Number(previousCumulativeInvestedAgg._sum.amount ?? 0);
     }
 
     const currentBalance = Number(balanceAgg._sum.currentBalance ?? 0);
     const totalIncome = currentIncome;
     const totalExpense = currentExpense;
-    // Sobras = renda do mês que ainda não virou despesa nem investimento —
-    // continua contando mesmo que o usuário tenha movido esse dinheiro pra
-    // outra conta (ex: uma transferência manual pra uma "reserva"), já que
-    // ele não foi gasto nem investido.
-    const leftovers = totalIncome - totalExpense - totalInvested;
+    // Sobras = saldo acumulado de toda renda (desde o início do histórico até
+    // o fim do mês selecionado) que ainda não virou despesa nem investimento —
+    // carrega de um mês pro outro em vez de zerar, já que esse dinheiro
+    // continua nas contas. Continua contando mesmo que o usuário tenha movido
+    // pra outra conta (ex: transferência manual pra uma "reserva"), já que ele
+    // não foi gasto nem investido.
+    const leftovers = cumulativeTotals.totalIncome - cumulativeTotals.totalExpense - cumulativeInvested;
 
     // Variação percentual vs. mês anterior — usada nos cards do dashboard
     const pctChange = (current: number, previous: number): number | null => {
@@ -72,7 +98,8 @@ export class DashboardService {
       return Math.round(((current - previous) / previous) * 1000) / 10;
     };
     const previousInvested = Number(previousInvestedAgg._sum.amount ?? 0);
-    const previousLeftovers = previousTotals.totalIncome - previousTotals.totalExpense - previousInvested;
+    const previousLeftovers =
+      previousCumulativeTotals.totalIncome - previousCumulativeTotals.totalExpense - previousCumulativeInvested;
     const comparison = {
       incomeChangePct: pctChange(totalIncome, previousTotals.totalIncome),
       expenseChangePct: pctChange(totalExpense, previousTotals.totalExpense),
@@ -157,7 +184,7 @@ export class DashboardService {
    */
   private async getIncomeExpenseTotals(
     userId: string,
-    dateFilter: { gte: Date; lt: Date },
+    dateFilter: { gte?: Date; lt: Date },
     investmentAccountIds: string[],
   ) {
     const [incomeAgg, nonCardExpenseAgg, cardExpenseAgg] = await Promise.all([
