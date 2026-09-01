@@ -1,13 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { FeedbackQueryDto } from './dto/feedback-query.dto';
 import { UpdateFeedbackDto } from './dto/update-feedback.dto';
 
 @Injectable()
 export class FeedbackService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   create(userId: string, dto: CreateFeedbackDto) {
     return this.prisma.feedback.create({
@@ -46,6 +50,21 @@ export class FeedbackService {
     const existing = await this.prisma.feedback.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Feedback não encontrado');
 
-    return this.prisma.feedback.update({ where: { id }, data: { status: dto.status } });
+    const updated = await this.prisma.feedback.update({ where: { id }, data: { status: dto.status } });
+
+    // Avisa quem abriu o chamado que foi resolvido — só na transição real
+    // pra RESOLVED, pra não notificar de novo se o admin só reabrir e
+    // resolver de novo em seguida, nem em toda edição sem mudança de status.
+    if (dto.status === 'RESOLVED' && existing.status !== 'RESOLVED') {
+      await this.notificationsService.create({
+        userId: existing.userId,
+        type: 'SYSTEM',
+        title: 'Seu feedback foi resolvido',
+        message: `O feedback que você enviou sobre "${existing.screen}" foi marcado como resolvido: "${existing.message}"`,
+        referenceId: existing.id,
+      });
+    }
+
+    return updated;
   }
 }

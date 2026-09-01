@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 
 const DUE_SOON_DAYS = 5;
@@ -6,6 +7,15 @@ const DUE_SOON_DAYS = 5;
 @Injectable()
 export class NotificationsService {
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Cria uma notificação avulsa — usado por outros módulos (ex: Feedback,
+   * ao avisar o usuário que o chamado dele foi resolvido) que não têm um
+   * fluxo de sincronização próprio como o de vencimentos abaixo.
+   */
+  create(data: { userId: string; type: NotificationType; title: string; message: string; referenceId?: string }) {
+    return this.prisma.notification.create({ data });
+  }
 
   /**
    * Lista as notificações do usuário. Antes de listar, sincroniza novos
