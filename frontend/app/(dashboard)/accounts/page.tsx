@@ -74,7 +74,9 @@ export default function AccountsPage() {
     setEditingId(acc.id);
     setName(acc.name);
     setType(acc.type);
-    setInitialBalance(acc.initialBalance?.toString() || '0');
+    // No modo edição este campo representa o saldo ATUAL (não o inicial da
+    // criação) — é o que aparece na aba Contas e no Saldo Geral.
+    setInitialBalance((acc.currentBalance ?? acc.initialBalance)?.toString() || '0');
     setColor(acc.color || '#3b82f6');
     setIncludeInDashboard(acc.includeInDashboard ?? true);
     setIsModalOpen(true);
@@ -112,13 +114,24 @@ export default function AccountsPage() {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const payload = {
-        name,
-        type,
-        initialBalance: parseFloat(initialBalance || '0'),
-        color: color || '#3b82f6',
-        includeInDashboard,  // ITEM 1 — enviado ao backend
-      };
+      const balanceValue = parseFloat(initialBalance || '0');
+      const payload = editingId
+        ? {
+            name,
+            type,
+            // Correção direta do saldo atual — initialBalance não muda aqui,
+            // ele só faz sentido no momento da criação da conta.
+            currentBalance: balanceValue,
+            color: color || '#3b82f6',
+            includeInDashboard,
+          }
+        : {
+            name,
+            type,
+            initialBalance: balanceValue,
+            color: color || '#3b82f6',
+            includeInDashboard, // ITEM 1 — enviado ao backend
+          };
 
       if (editingId) {
         await api.patch(`/accounts/${editingId}`, payload);
@@ -279,7 +292,9 @@ export default function AccountsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Saldo Inicial (R$)</label>
+                <label className="block text-sm font-medium dark:text-gray-300 mb-1">
+                  {editingId ? 'Saldo Atual (R$)' : 'Saldo Inicial (R$)'}
+                </label>
                 <input
                   type="number"
                   step="0.01"
@@ -288,6 +303,11 @@ export default function AccountsPage() {
                   onChange={(e) => setInitialBalance(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {editingId && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Corrige o saldo desta conta diretamente — use se o valor mostrado estiver divergente do real.
+                  </p>
+                )}
               </div>
 
               <div>
