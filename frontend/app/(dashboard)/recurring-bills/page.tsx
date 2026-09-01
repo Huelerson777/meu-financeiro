@@ -4,7 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 
-const formatDate = (value: string) => new Date(value).toLocaleDateString('pt-BR');
+// Datas de vencimento não têm hora — usar toLocaleDateString (fuso local do
+// navegador) faria uma data salva como meia-noite UTC (produção roda em UTC)
+// aparecer com um dia a menos pra quem está no Brasil (UTC-3). Lê os
+// componentes em UTC pra sempre mostrar o dia que foi realmente salvo.
+const formatDate = (value: string) => {
+  const d = new Date(value);
+  return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}`;
+};
 
 interface RecurringBill {
   id: string;

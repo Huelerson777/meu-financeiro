@@ -244,7 +244,7 @@ export class InstallmentPurchasesService {
   }
 
   private addMonths(date: Date, months: number): Date {
-    return new Date(date.getFullYear(), date.getMonth() + months, date.getDate());
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()));
   }
 
   /**
@@ -256,6 +256,6 @@ export class InstallmentPurchasesService {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
     if (!match) return new Date(value);
     const [, year, month, day] = match;
-    return new Date(Number(year), Number(month) - 1, Number(day));
+    return new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
   }
 }
