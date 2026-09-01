@@ -39,7 +39,7 @@ export class RecurringBillsService {
     if (dto.categoryId) await this.ensureCategoryOwnership(dto.categoryId, userId);
     if (dto.accountId) await this.ensureAccountOwnership(dto.accountId, userId);
 
-    return this.prisma.recurringBill.update({
+    const updated = await this.prisma.recurringBill.update({
       where: { id },
       data: {
         description: dto.description,
@@ -50,6 +50,23 @@ export class RecurringBillsService {
         isActive: dto.isActive,
       },
     });
+
+    // Lançamentos já gerados (PENDING) pra essa conta fixa ficam "presos" no
+    // valor/descrição de quando foram criados — sem isso, corrigir um valor
+    // errado aqui (ex: lançou 0,03 por engano) não reflete no que já foi
+    // gerado, e o usuário continua vendo o valor errado no Dashboard.
+    // Nunca mexe em parcelas já pagas — só nas ainda em aberto.
+    await this.prisma.transaction.updateMany({
+      where: { recurringBillId: id, status: 'PENDING' },
+      data: {
+        description: dto.description,
+        categoryId: dto.categoryId,
+        accountId: dto.accountId,
+        ...(dto.defaultAmount != null ? { amount: dto.defaultAmount } : {}),
+      },
+    });
+
+    return updated;
   }
 
   async remove(id: string, userId: string) {
