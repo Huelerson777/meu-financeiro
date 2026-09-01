@@ -453,6 +453,10 @@ model Feedback {
   userId    String         @map("user_id")
   screen    String
   message   String
+  // Print/imagem anexada, como data URI completa ("data:image/png;base64,...").
+  // Guardada direto no banco (sem serviço de storage externo) — o disco do
+  // Render é efêmero, então salvar em arquivo local se perderia no próximo deploy.
+  image     String?        @db.Text
   status    FeedbackStatus @default(OPEN)
   createdAt DateTime       @default(now()) @map("created_at")
   updatedAt DateTime       @updatedAt @map("updated_at")

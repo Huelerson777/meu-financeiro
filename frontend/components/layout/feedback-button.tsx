@@ -1,8 +1,18 @@
 'use client';
 
-import { useState } from 'react';
-import { HelpCircle } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { HelpCircle, Paperclip, X } from 'lucide-react';
 import { api } from '@/services/api';
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB — mesmo teto validado no backend
+
+const fileToDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 
 const SCREENS = [
   'Dashboard',
@@ -23,22 +33,41 @@ export function FeedbackButton() {
   const [sent, setSent] = useState(false);
   const [screen, setScreen] = useState(SCREENS[0]);
   const [message, setMessage] = useState('');
+  const [image, setImage] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpen = () => {
     setScreen(SCREENS[0]);
     setMessage('');
+    setImage(null);
     setSent(false);
     setIsOpen(true);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // permite escolher o mesmo arquivo de novo depois de remover
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Escolha um arquivo de imagem (print de tela).');
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      alert('Imagem muito grande — o limite é 5MB.');
+      return;
+    }
+    setImage(await fileToDataUrl(file));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await api.post('/feedback', { screen, message });
+      await api.post('/feedback', { screen, message, image: image ?? undefined });
       setSent(true);
-    } catch {
-      alert('Erro ao enviar. Tenta de novo em alguns instantes.');
+    } catch (err: any) {
+      const msg = err.response?.data?.message;
+      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao enviar. Tenta de novo em alguns instantes.');
     } finally {
       setIsSubmitting(false);
     }
@@ -111,6 +140,41 @@ export function FeedbackButton() {
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       className="w-full resize-none rounded-lg border border-border bg-transparent px-3 py-2 text-foreground"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-foreground">
+                      Print/imagem <span className="text-xs font-normal text-muted-foreground">(opcional)</span>
+                    </label>
+                    {image ? (
+                      <div className="relative inline-block">
+                        <img src={image} alt="Print anexado" className="max-h-40 rounded-lg border border-border" />
+                        <button
+                          type="button"
+                          onClick={() => setImage(null)}
+                          title="Remover imagem"
+                          className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-danger text-white shadow"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <Paperclip className="h-4 w-4" />
+                        Anexar print (até 5MB)
+                      </button>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
                     />
                   </div>
 

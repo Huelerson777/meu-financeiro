@@ -7,6 +7,7 @@ interface FeedbackItem {
   id: string;
   screen: string;
   message: string;
+  image?: string | null;
   status: 'OPEN' | 'RESOLVED';
   createdAt: string;
   user: { name: string; email: string };
@@ -31,6 +32,7 @@ export default function FeedbackPage() {
   const [loading, setLoading] = useState(true);
   const [forbidden, setForbidden] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'' | 'OPEN' | 'RESOLVED'>('OPEN');
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -131,7 +133,18 @@ export default function FeedbackPage() {
                       {item.screen}
                     </span>
                   </td>
-                  <td className="p-4 max-w-md text-sm text-gray-700 dark:text-gray-300">{item.message}</td>
+                  <td className="p-4 max-w-md text-sm text-gray-700 dark:text-gray-300">
+                    <p>{item.message}</p>
+                    {item.image && (
+                      <button type="button" onClick={() => setViewingImage(item.image!)} className="mt-2 block">
+                        <img
+                          src={item.image}
+                          alt="Print anexado"
+                          className="h-16 w-16 rounded-md border border-gray-200 object-cover hover:opacity-80 dark:border-zinc-700"
+                        />
+                      </button>
+                    )}
+                  </td>
                   <td className="p-4 text-center">
                     <span
                       className={`rounded px-2 py-1 text-xs font-bold ${
@@ -157,6 +170,15 @@ export default function FeedbackPage() {
           </table>
         )}
       </div>
+
+      {viewingImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6"
+          onClick={() => setViewingImage(null)}
+        >
+          <img src={viewingImage} alt="Print anexado (tamanho real)" className="max-h-full max-w-full rounded-lg shadow-2xl" />
+        </div>
+      )}
     </div>
   );
 }

@@ -11,7 +11,7 @@ export class FeedbackService {
 
   create(userId: string, dto: CreateFeedbackDto) {
     return this.prisma.feedback.create({
-      data: { userId, screen: dto.screen, message: dto.message },
+      data: { userId, screen: dto.screen, message: dto.message, image: dto.image },
     });
   }
 

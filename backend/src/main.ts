@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
@@ -8,10 +9,14 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
-  // rawBody:true expõe req.rawBody — necessário pra validar a assinatura
-  // HMAC que a Meta manda no webhook do WhatsApp (precisa do corpo bruto,
-  // antes do parse de JSON).
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  // bodyParser:false + useBodyParser manual abaixo — o body parser
+  // automático do Nest usa o limite padrão do Express (100kb), pequeno
+  // demais pra um print de tela em base64 (anexo de feedback). rawBody:true
+  // continua necessário pra validar a assinatura HMAC que a Meta manda no
+  // webhook do WhatsApp (precisa do corpo bruto, antes do parse de JSON).
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true, bodyParser: false });
+  app.useBodyParser('json', { limit: '8mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '8mb' });
 
   // Atrás do proxy do Render, sem isso `req.ip` retorna o IP interno do
   // proxy em vez do IP real do cliente — usado no log de auditoria.
