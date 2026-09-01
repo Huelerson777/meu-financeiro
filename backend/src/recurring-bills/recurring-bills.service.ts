@@ -56,9 +56,10 @@ export class RecurringBillsService {
     const existing = await this.prisma.recurringBill.findFirst({ where: { id, userId } });
     if (!existing) throw new NotFoundException('Conta fixa não encontrada');
 
-    // Soft delete: desativa em vez de apagar, pra manter o histórico dos
-    // lançamentos já gerados (eles só perdem o vínculo, não são apagados).
-    await this.prisma.recurringBill.update({ where: { id }, data: { isActive: false } });
+    // Exclusão definitiva. Os lançamentos já gerados por essa conta fixa não
+    // são apagados — só perdem o vínculo (recurringBillId vira null via
+    // onDelete: SetNull), preservando o histórico.
+    await this.prisma.recurringBill.delete({ where: { id } });
     return { id };
   }
 

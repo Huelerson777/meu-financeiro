@@ -32,7 +32,7 @@ export class RecurringBillsController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Pausa uma conta fixa (não gera mais lançamentos)' })
+  @ApiOperation({ summary: 'Exclui definitivamente uma conta fixa (lançamentos já gerados são mantidos)' })
   remove(@CurrentUser() user: { id: string }, @Param('id') id: string) {
     return this.recurringBillsService.remove(id, user.id);
   }

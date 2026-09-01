@@ -122,14 +122,20 @@ export default function RecurringBillsPage() {
 
   const handleTogglePause = async (b: RecurringBill) => {
     try {
-      if (b.isActive) {
-        await api.delete(`/recurring-bills/${b.id}`);
-      } else {
-        await api.patch(`/recurring-bills/${b.id}`, { isActive: true });
-      }
+      await api.patch(`/recurring-bills/${b.id}`, { isActive: !b.isActive });
       fetchData();
     } catch {
       alert('Erro ao atualizar a conta fixa.');
+    }
+  };
+
+  const handleDelete = async (b: RecurringBill) => {
+    if (!window.confirm(`Tem certeza que deseja excluir a conta fixa "${b.description}"? Os lançamentos já gerados por ela são mantidos, só deixam de ser atualizados automaticamente.`)) return;
+    try {
+      await api.delete(`/recurring-bills/${b.id}`);
+      fetchData();
+    } catch {
+      alert('Erro ao excluir a conta fixa.');
     }
   };
 
@@ -237,6 +243,9 @@ export default function RecurringBillsPage() {
                       </button>
                       <button onClick={() => handleTogglePause(b)} className="text-amber-500 hover:text-amber-700 text-sm font-medium">
                         {b.isActive ? 'Pausar' : 'Reativar'}
+                      </button>
+                      <button onClick={() => handleDelete(b)} className="text-red-500 hover:text-red-700 text-sm font-medium">
+                        Excluir
                       </button>
                     </div>
                   </td>
