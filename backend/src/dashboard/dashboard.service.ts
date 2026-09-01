@@ -401,7 +401,9 @@ export class DashboardService {
 
   async getUpcomingBills(userId: string) {
     return this.prisma.transaction.findMany({
-      where: { userId, type: 'EXPENSE', status: 'PENDING' },
+      // isInstallment: false — parcelas (cartão ou fora dele) já têm sua
+      // própria representação via Installment, não entram aqui.
+      where: { userId, type: 'EXPENSE', status: 'PENDING', isInstallment: false },
       orderBy: { date: 'asc' },
       take: 5,
       include: { category: true, account: true },
@@ -443,8 +445,9 @@ export class DashboardService {
         where: { paid: true, paidAt: { gte: startDate, lt: endDate }, transaction: { userId, cardId: { not: null } } },
         _sum: { amount: true },
       }),
-      // cardId: null aqui pra não duplicar: compras de cartão pendentes já
-      // vêm com todos os detalhes (nome do cartão etc.) via openInstallments.
+      // isInstallment: false aqui pra não duplicar: compras parceladas
+      // pendentes (de cartão ou fora dele) já vêm com todos os detalhes
+      // (parcela X/Y, conta de onde saiu ao pagar etc.) via openInstallments.
       this.prisma.transaction.findMany({
         where: {
           userId,
@@ -452,6 +455,7 @@ export class DashboardService {
           date: { gte: startDate, lt: endDate },
           type: { in: ['INCOME', 'EXPENSE'] },
           cardId: null,
+          isInstallment: false,
         },
         include: { account: { select: { name: true } }, category: { select: { name: true, color: true } } },
         orderBy: { date: 'asc' },
