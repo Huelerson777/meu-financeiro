@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Bell, CreditCard, Receipt, Target, AlertTriangle, Info } from 'lucide-react';
+import { Bell, CreditCard, Receipt, CheckCircle2, Target, AlertTriangle, Info } from 'lucide-react';
 import { useNotifications, Notification } from '@/hooks/use-notifications';
 
 const ICONS: Record<Notification['type'], typeof Bell> = {
   CARD_DUE: CreditCard,
+  CARD_INVOICE_CLOSED: CheckCircle2,
   BILL_DUE: Receipt,
   GOAL_PROGRESS: Target,
   BUDGET_EXCEEDED: AlertTriangle,

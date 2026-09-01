@@ -65,6 +65,7 @@ enum InvestmentCategory {
 enum NotificationType {
   BILL_DUE
   CARD_DUE
+  CARD_INVOICE_CLOSED
   GOAL_PROGRESS
   BUDGET_EXCEEDED
   SYSTEM

@@ -3,7 +3,7 @@ import { api } from '@/services/api';
 
 export interface Notification {
   id: string;
-  type: 'BILL_DUE' | 'CARD_DUE' | 'GOAL_PROGRESS' | 'BUDGET_EXCEEDED' | 'SYSTEM';
+  type: 'BILL_DUE' | 'CARD_DUE' | 'CARD_INVOICE_CLOSED' | 'GOAL_PROGRESS' | 'BUDGET_EXCEEDED' | 'SYSTEM';
   title: string;
   message: string;
   read: boolean;
