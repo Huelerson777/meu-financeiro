@@ -70,8 +70,6 @@ npm install
 npm run dev
 ```
 
-Login de demonstração (criado pelo seed): `demo@financeflow.com` / `123456`
-
 ## Documentação
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — arquitetura, padrões e como implementar um novo módulo
