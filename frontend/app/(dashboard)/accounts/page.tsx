@@ -217,7 +217,13 @@ export default function AccountsPage() {
                 {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
               </span>
               <h3 className="text-xl font-bold mt-3 dark:text-white">{acc.name}</h3>
-              <p className="text-2xl font-semibold mt-2 text-green-600 dark:text-green-400">
+              <p
+                className={`text-2xl font-semibold mt-2 ${
+                  Number(acc.currentBalance ?? acc.initialBalance ?? 0) < 0
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-green-600 dark:text-green-400'
+                }`}
+              >
                 {formatCurrency(acc.currentBalance ?? acc.initialBalance)}
               </p>
 
