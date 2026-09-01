@@ -16,11 +16,11 @@ export class CardsService {
   /**
    * Lista os cartões já com o valor em aberto da próxima fatura de cada um
    * (evita uma chamada extra por cartão só pra mostrar isso na listagem).
-   * A 1ª parcela de uma compra sempre cai no mês seguinte ao da compra (ver
-   * calculateInstallmentDueDate), então "fatura do mês corrente" quase nunca
-   * teria nada — o que interessa é a fatura mais próxima que ainda tem saldo
-   * em aberto (a próxima que o usuário precisa pagar), não literalmente o
-   * mês do calendário atual.
+   * A 1ª parcela de uma compra cai na fatura do ciclo em que ela foi feita
+   * (ver calculateInstallmentDueDate), que quase sempre já não é mais a
+   * fatura do mês corrente — o que interessa é a fatura mais próxima que
+   * ainda tem saldo em aberto (a próxima que o usuário precisa pagar), não
+   * literalmente o mês do calendário atual.
    */
   async findAll(userId: string) {
     const cards = await this.prisma.card.findMany({
@@ -125,7 +125,7 @@ export class CardsService {
       const createdTransactions = [];
 
       for (let i = 0; i < dto.installmentsCount; i++) {
-        const dueDate = this.calculateInstallmentDueDate(purchaseDate, card.dueDay, i);
+        const dueDate = this.calculateInstallmentDueDate(purchaseDate, card.closingDay, card.dueDay, i);
 
         const transaction = await tx.transaction.create({
           data: {
@@ -533,7 +533,7 @@ export class CardsService {
       await tx.transaction.deleteMany({ where: { installmentGroupId, userId } });
 
       for (let i = 0; i < dto.installmentsCount; i++) {
-        const dueDate = this.calculateInstallmentDueDate(purchaseDate, card.dueDay, i);
+        const dueDate = this.calculateInstallmentDueDate(purchaseDate, card.closingDay, card.dueDay, i);
 
         const transaction = await tx.transaction.create({
           data: {
@@ -579,16 +579,33 @@ export class CardsService {
   }
 
   /**
-   * Calcula em qual fatura (mês) cada parcela vai cair: a primeira parcela
-   * sempre cai no mês seguinte ao da compra (ex: compra em 14/08 → 1ª
-   * parcela vence em 10/09), e cada parcela seguinte cai um mês depois.
+   * Calcula em qual fatura (mês) cada parcela vai cair, respeitando o dia de
+   * fechamento do cartão: uma compra feita até o dia de fechamento entra no
+   * ciclo que fecha naquele mês; feita depois, só entra no ciclo seguinte.
+   * O vencimento cai no mesmo mês do fechamento quando dueDay >= closingDay
+   * (ex: fecha dia 3, vence dia 10), ou no mês seguinte quando dueDay <
+   * closingDay (ex: fecha dia 27, vence dia 3). Cada parcela seguinte cai um
+   * mês depois da anterior.
    */
-  private calculateInstallmentDueDate(purchaseDate: Date, dueDay: number, installmentIndex: number): Date {
-    const invoiceMonth = purchaseDate.getMonth() + 1;
-    const invoiceYear = purchaseDate.getFullYear();
+  private calculateInstallmentDueDate(
+    purchaseDate: Date,
+    closingDay: number,
+    dueDay: number,
+    installmentIndex: number,
+  ): Date {
+    let cycleMonth = purchaseDate.getMonth();
+    const cycleYear = purchaseDate.getFullYear();
 
-    const targetMonth = invoiceMonth + installmentIndex;
-    return new Date(invoiceYear, targetMonth, dueDay);
+    if (purchaseDate.getDate() > closingDay) {
+      cycleMonth += 1;
+    }
+
+    let dueMonth = cycleMonth;
+    if (dueDay < closingDay) {
+      dueMonth += 1;
+    }
+
+    return new Date(cycleYear, dueMonth + installmentIndex, dueDay);
   }
 
   private async assertOwnership(id: string, userId: string) {
