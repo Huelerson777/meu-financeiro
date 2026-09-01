@@ -77,6 +77,16 @@ export class InstallmentPurchasesService {
     }
   }
 
+  /**
+   * Cria as N parcelas em duas chamadas em lote (createMany) em vez de N
+   * pares sequenciais de create() — com financiamentos longos (ex: 48-60x)
+   * o loop antigo fazia dezenas de round-trips ao banco dentro de uma única
+   * transação interativa, o que na latência real do Render->Neon estourava
+   * o timeout padrão do Prisma (5s) e derrubava a operação inteira com
+   * "Transaction not found" mesmo sem nada de errado com os dados.
+   * Os ids são gerados aqui pra poder linkar Installment.transactionId sem
+   * precisar do retorno de cada create individual.
+   */
   private async createInstallments(
     tx: Prisma.TransactionClient,
     userId: string,
@@ -85,42 +95,41 @@ export class InstallmentPurchasesService {
   ) {
     const startInstallment = dto.startInstallment ?? 1;
     const firstDueDate = this.parseDateOnly(dto.firstDueDate);
-    const createdTransactions = [];
 
+    const rows = [];
     for (let number = startInstallment; number <= dto.totalInstallments; number++) {
       const offset = number - startInstallment;
-      const dueDate = this.addMonths(firstDueDate, offset);
-
-      const transaction = await tx.transaction.create({
-        data: {
-          userId,
-          accountId: dto.accountId,
-          categoryId: dto.categoryId,
-          type: 'EXPENSE',
-          status: 'PENDING',
-          description: `${dto.description} (${number}/${dto.totalInstallments})`,
-          amount: dto.installmentAmount,
-          date: dueDate,
-          isInstallment: true,
-          installmentGroupId,
-        },
-      });
-
-      await tx.installment.create({
-        data: {
-          transactionId: transaction.id,
-          number,
-          totalCount: dto.totalInstallments,
-          amount: dto.installmentAmount,
-          dueDate,
-          paid: false,
-        },
-      });
-
-      createdTransactions.push(transaction);
+      rows.push({ id: randomUUID(), number, dueDate: this.addMonths(firstDueDate, offset) });
     }
 
-    return createdTransactions;
+    await tx.transaction.createMany({
+      data: rows.map((r) => ({
+        id: r.id,
+        userId,
+        accountId: dto.accountId,
+        categoryId: dto.categoryId,
+        type: 'EXPENSE' as const,
+        status: 'PENDING' as const,
+        description: `${dto.description} (${r.number}/${dto.totalInstallments})`,
+        amount: dto.installmentAmount,
+        date: r.dueDate,
+        isInstallment: true,
+        installmentGroupId,
+      })),
+    });
+
+    await tx.installment.createMany({
+      data: rows.map((r) => ({
+        transactionId: r.id,
+        number: r.number,
+        totalCount: dto.totalInstallments,
+        amount: dto.installmentAmount,
+        dueDate: r.dueDate,
+        paid: false,
+      })),
+    });
+
+    return rows.map((r) => r.id);
   }
 
   /**
