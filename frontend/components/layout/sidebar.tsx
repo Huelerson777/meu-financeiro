@@ -84,11 +84,14 @@ export function Sidebar() {
       <aside
         className={cn(
           'hidden shrink-0 border-r border-border bg-card lg:flex lg:flex-col transition-[width] duration-150',
+          'lg:sticky lg:top-0 lg:h-screen',
           collapsed ? 'w-16' : 'w-64',
         )}
       >
         <Logo collapsed={collapsed} />
-        <NavLinks collapsed={collapsed} />
+        <div className="flex-1 overflow-y-auto">
+          <NavLinks collapsed={collapsed} />
+        </div>
         <div className="border-t border-border p-3">
           <button
             onClick={toggleSidebar}
