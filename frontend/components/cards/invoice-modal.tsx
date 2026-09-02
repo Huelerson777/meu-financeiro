@@ -13,6 +13,7 @@ interface InvoiceItem {
   description: string;
   amount: number;
   date: string;
+  purchaseDate: string | null;
   createdAt: string;
   category?: { name: string; color: string } | null;
   categoryId?: string | null;
@@ -67,12 +68,16 @@ function formatDay(dateStr: string) {
 }
 
 // Agrupa os itens (já ordenados pelo backend) em blocos consecutivos do mesmo dia de
-// lançamento. Usa createdAt (dia em que a compra foi registrada) em vez de "date"
-// (data de vencimento da parcela), que é sempre o mesmo dia do mês pra toda a fatura.
+// compra. Usa purchaseDate (dia em que a compra de fato aconteceu) em vez de "date"
+// (data de vencimento da parcela, sempre o mesmo dia do mês pra toda a fatura).
+// Compras lançadas antes desse campo existir não têm purchaseDate — cai pra
+// createdAt (dia do lançamento) como aproximação. Créditos/estornos não têm
+// purchaseDate (não são parcela) — usam o próprio "date", que pra eles já é a
+// data real informada.
 function groupItemsByDay(items: InvoiceItem[]) {
   const groups: { day: string; items: InvoiceItem[] }[] = [];
   for (const item of items) {
-    const day = formatDay(item.createdAt);
+    const day = formatDay(item.purchaseDate ?? (item.isCredit ? item.date : item.createdAt));
     const last = groups[groups.length - 1];
     if (last && last.day === day) {
       last.items.push(item);
@@ -194,7 +199,9 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
         description: name,
         totalAmount,
         installmentsCount: group.length,
-        purchaseDate: new Date(earliest.date).toISOString().split('T')[0],
+        // purchaseDate só existe pra compras lançadas depois desse campo existir;
+        // pra compras antigas cai pro "date" (vencimento) como aproximação.
+        purchaseDate: new Date(earliest.purchaseDate ?? earliest.date).toISOString().split('T')[0],
         categoryId: item.categoryId ?? null,
       });
     } catch {

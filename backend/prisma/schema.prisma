@@ -237,6 +237,10 @@ model Transaction {
   amount         Decimal           @db.Decimal(14, 2)
   status         TransactionStatus @default(PENDING)
   date           DateTime
+  // Só preenchido para compras de cartão (ver CardsService.createPurchase):
+  // `date` acima guarda o vencimento da parcela na fatura, não quando a
+  // compra de fato aconteceu — isso fica aqui.
+  purchaseDate   DateTime?         @map("purchase_date")
   notes          String?
 
   isRecurring       Boolean               @default(false) @map("is_recurring")

@@ -137,6 +137,7 @@ export class CardsService {
             description: `${dto.description} (${i + 1}/${dto.installmentsCount})`,
             amount: installmentAmounts[i],
             date: dueDate,
+            purchaseDate,
             isInstallment: true,
             installmentGroupId,
           },
@@ -261,6 +262,7 @@ export class CardsService {
         description: t.description,
         amount,
         date: t.date,
+        purchaseDate: t.purchaseDate,
         createdAt: t.createdAt,
         category: t.category,
         categoryId: t.categoryId,
@@ -273,7 +275,20 @@ export class CardsService {
       });
     });
 
-    return Array.from(invoicesMap.values()).sort((a, b) => (a.month < b.month ? -1 : 1));
+    const invoices = Array.from(invoicesMap.values());
+
+    // Dentro de cada fatura, ordena pela data real da compra (não pelo
+    // vencimento, que é igual pra toda a fatura, nem pela ordem de
+    // lançamento) — é isso que o agrupamento por dia no frontend espera.
+    invoices.forEach((invoice) => {
+      invoice.items.sort((a, b) => {
+        const dateA = new Date(a.purchaseDate ?? (a.isCredit ? a.date : a.createdAt)).getTime();
+        const dateB = new Date(b.purchaseDate ?? (b.isCredit ? b.date : b.createdAt)).getTime();
+        return dateA - dateB;
+      });
+    });
+
+    return invoices.sort((a, b) => (a.month < b.month ? -1 : 1));
   }
 
   /**
@@ -545,6 +560,7 @@ export class CardsService {
             description: `${dto.description} (${i + 1}/${dto.installmentsCount})`,
             amount: installmentAmounts[i],
             date: dueDate,
+            purchaseDate,
             isInstallment: true,
             installmentGroupId: newGroupId,
           },
