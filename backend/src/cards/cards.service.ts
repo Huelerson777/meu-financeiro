@@ -317,7 +317,9 @@ export class CardsService {
       },
     });
 
-    await this.generateRecurringPurchaseOccurrence(recurring, card, new Date());
+    const now = new Date();
+    await this.generateRecurringPurchaseOccurrence(recurring, card, now);
+    await this.backfillOpenInvoiceIfNeeded(recurring, card, now);
 
     return recurring;
   }
@@ -420,6 +422,55 @@ export class CardsService {
   }
 
   /**
+   * Se o dia de cobrança configurado é depois do fechamento do cartão, o
+   * ciclo "natural" de hoje cai na fatura seguinte à que já está em aberto —
+   * a recorrência só apareceria daqui a 2 meses, mesmo já valendo pra fatura
+   * atual. Quando o ciclo do mês anterior cair exatamente na fatura que já
+   * está em aberto (sem mexer em fatura já paga), gera essa cobrança também.
+   */
+  private async backfillOpenInvoiceIfNeeded(
+    recurring: {
+      id: string;
+      userId: string;
+      cardId: string;
+      categoryId: string | null;
+      description: string;
+      amount: any;
+      chargeDay: number;
+    },
+    card: { closingDay: number; dueDay: number },
+    now: Date,
+  ) {
+    const nearestOpen = await this.prisma.installment.findFirst({
+      where: { paid: false, transaction: { cardId: recurring.cardId, userId: recurring.userId } },
+      orderBy: { dueDate: 'asc' },
+      select: { dueDate: true },
+    });
+    if (!nearestOpen) return;
+
+    const lastMonthRef = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const candidateDue = this.computeRecurringDueDate(card, recurring.chargeDay, lastMonthRef);
+
+    const sameMonth =
+      candidateDue.getFullYear() === nearestOpen.dueDate.getFullYear() &&
+      candidateDue.getMonth() === nearestOpen.dueDate.getMonth();
+
+    if (sameMonth) {
+      await this.generateRecurringPurchaseOccurrence(recurring, card, lastMonthRef);
+    }
+  }
+
+  private computeRecurringDueDate(
+    card: { closingDay: number; dueDay: number },
+    chargeDay: number,
+    referenceDate: Date,
+  ): Date {
+    const lastDay = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0).getDate();
+    const purchaseDate = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), Math.min(chargeDay, lastDay));
+    return this.calculateInstallmentDueDate(purchaseDate, card.closingDay, card.dueDay, 0);
+  }
+
+  /**
    * Cria a transação + parcela única (1/1) da cobrança recorrente pro mês de
    * `now`, se ainda não existir uma pra esse mês. purchaseDate cai no dia
    * configurado (chargeDay) e date (vencimento) é calculado exatamente como
@@ -450,7 +501,7 @@ export class CardsService {
     });
     if (alreadyGenerated) return false;
 
-    const dueDate = this.calculateInstallmentDueDate(purchaseDate, card.closingDay, card.dueDay, 0);
+    const dueDate = this.computeRecurringDueDate(card, recurring.chargeDay, now);
     const amount = Number(recurring.amount);
 
     await this.prisma.$transaction(async (tx) => {

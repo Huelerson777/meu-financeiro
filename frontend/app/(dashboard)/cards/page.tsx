@@ -56,7 +56,10 @@ export default function CardsPage() {
   };
 
   useEffect(() => {
-    fetchCards();
+    // Gera (de forma idempotente) a cobrança do mês corrente de cada compra
+    // recorrente ativa assim que a lista de cartões é aberta — sem isso, só
+    // aconteceria ao entrar na fatura de cada cartão individualmente.
+    api.post('/cards/recurring-purchases/sync').catch(() => {}).finally(fetchCards);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
