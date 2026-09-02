@@ -8,6 +8,8 @@ import { PayInstallmentDto } from './dto/pay-installment.dto';
 import { PayInstallmentsBatchDto } from './dto/pay-installments-batch.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
 import { CreateCreditDto } from './dto/create-credit.dto';
+import { CreateRecurringPurchaseDto } from './dto/create-recurring-purchase.dto';
+import { UpdateRecurringPurchaseDto } from './dto/update-recurring-purchase.dto';
 
 @Injectable()
 export class CardsService {
@@ -272,6 +274,7 @@ export class CardsService {
         paidAt: installment?.paidAt ?? null,
         paidFromAccountName: installment?.paidFromAccount?.name ?? null,
         isCredit: !t.isInstallment && amount < 0,
+        cardRecurringPurchaseId: t.cardRecurringPurchaseId,
       });
     });
 
@@ -289,6 +292,202 @@ export class CardsService {
     });
 
     return invoices.sort((a, b) => (a.month < b.month ? -1 : 1));
+  }
+
+  /**
+   * Cadastra uma compra recorrente (assinatura: Apple, streaming, mensalidade
+   * de academia sem parcela definida...) e já gera a cobrança do ciclo atual,
+   * pra aparecer na fatura imediatamente.
+   */
+  async createRecurringPurchase(cardId: string, userId: string, dto: CreateRecurringPurchaseDto) {
+    const card = await this.prisma.card.findUnique({ where: { id: cardId } });
+    if (!card) throw new NotFoundException('Cartão não encontrado');
+    if (card.userId !== userId) throw new ForbiddenException('Este cartão não pertence a você');
+    if (card.isArchived) throw new BadRequestException('Este cartão está arquivado');
+
+    const recurring = await this.prisma.cardRecurringPurchase.create({
+      data: {
+        userId,
+        cardId,
+        categoryId: dto.categoryId,
+        description: dto.description,
+        amount: dto.amount,
+        chargeDay: dto.chargeDay,
+        isActive: dto.isActive ?? true,
+      },
+    });
+
+    await this.generateRecurringPurchaseOccurrence(recurring, card, new Date());
+
+    return recurring;
+  }
+
+  async listRecurringPurchases(cardId: string, userId: string) {
+    await this.assertOwnership(cardId, userId);
+    return this.prisma.cardRecurringPurchase.findMany({
+      where: { cardId, userId },
+      include: { category: { select: { name: true, color: true } } },
+      orderBy: [{ isActive: 'desc' }, { description: 'asc' }],
+    });
+  }
+
+  /**
+   * Atualiza a definição da recorrência. Igual RecurringBillsService.update:
+   * só reflete nas cobranças ainda em aberto (PENDING) — as já pagas ficam
+   * como estavam, e ajusta o limite usado do cartão pela diferença de valor.
+   */
+  async updateRecurringPurchase(id: string, userId: string, dto: UpdateRecurringPurchaseDto) {
+    const existing = await this.prisma.cardRecurringPurchase.findFirst({ where: { id, userId } });
+    if (!existing) throw new NotFoundException('Compra recorrente não encontrada');
+
+    const updated = await this.prisma.cardRecurringPurchase.update({
+      where: { id },
+      data: {
+        description: dto.description,
+        categoryId: dto.categoryId,
+        amount: dto.amount,
+        chargeDay: dto.chargeDay,
+        isActive: dto.isActive,
+      },
+    });
+
+    const pending = await this.prisma.transaction.findMany({
+      where: { cardRecurringPurchaseId: id, status: 'PENDING' },
+      select: { id: true, amount: true },
+    });
+
+    if (pending.length > 0) {
+      await this.prisma.transaction.updateMany({
+        where: { id: { in: pending.map((t) => t.id) } },
+        data: {
+          ...(dto.description != null ? { description: dto.description } : {}),
+          ...(dto.categoryId !== undefined ? { categoryId: dto.categoryId } : {}),
+          ...(dto.amount != null ? { amount: dto.amount } : {}),
+        },
+      });
+
+      if (dto.amount != null) {
+        await this.prisma.installment.updateMany({
+          where: { transactionId: { in: pending.map((t) => t.id) } },
+          data: { amount: dto.amount },
+        });
+
+        const oldSum = pending.reduce((acc, t) => acc + Number(t.amount), 0);
+        const newSum = dto.amount * pending.length;
+        await this.prisma.card.update({
+          where: { id: existing.cardId },
+          data: { usedLimit: { increment: newSum - oldSum } },
+        });
+      }
+    }
+
+    return updated;
+  }
+
+  /**
+   * Exclui definitivamente a definição da recorrência (pra de gerar cobranças
+   * novas). As já geradas continuam existindo, só perdem o vínculo — mesma
+   * lógica do RecurringBillsService.remove.
+   */
+  async removeRecurringPurchase(id: string, userId: string) {
+    const existing = await this.prisma.cardRecurringPurchase.findFirst({ where: { id, userId } });
+    if (!existing) throw new NotFoundException('Compra recorrente não encontrada');
+
+    await this.prisma.cardRecurringPurchase.delete({ where: { id } });
+    return { id };
+  }
+
+  /**
+   * Gera, de forma idempotente, a cobrança (PENDING) do ciclo corrente pra
+   * cada compra recorrente ativa do usuário que ainda não tem lançamento
+   * nesse ciclo. Chamado pelo frontend ao abrir a fatura do cartão.
+   */
+  async syncRecurringPurchases(userId: string) {
+    const now = new Date();
+    const recurrences = await this.prisma.cardRecurringPurchase.findMany({
+      where: { userId, isActive: true },
+      include: { card: true },
+    });
+
+    let generated = 0;
+    for (const recurring of recurrences) {
+      if (recurring.card.isArchived) continue;
+      const created = await this.generateRecurringPurchaseOccurrence(recurring, recurring.card, now);
+      if (created) generated++;
+    }
+
+    return { generated };
+  }
+
+  /**
+   * Cria a transação + parcela única (1/1) da cobrança recorrente pro mês de
+   * `now`, se ainda não existir uma pra esse mês. purchaseDate cai no dia
+   * configurado (chargeDay) e date (vencimento) é calculado exatamente como
+   * numa compra normal, respeitando o ciclo de fechamento do cartão.
+   */
+  private async generateRecurringPurchaseOccurrence(
+    recurring: {
+      id: string;
+      userId: string;
+      cardId: string;
+      categoryId: string | null;
+      description: string;
+      amount: any;
+      chargeDay: number;
+    },
+    card: { closingDay: number; dueDay: number },
+    now: Date,
+  ): Promise<boolean> {
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const purchaseDate = new Date(now.getFullYear(), now.getMonth(), Math.min(recurring.chargeDay, lastDayOfMonth));
+
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    const alreadyGenerated = await this.prisma.transaction.findFirst({
+      where: { cardRecurringPurchaseId: recurring.id, purchaseDate: { gte: monthStart, lt: monthEnd } },
+      select: { id: true },
+    });
+    if (alreadyGenerated) return false;
+
+    const dueDate = this.calculateInstallmentDueDate(purchaseDate, card.closingDay, card.dueDay, 0);
+    const amount = Number(recurring.amount);
+
+    await this.prisma.$transaction(async (tx) => {
+      const transaction = await tx.transaction.create({
+        data: {
+          userId: recurring.userId,
+          cardId: recurring.cardId,
+          categoryId: recurring.categoryId,
+          type: 'EXPENSE',
+          status: 'PENDING',
+          description: recurring.description,
+          amount,
+          date: dueDate,
+          purchaseDate,
+          isInstallment: true,
+          cardRecurringPurchaseId: recurring.id,
+        },
+      });
+
+      await tx.installment.create({
+        data: {
+          transactionId: transaction.id,
+          number: 1,
+          totalCount: 1,
+          amount,
+          dueDate,
+          paid: false,
+        },
+      });
+
+      await tx.card.update({
+        where: { id: recurring.cardId },
+        data: { usedLimit: { increment: amount } },
+      });
+    });
+
+    return true;
   }
 
   /**

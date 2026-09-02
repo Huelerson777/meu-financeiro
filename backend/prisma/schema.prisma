@@ -103,6 +103,7 @@ model User {
   logs            Log[]
   feedbacks       Feedback[]
   recurringBills  RecurringBill[]
+  cardRecurringPurchases CardRecurringPurchase[]
   whatsappSessions WhatsappSession[]
 
   @@map("users")
@@ -216,6 +217,7 @@ model Category {
   transactions Transaction[]
   budgets      Budget[]
   recurringBills RecurringBill[]
+  cardRecurringPurchases CardRecurringPurchase[]
 
   @@map("categories")
   @@index([userId])
@@ -253,6 +255,8 @@ model Transaction {
 
   recurringBillId String? @map("recurring_bill_id")
 
+  cardRecurringPurchaseId String? @map("card_recurring_purchase_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -263,6 +267,7 @@ model Transaction {
   transfer     Transfer?     @relation(fields: [transferId], references: [id], onDelete: Cascade)
   installments Installment[]
   recurringBill RecurringBill? @relation(fields: [recurringBillId], references: [id], onDelete: SetNull)
+  cardRecurringPurchase CardRecurringPurchase? @relation(fields: [cardRecurringPurchaseId], references: [id], onDelete: SetNull)
 
   @@map("transactions")
   @@index([userId])
@@ -272,6 +277,7 @@ model Transaction {
   @@index([date])
   @@index([status])
   @@index([recurringBillId])
+  @@index([cardRecurringPurchaseId])
 }
 
 // ============================================================================
@@ -338,9 +344,38 @@ model Card {
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  recurringPurchases CardRecurringPurchase[]
 
   @@map("cards")
   @@index([userId])
+}
+
+// Compra recorrente no cartão (assinaturas: Apple, streaming, mensalidade...):
+// mesmo valor todo mês, sem data final. Diferente de uma compra parcelada
+// (CreatePurchaseDto), que tem número fixo de parcelas e termina.
+model CardRecurringPurchase {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  cardId      String   @map("card_id")
+  categoryId  String?  @map("category_id")
+  description String
+  amount      Decimal  @db.Decimal(14, 2)
+  // Dia do mês em que a cobrança de fato acontece (ex: dia que a Apple
+  // cobra) — igual ao purchaseDate de uma compra normal, usado pra cair no
+  // ciclo de fatura certo (ver CardsService.calculateInstallmentDueDate).
+  chargeDay   Int      @map("charge_day")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  card         Card          @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+
+  @@map("card_recurring_purchases")
+  @@index([userId])
+  @@index([cardId])
 }
 
 // ============================================================================

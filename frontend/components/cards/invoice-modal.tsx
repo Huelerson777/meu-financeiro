@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Pencil, Trash2, MinusCircle } from 'lucide-react';
+import { X, Pencil, Trash2, MinusCircle, Repeat } from 'lucide-react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { PurchaseModal } from './purchase-modal';
+import { RecurringPurchaseModal } from './recurring-purchase-modal';
 import { PaymentModal } from './payment-modal';
 import { CreditModal } from './credit-modal';
 
@@ -23,6 +24,7 @@ interface InvoiceItem {
   paidAt?: string | null;
   paidFromAccountName?: string | null;
   isCredit: boolean;
+  cardRecurringPurchaseId: string | null;
 }
 
 interface Invoice {
@@ -110,7 +112,10 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
   };
 
   useEffect(() => {
-    fetchInvoices();
+    // Gera (de forma idempotente) a cobrança do mês corrente de cada compra
+    // recorrente ativa antes de mostrar a fatura, assim como recurring-bills
+    // faz no Dashboard.
+    api.post('/cards/recurring-purchases/sync').catch(() => {}).finally(fetchInvoices);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card.id]);
 
@@ -122,6 +127,17 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
         fetchInvoices();
       } catch (err: any) {
         alert('Erro ao excluir crédito.');
+      }
+      return;
+    }
+
+    if (item.cardRecurringPurchaseId) {
+      if (!window.confirm(`Cancelar a assinatura "${item.description}"? As cobranças já geradas continuam, só não gera mais nos próximos meses.`)) return;
+      try {
+        await api.delete(`/cards/recurring-purchases/${item.cardRecurringPurchaseId}`);
+        fetchInvoices();
+      } catch (err: any) {
+        alert('Erro ao cancelar assinatura.');
       }
       return;
     }
@@ -177,9 +193,30 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
   };
 
   const [purchaseToEdit, setPurchaseToEdit] = useState<any>(null);
+  const [recurringToEdit, setRecurringToEdit] = useState<any>(null);
   const [showCreditModal, setShowCreditModal] = useState(false);
 
   const handleEditClick = async (item: InvoiceItem) => {
+    if (item.cardRecurringPurchaseId) {
+      try {
+        const res = await api.get(`/cards/${card.id}/recurring-purchases`);
+        const raw = res.data;
+        const list = Array.isArray(raw) ? raw : Array.isArray(raw?.data) ? raw.data : [];
+        const recurring = list.find((r: any) => r.id === item.cardRecurringPurchaseId);
+        if (!recurring) return;
+        setRecurringToEdit({
+          id: recurring.id,
+          description: recurring.description,
+          amount: Number(recurring.amount),
+          chargeDay: recurring.chargeDay,
+          categoryId: recurring.categoryId ?? null,
+        });
+      } catch {
+        alert('Erro ao carregar dados da assinatura para edição.');
+      }
+      return;
+    }
+
     try {
       const res = await api.get('/transactions', { params: { type: 'EXPENSE', limit: 100 } });
       const raw = res.data;
@@ -322,6 +359,12 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                                   {installmentLabel}
                                 </span>
                               )}
+                              {item.cardRecurringPurchaseId && (
+                                <Repeat
+                                  className="inline-block w-3 h-3 mr-1 mb-0.5 text-purple-500"
+                                  aria-label="Assinatura recorrente"
+                                />
+                              )}
                               {name}
                             </span>
                             {item.category && (
@@ -348,7 +391,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                             {!item.isCredit && (
                               <button
                                 onClick={() => handleEditClick(item)}
-                                title="Editar todas as parcelas desta compra"
+                                title={item.cardRecurringPurchaseId ? 'Editar assinatura' : 'Editar todas as parcelas desta compra'}
                                 className="text-gray-400 hover:text-blue-500"
                               >
                                 <Pencil className="w-4 h-4" />
@@ -356,7 +399,13 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                             )}
                             <button
                               onClick={() => handleDelete(item)}
-                              title={item.isCredit ? 'Excluir este crédito' : 'Excluir todas as parcelas desta compra'}
+                              title={
+                                item.isCredit
+                                  ? 'Excluir este crédito'
+                                  : item.cardRecurringPurchaseId
+                                    ? 'Cancelar assinatura'
+                                    : 'Excluir todas as parcelas desta compra'
+                              }
                               className="text-gray-400 hover:text-red-500"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -437,6 +486,18 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
           onClose={() => setPurchaseToEdit(null)}
           onSuccess={() => {
             setPurchaseToEdit(null);
+            fetchInvoices();
+          }}
+        />
+      )}
+
+      {recurringToEdit && (
+        <RecurringPurchaseModal
+          card={card}
+          editingRecurring={recurringToEdit}
+          onClose={() => setRecurringToEdit(null)}
+          onSuccess={() => {
+            setRecurringToEdit(null);
             fetchInvoices();
           }}
         />

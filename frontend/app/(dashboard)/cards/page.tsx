@@ -5,6 +5,7 @@ import { CreditCard, Plus, Pencil, Trash2 } from 'lucide-react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { PurchaseModal } from '@/components/cards/purchase-modal';
+import { RecurringPurchaseModal } from '@/components/cards/recurring-purchase-modal';
 import { InvoiceModal } from '@/components/cards/invoice-modal';
 
 interface Card {
@@ -28,6 +29,7 @@ export default function CardsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [purchaseCard, setPurchaseCard] = useState<Card | null>(null);
+  const [recurringCard, setRecurringCard] = useState<Card | null>(null);
   const [invoiceCard, setInvoiceCard] = useState<Card | null>(null);
 
   const [name, setName] = useState('');
@@ -202,13 +204,22 @@ export default function CardsPage() {
                   </span>
                 </div>
 
-                <button
-                  onClick={(e) => { e.stopPropagation(); setPurchaseCard(c); }}
-                  className="mt-3 w-full text-sm font-medium py-2 rounded-lg transition"
-                  style={{ backgroundColor: `${cardColor}14`, color: cardColor }}
-                >
-                  + Lançar compra parcelada
-                </button>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setPurchaseCard(c); }}
+                    className="flex-1 text-sm font-medium py-2 rounded-lg transition"
+                    style={{ backgroundColor: `${cardColor}14`, color: cardColor }}
+                  >
+                    + Compra parcelada
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setRecurringCard(c); }}
+                    className="flex-1 text-sm font-medium py-2 rounded-lg transition"
+                    style={{ backgroundColor: `${cardColor}14`, color: cardColor }}
+                  >
+                    + Recorrente
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -306,6 +317,18 @@ export default function CardsPage() {
           onClose={() => setPurchaseCard(null)}
           onSuccess={() => {
             setPurchaseCard(null);
+            fetchCards();
+          }}
+        />
+      )}
+
+      {/* Modal Lançar Compra Recorrente */}
+      {recurringCard && (
+        <RecurringPurchaseModal
+          card={recurringCard}
+          onClose={() => setRecurringCard(null)}
+          onSuccess={() => {
+            setRecurringCard(null);
             fetchCards();
           }}
         />

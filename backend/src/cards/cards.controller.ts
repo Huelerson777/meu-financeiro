@@ -10,6 +10,8 @@ import { PayInstallmentDto } from './dto/pay-installment.dto';
 import { PayInstallmentsBatchDto } from './dto/pay-installments-batch.dto';
 import { PayInvoiceDto } from './dto/pay-invoice.dto';
 import { CreateCreditDto } from './dto/create-credit.dto';
+import { CreateRecurringPurchaseDto } from './dto/create-recurring-purchase.dto';
+import { UpdateRecurringPurchaseDto } from './dto/update-recurring-purchase.dto';
 
 @ApiTags('Cards')
 @ApiBearerAuth()
@@ -112,5 +114,38 @@ export class CardsController {
     @Body() dto: PayInvoiceDto,
   ) {
     return this.cardsService.payInvoice(id, user.id, dto);
+  }
+
+  @Post(':id/recurring-purchases')
+  createRecurringPurchase(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: CreateRecurringPurchaseDto,
+  ) {
+    return this.cardsService.createRecurringPurchase(id, user.id, dto);
+  }
+
+  @Get(':id/recurring-purchases')
+  listRecurringPurchases(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.cardsService.listRecurringPurchases(id, user.id);
+  }
+
+  @Patch('recurring-purchases/:id')
+  updateRecurringPurchase(
+    @CurrentUser() user: { id: string },
+    @Param('id') id: string,
+    @Body() dto: UpdateRecurringPurchaseDto,
+  ) {
+    return this.cardsService.updateRecurringPurchase(id, user.id, dto);
+  }
+
+  @Delete('recurring-purchases/:id')
+  removeRecurringPurchase(@CurrentUser() user: { id: string }, @Param('id') id: string) {
+    return this.cardsService.removeRecurringPurchase(id, user.id);
+  }
+
+  @Post('recurring-purchases/sync')
+  syncRecurringPurchases(@CurrentUser() user: { id: string }) {
+    return this.cardsService.syncRecurringPurchases(user.id);
   }
 }
