@@ -104,8 +104,12 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
         setInvoices(list);
         const now = new Date();
         const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-        const hasCurrentMonth = list.some((inv) => inv.month === currentKey);
-        setSelectedMonth((prev) => prev ?? (hasCurrentMonth ? currentKey : list[0]?.month ?? null));
+        // Prioriza a fatura em aberto mais próxima (a que o usuário ainda
+        // precisa pagar) — se a fatura do mês corrente já foi quitada, abre
+        // direto a próxima em vez de mostrar uma fatura já paga.
+        const nextOpenInvoice = list.find((inv) => inv.openTotal > 0);
+        const fallback = list.find((inv) => inv.month === currentKey) ?? list[0];
+        setSelectedMonth((prev) => prev ?? (nextOpenInvoice ?? fallback)?.month ?? null);
       })
       .catch(() => setInvoices([]))
       .finally(() => setLoading(false));

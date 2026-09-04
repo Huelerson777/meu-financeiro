@@ -62,10 +62,17 @@ export class CardsService {
 
     return cards.map((c) => {
       const monthMap = byCard.get(c.id);
-      const earliestMonth = monthMap && monthMap.size > 0 ? Array.from(monthMap.keys()).sort()[0] : null;
+      // Ignora meses cujo saldo já fechou <= 0 (ex: um crédito/estorno lançado
+      // num mês cujas parcelas já foram todas pagas, sem nenhuma parcela em
+      // aberto pra "absorver" — não é uma fatura a pagar, é sobra a favor).
+      const earliestOpenMonth = monthMap
+        ? Array.from(monthMap.entries())
+            .filter(([, total]) => total > 0)
+            .sort(([a], [b]) => (a < b ? -1 : 1))[0]
+        : undefined;
       return {
         ...c,
-        currentInvoiceOpenTotal: earliestMonth ? monthMap!.get(earliestMonth)! : 0,
+        currentInvoiceOpenTotal: earliestOpenMonth ? earliestOpenMonth[1] : 0,
       };
     });
   }
