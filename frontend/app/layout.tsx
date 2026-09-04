@@ -8,7 +8,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'FinanceFlow — Gestão financeira inteligente',
+  title: 'FinanceFlow',
   description: 'Controle suas contas, cartões, investimentos e metas em um só lugar.',
 };
 
