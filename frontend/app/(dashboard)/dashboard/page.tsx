@@ -2,7 +2,7 @@
 
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { TrendingUp, TrendingDown, PiggyBank, Target, CircleCheck, CircleDashed, Wallet } from 'lucide-react';
+import { TrendingUp, TrendingDown, PiggyBank, Target, CircleCheck, CircleDashed, Wallet, X } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, Cell, Tooltip as RechartsTooltip,
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Legend, LabelList,
@@ -18,6 +18,7 @@ import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
 import { AiQuickAddCard } from '@/components/dashboard/ai-quick-add-card';
 import { WidgetPicker, useDashboardWidgetOrder, WIDGET_SPANS } from '@/components/dashboard/widget-picker';
+import { AccountVisibilityPicker, useHiddenAccountIds } from '@/components/dashboard/account-visibility-picker';
 import { PaymentModal } from '@/components/cards/payment-modal';
 import {
   useDashboardSummary,
@@ -88,6 +89,8 @@ export default function DashboardPage() {
   } = useDashboardPaymentsStatus({ month: selectedMonth, year: selectedYear });
   const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
   const { data: accountsData, isLoading: accountsLoading } = useAccounts();
+  const { hiddenIds: hiddenAccountIds, setHiddenIds: setHiddenAccountIds } = useHiddenAccountIds();
+  const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
   const { order, setOrder } = useDashboardWidgetOrder();
   const firstName = useAuthStore((s) => s.user?.name)?.split(' ')[0];
 
@@ -207,8 +210,15 @@ export default function DashboardPage() {
   const monthlyFlow = data?.monthlyFlow ?? [];
   const sortedCategoryData = categoryData ? [...categoryData].sort((a, b) => b.total - a.total) : [];
   const sortedAccountBalances = accountsData
-    ? [...accountsData.items].sort((a, b) => Number(b.currentBalance) - Number(a.currentBalance))
+    ? accountsData.items
+        .filter((acc) => !hiddenAccountIds.includes(acc.id))
+        .sort((a, b) => Number(b.currentBalance) - Number(a.currentBalance))
     : [];
+
+  const hideAccountFromChart = (accountId: string) => {
+    setHoveredAccountId(null);
+    setHiddenAccountIds([...hiddenAccountIds, accountId]);
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -588,8 +598,9 @@ export default function DashboardPage() {
           ),
           accountBalances: (
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-center justify-between space-y-0">
           <CardTitle>Saldo por Conta</CardTitle>
+          <AccountVisibilityPicker accounts={accountsData?.items ?? []} />
         </CardHeader>
         <CardContent>
           {accountsLoading ? (
@@ -597,13 +608,19 @@ export default function DashboardPage() {
               Carregando...
             </div>
           ) : sortedAccountBalances.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
-              Nenhuma conta cadastrada.
+            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm text-center px-4">
+              {accountsData && accountsData.items.length > 0
+                ? 'Todas as contas foram ocultadas deste gráfico. Use o botão de olho acima para reexibir alguma.'
+                : 'Nenhuma conta cadastrada.'}
             </div>
           ) : (
             // Mesmo padrão visual do gráfico de categorias: barras horizontais
             // ordenadas da maior pra menor, com o valor exato no final da barra.
-            <div style={{ height: Math.max(64 * sortedAccountBalances.length, 240) }}>
+            // O overlay de linhas abaixo replica o espaçamento vertical que o
+            // Recharts usa internamente (margin top/bottom padrão de 5px,
+            // categorias distribuídas em altura igual) só pra posicionar o
+            // botão de remover — ele não desenha nada, é invisível até o hover.
+            <div className="relative" style={{ height: Math.max(64 * sortedAccountBalances.length, 240) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   layout="vertical"
@@ -644,6 +661,35 @@ export default function DashboardPage() {
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+
+              {(() => {
+                const chartHeight = Math.max(64 * sortedAccountBalances.length, 240);
+                const rowHeight = (chartHeight - 10) / sortedAccountBalances.length;
+                return sortedAccountBalances.map((acc, index) => (
+                  <div
+                    key={acc.id}
+                    className="absolute left-0 right-0 flex items-start justify-end pr-2 pt-1 cursor-pointer"
+                    style={{ top: 5 + rowHeight * index, height: rowHeight }}
+                    onMouseEnter={() => setHoveredAccountId(acc.id)}
+                    onMouseLeave={() => setHoveredAccountId(null)}
+                    onClick={() => router.push('/accounts')}
+                  >
+                    <button
+                      type="button"
+                      title={`Remover "${acc.name}" deste gráfico`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        hideAccountFromChart(acc.id);
+                      }}
+                      className={`flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-opacity hover:border-destructive hover:text-destructive ${
+                        hoveredAccountId === acc.id ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ));
+              })()}
             </div>
           )}
         </CardContent>

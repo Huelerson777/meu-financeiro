@@ -26,4 +26,14 @@ export class UpdateSettingsDto {
   @IsArray()
   @IsString({ each: true })
   dashboardWidgets?: string[];
+
+  @ApiPropertyOptional({
+    description: 'IDs de contas ocultadas do gráfico de Saldo por Conta no Dashboard',
+    example: ['b3f1...', 'c9a2...'],
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  dashboardHiddenAccountIds?: string[];
 }

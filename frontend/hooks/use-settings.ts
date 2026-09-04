@@ -6,6 +6,7 @@ export interface UserSettings {
   language: string;
   currency: string;
   dashboardWidgets: string[] | null;
+  dashboardHiddenAccountIds: string[] | null;
 }
 
 export function useSettings() {
