@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, Pencil, Trash2, MinusCircle, Repeat } from 'lucide-react';
+import { X, Pencil, Trash2, MinusCircle, Repeat, Check } from 'lucide-react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { PurchaseModal } from './purchase-modal';
@@ -283,19 +283,28 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
           <>
             {/* Abas de mês */}
             <div className="flex-shrink-0 flex gap-2 px-6 py-3 overflow-x-auto border-b border-gray-100 dark:border-zinc-800">
-              {invoices.map((inv) => (
-                <button
-                  key={inv.month}
-                  onClick={() => handleSelectMonth(inv.month)}
-                  className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                    selectedMonth === inv.month
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700'
-                  }`}
-                >
-                  {formatMonth(inv.month)}
-                </button>
-              ))}
+              {invoices.map((inv) => {
+                const isPaid = inv.openTotal <= 0;
+                return (
+                  <button
+                    key={inv.month}
+                    onClick={() => handleSelectMonth(inv.month)}
+                    title={isPaid ? 'Fatura quitada' : undefined}
+                    className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 ${
+                      selectedMonth === inv.month
+                        ? isPaid
+                          ? 'bg-green-600 text-white'
+                          : 'bg-blue-600 text-white'
+                        : isPaid
+                          ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-950/60'
+                          : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700'
+                    }`}
+                  >
+                    {isPaid && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
+                    {formatMonth(inv.month)}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Lista de parcelas do mês selecionado */}
