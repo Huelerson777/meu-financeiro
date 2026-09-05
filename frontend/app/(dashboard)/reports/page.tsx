@@ -204,7 +204,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
                   <XAxis type="number" hide />
                   <YAxis type="category" dataKey="name" width={150} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <RechartsTooltip content={<SingleValueTooltip />} />
+                  <RechartsTooltip content={<SingleValueTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
                   <Bar dataKey="amount" radius={[0, 4, 4, 0]} barSize={22}>
                     {categoryReport.items.map((entry, index) => (
                       <Cell key={`cat-cell-${index}`} fill={entry.color} />

@@ -559,7 +559,7 @@ export default function DashboardPage() {
                     tickLine={false}
                     axisLine={false}
                   />
-                  <RechartsTooltip content={<SingleValueTooltip />} />
+                  <RechartsTooltip content={<SingleValueTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
                   <Bar
                     dataKey="total"
                     radius={[0, 4, 4, 0]}
@@ -608,6 +608,10 @@ export default function DashboardPage() {
             // Recharts usa internamente (margin top/bottom padrão de 5px,
             // categorias distribuídas em altura igual) só pra posicionar o
             // botão de remover — ele não desenha nada, é invisível até o hover.
+            // pointer-events-none nele é essencial: sem isso ele intercepta o
+            // mouse antes de chegar nas barras do gráfico por baixo, e o
+            // tooltip/hover do Recharts nunca dispara (só a barra em si e o
+            // botão, via pointer-events-auto, voltam a responder ao mouse).
             <div className="relative" style={{ height: Math.max(64 * sortedAccountBalances.length, 240) }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
@@ -629,7 +633,7 @@ export default function DashboardPage() {
                     tickLine={false}
                     axisLine={false}
                   />
-                  <RechartsTooltip content={<SingleValueTooltip />} />
+                  <RechartsTooltip content={<SingleValueTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
                   <Bar
                     dataKey="total"
                     radius={[0, 4, 4, 0]}
@@ -638,7 +642,12 @@ export default function DashboardPage() {
                     onClick={() => router.push('/accounts')}
                   >
                     {sortedAccountBalances.map((acc, index) => (
-                      <Cell key={`acc-cell-${index}`} fill={acc.color || '#64748B'} />
+                      <Cell
+                        key={`acc-cell-${index}`}
+                        fill={acc.color || '#64748B'}
+                        onMouseEnter={() => setHoveredAccountId(acc.id)}
+                        onMouseLeave={() => setHoveredAccountId(null)}
+                      />
                     ))}
                     <LabelList
                       dataKey="total"
@@ -656,11 +665,8 @@ export default function DashboardPage() {
                 return sortedAccountBalances.map((acc, index) => (
                   <div
                     key={acc.id}
-                    className="absolute left-0 right-0 flex items-start justify-end pr-2 pt-1 cursor-pointer"
+                    className="pointer-events-none absolute left-0 right-0 flex items-start justify-end pr-2 pt-1"
                     style={{ top: 5 + rowHeight * index, height: rowHeight }}
-                    onMouseEnter={() => setHoveredAccountId(acc.id)}
-                    onMouseLeave={() => setHoveredAccountId(null)}
-                    onClick={() => router.push('/accounts')}
                   >
                     <button
                       type="button"
@@ -669,7 +675,7 @@ export default function DashboardPage() {
                         e.stopPropagation();
                         hideAccountFromChart(acc.id);
                       }}
-                      className={`flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-opacity hover:border-destructive hover:text-destructive ${
+                      className={`pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-opacity hover:border-destructive hover:text-destructive ${
                         hoveredAccountId === acc.id ? 'opacity-100' : 'opacity-0'
                       }`}
                     >
