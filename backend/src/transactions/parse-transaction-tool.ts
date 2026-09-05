@@ -15,12 +15,13 @@ export const PARSE_TRANSACTION_TOOL: Anthropic.Tool = {
     properties: {
       type: {
         type: 'string',
-        enum: ['EXPENSE', 'INCOME'],
-        description: 'EXPENSE para gasto/despesa, INCOME para receita/entrada',
+        enum: ['EXPENSE', 'INCOME', 'TRANSFER', 'INVESTMENT'],
+        description:
+          'EXPENSE para gasto/despesa, INCOME para receita/entrada, TRANSFER para mover dinheiro entre duas contas do usuário, INVESTMENT para um aporte que sai de uma conta e vai para uma conta de investimento.',
       },
       description: {
         type: 'string',
-        description: 'Descrição curta do lançamento, ex: "Blusa Renner", "Venda de um controle"',
+        description: 'Descrição curta do lançamento, ex: "Blusa Renner", "Venda de um controle", "Aporte CDB"',
       },
       amount: {
         type: 'number',
@@ -29,12 +30,17 @@ export const PARSE_TRANSACTION_TOOL: Anthropic.Tool = {
       accountId: {
         type: 'string',
         description:
-          'id de uma das contas informadas na lista de contas disponíveis — use quando for um pagamento por conta (débito, pix, dinheiro). Não preencher junto com cardId.',
+          'id de uma das contas informadas na lista de contas disponíveis — pagamento/recebimento por conta (débito, pix, dinheiro), ou a conta de ORIGEM quando type for TRANSFER/INVESTMENT. Não preencher junto com cardId.',
+      },
+      toAccountId: {
+        type: 'string',
+        description:
+          'Só quando type for TRANSFER ou INVESTMENT: id da conta de DESTINO do dinheiro. Em INVESTMENT precisa ser uma conta do tipo investimento.',
       },
       cardId: {
         type: 'string',
         description:
-          'id de um dos cartões informados na lista de cartões disponíveis — use quando o texto mencionar cartão de crédito. Não preencher junto com accountId.',
+          'id de um dos cartões informados na lista de cartões disponíveis — use quando o texto mencionar cartão de crédito (só se aplica a EXPENSE/INCOME). Não preencher junto com accountId.',
       },
       installmentsCount: {
         type: 'number',
@@ -42,7 +48,7 @@ export const PARSE_TRANSACTION_TOOL: Anthropic.Tool = {
       },
       categoryId: {
         type: 'string',
-        description: 'id de uma das categorias informadas, se ficar óbvio qual usar. Pode ficar de fora.',
+        description: 'id de uma das categorias informadas, se ficar óbvio qual usar. Não se aplica a TRANSFER/INVESTMENT.',
       },
       date: {
         type: 'string',
