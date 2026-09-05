@@ -62,6 +62,15 @@ enum InvestmentCategory {
   OTHER
 }
 
+// Indexador de renda fixa — define como o rendimento é calculado
+// (ver backend/src/investments/accrual.util.ts).
+enum Indexer {
+  CDI
+  SELIC
+  IPCA_PLUS
+  PREFIXADO
+}
+
 enum NotificationType {
   BILL_DUE
   CARD_DUE
@@ -176,6 +185,7 @@ model Account {
   transfersTo     Transfer[]  @relation("TransferToAccount")
   paidInstallments Installment[]
   recurringBills  RecurringBill[]
+  investments     Investment[]
 
   @@map("accounts")
   @@index([userId])
@@ -193,6 +203,7 @@ model Transfer {
   fromAccount Account @relation("TransferFromAccount", fields: [fromId], references: [id], onDelete: Cascade)
   toAccount   Account @relation("TransferToAccount", fields: [toId], references: [id], onDelete: Cascade)
   transaction Transaction?
+  investment  Investment?
 
   @@map("transfers")
   @@index([fromId])
@@ -382,21 +393,37 @@ model CardRecurringPurchase {
 // INVESTMENTS
 // ============================================================================
 
+// Posição de investimento vinculada a um aporte (Transfer) numa conta
+// INVESTMENT — ver backend/src/investments/investments.service.ts.
+// FIXED_INCOME usa indexer/rate/startDate (quantity fica fixo em 1,
+// averagePrice = principal); STOCK/FUND usam quantity/averagePrice/ticker
+// (currentPrice atualizado via brapi.dev quando ticker está preenchido);
+// CRYPTO/REAL_ESTATE/OTHER têm currentPrice sempre manual.
 model Investment {
   id           String             @id @default(uuid())
   userId       String             @map("user_id")
+  accountId    String             @map("account_id")
+  transferId   String?            @unique @map("transfer_id")
   name         String
   category     InvestmentCategory
+  ticker       String?
   quantity     Decimal            @db.Decimal(18, 8)
   averagePrice Decimal            @map("average_price") @db.Decimal(14, 2)
   currentPrice Decimal            @map("current_price") @db.Decimal(14, 2)
+  indexer      Indexer?
+  rate         Decimal?           @db.Decimal(8, 4)
+  startDate    DateTime?          @map("start_date")
+  lastValuedAt DateTime?          @map("last_valued_at")
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account  Account   @relation(fields: [accountId], references: [id])
+  transfer Transfer? @relation(fields: [transferId], references: [id])
 
   @@map("investments")
   @@index([userId])
+  @@index([accountId])
 }
 
 // ============================================================================

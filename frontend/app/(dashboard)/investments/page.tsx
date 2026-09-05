@@ -1,9 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PiggyBank, TrendingUp } from 'lucide-react';
+import { PiggyBank, TrendingUp, Trash2 } from 'lucide-react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
+import { useInvestmentPositions } from '@/hooks/use-investments';
+import { investmentsService } from '@/services/investments.service';
+
+const CATEGORY_LABELS: Record<string, string> = {
+  FIXED_INCOME: 'Renda fixa',
+  STOCK: 'Ação',
+  FUND: 'Fundo/FII',
+  CRYPTO: 'Criptomoeda',
+  REAL_ESTATE: 'Imóvel',
+  OTHER: 'Outro',
+};
+
+const INDEXER_LABELS: Record<string, string> = {
+  CDI: '% do CDI',
+  SELIC: '% da Selic',
+  IPCA_PLUS: 'IPCA+',
+  PREFIXADO: 'Prefixado',
+};
 
 interface Contribution {
   id: string;
@@ -42,18 +60,33 @@ export default function InvestmentsPage() {
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const { data: positions, isLoading: positionsLoading, refetch: refetchPositions } = useInvestmentPositions();
 
-  useEffect(() => {
+  const fetchContributions = () => {
     setLoading(true);
     const params: Record<string, string> = {};
     if (startDate) params.startDate = startDate;
     if (endDate) params.endDate = endDate;
 
-    api
+    return api
       .get('/investments/contributions', { params })
       .then((res) => setData(res.data?.data ?? res.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false));
+  };
+
+  const handleDeletePosition = async (id: string, name: string) => {
+    if (!window.confirm(`Excluir "${name}"? Isso também remove o aporte associado.`)) return;
+    await investmentsService.deletePosition(id);
+    // Excluir a posição também exclui o aporte (Transfer) vinculado — precisa
+    // atualizar os dois, não só a lista de posições.
+    refetchPositions();
+    fetchContributions();
+  };
+
+  useEffect(() => {
+    fetchContributions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate]);
 
   const hasInvestmentAccount = (data?.investmentAccounts?.length ?? 0) > 0;
@@ -122,6 +155,65 @@ export default function InvestmentsPage() {
             <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
               <TrendingUp className="w-7 h-7 text-blue-600 dark:text-blue-400" />
             </div>
+          </div>
+
+          {/* Posições registradas (opcional — quem só usa aporte simples não tem nenhuma aqui) */}
+          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 overflow-hidden mb-8">
+            <div className="p-6 pb-0">
+              <h2 className="font-semibold dark:text-white mb-1">Minhas posições</h2>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                Ativos registrados com "Registrar ativo" ao investir — valor atualizado automaticamente pra renda fixa e ações/fundos com ticker.
+              </p>
+            </div>
+            {positionsLoading ? (
+              <div className="text-sm text-gray-500 dark:text-gray-400 p-6 pt-0">Carregando...</div>
+            ) : !positions || positions.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 p-6 pt-0">
+                Nenhuma posição registrada ainda. Use "Registrar ativo" ao lançar um aporte em Transações &gt; Investir.
+              </p>
+            ) : (
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-zinc-800 text-gray-500 dark:text-gray-400">
+                    <th className="px-6 py-2 font-medium">Ativo</th>
+                    <th className="px-6 py-2 font-medium">Categoria</th>
+                    <th className="px-6 py-2 font-medium text-right">Investido</th>
+                    <th className="px-6 py-2 font-medium text-right">Atual</th>
+                    <th className="px-6 py-2 font-medium text-right">Rendimento</th>
+                    <th className="px-6 py-2 font-medium"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {positions.map((p) => (
+                    <tr key={p.id} className="border-b border-gray-50 dark:border-zinc-800/50">
+                      <td className="px-6 py-3 dark:text-gray-200">
+                        {p.name}
+                        {(p.ticker || p.indexer) && (
+                          <span className="ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                            {p.ticker || (p.indexer ? `${p.rate ?? ''} ${INDEXER_LABELS[p.indexer]}` : '')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3 text-gray-500 dark:text-gray-400">{CATEGORY_LABELS[p.category] ?? p.category}</td>
+                      <td className="px-6 py-3 text-right dark:text-gray-200">{formatCurrency(p.invested)}</td>
+                      <td className="px-6 py-3 text-right font-semibold dark:text-gray-100">{formatCurrency(p.current)}</td>
+                      <td className={`px-6 py-3 text-right font-semibold ${p.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        {p.profit >= 0 ? '+' : ''}{formatCurrency(p.profit)} ({p.profitPct.toFixed(2)}%)
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        <button
+                          onClick={() => handleDeletePosition(p.id, p.name)}
+                          className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition"
+                          title="Excluir posição"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
