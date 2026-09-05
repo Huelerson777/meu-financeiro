@@ -49,15 +49,18 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
-  // Swagger
-  const config = new DocumentBuilder()
-    .setTitle('FinanceFlow API')
-    .setDescription('API completa do sistema de gestão financeira FinanceFlow')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, document);
+  // Swagger — só em dev/staging. Em produção ele expõe todo o mapa da API
+  // (endpoints, DTOs, estrutura de dados) publicamente, sem autenticação.
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('FinanceFlow API')
+      .setDescription('API completa do sistema de gestão financeira FinanceFlow')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('docs', app, document);
+  }
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);

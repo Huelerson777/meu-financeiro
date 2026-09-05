@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/components/layout/theme-provider';
+import { DevToolsGuard } from '@/components/layout/devtools-guard';
 import { QueryProvider } from '@/providers/query-provider';
 import './globals.css';
 
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" className={inter.variable} suppressHydrationWarning>
       <body className="font-sans">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <DevToolsGuard />
           <QueryProvider>
             {children}
             <Toaster richColors position="top-right" />

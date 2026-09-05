@@ -372,10 +372,6 @@ function TransactionsPageContent() {
       setEditingTransferId(null);
       fetchData();
     } catch (err: any) {
-      // LOGS DETALHADOS ADICIONADOS AQUI 👇
-      console.error("🚨 ERRO COMPLETO DO BACKEND:", err);
-      console.error("🚨 RESPOSTA DA API:", err.response?.data);
-      
       const backendMessage = err.response?.data?.message;
       const formattedError = Array.isArray(backendMessage)
         ? backendMessage.join('\n• ')
