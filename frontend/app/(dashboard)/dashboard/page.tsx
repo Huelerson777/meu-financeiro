@@ -13,6 +13,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ChartTooltip, SingleValueTooltip } from '@/components/dashboard/chart-tooltips';
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
@@ -47,19 +48,6 @@ function formatCompactCurrency(value: number) {
   return `R$ ${value.toFixed(0)}`;
 }
 
-// Tooltip customizado para o gráfico de categorias
-const CategoryTooltip = ({ active, payload }: any) => {
-  if (active && payload && payload.length) {
-    const d = payload[0].payload;
-    return (
-      <div className="bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg p-3 shadow-lg text-sm">
-        <p className="font-semibold text-gray-800 dark:text-gray-100">{d.name}</p>
-        <p className="text-gray-600 dark:text-gray-300 mt-1">{formatCurrency(d.total)}</p>
-      </div>
-    );
-  }
-  return null;
-};
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -455,7 +443,7 @@ export default function DashboardPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis hide />
-                <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
+                <RechartsTooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
                 <Legend />
                 <Bar dataKey="Receitas" fill="hsl(var(--success, #16a34a))" radius={[4, 4, 0, 0]}>
                   <LabelList
@@ -526,7 +514,7 @@ export default function DashboardPage() {
                   width={70}
                   tickFormatter={(v) => formatCompactCurrency(v)}
                 />
-                <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
+                <RechartsTooltip content={<ChartTooltip />} />
                 <Legend />
                 <Area type="monotone" dataKey="receitas" name="Receitas" stroke="#16a34a" fill="url(#colorReceitas)" strokeWidth={2} />
                 <Area type="monotone" dataKey="despesas" name="Despesas" stroke="#dc2626" fill="url(#colorDespesas)" strokeWidth={2} />
@@ -571,7 +559,7 @@ export default function DashboardPage() {
                     tickLine={false}
                     axisLine={false}
                   />
-                  <RechartsTooltip content={<CategoryTooltip />} />
+                  <RechartsTooltip content={<SingleValueTooltip />} />
                   <Bar
                     dataKey="total"
                     radius={[0, 4, 4, 0]}
@@ -641,7 +629,7 @@ export default function DashboardPage() {
                     tickLine={false}
                     axisLine={false}
                   />
-                  <RechartsTooltip content={<CategoryTooltip />} />
+                  <RechartsTooltip content={<SingleValueTooltip />} />
                   <Bar
                     dataKey="total"
                     radius={[0, 4, 4, 0]}

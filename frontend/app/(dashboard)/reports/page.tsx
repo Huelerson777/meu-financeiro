@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ChartTooltip, SingleValueTooltip } from '@/components/dashboard/chart-tooltips';
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { useCashFlowReport, useCategoryReport, useAccountStatement } from '@/hooks/use-reports';
 import { reportsService } from '@/services/reports.service';
@@ -161,7 +162,7 @@ export default function ReportsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} width={70} />
-                <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
+                <RechartsTooltip content={<ChartTooltip />} />
                 <Area type="monotone" dataKey="receitas" name="Receitas" stroke="#16a34a" fill="url(#repColorReceitas)" strokeWidth={2} />
                 <Area type="monotone" dataKey="despesas" name="Despesas" stroke="#dc2626" fill="url(#repColorDespesas)" strokeWidth={2} />
               </AreaChart>
@@ -203,7 +204,7 @@ export default function ReportsPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
                   <XAxis type="number" hide />
                   <YAxis type="category" dataKey="name" width={150} stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <RechartsTooltip formatter={(value: number) => formatCurrency(value)} />
+                  <RechartsTooltip content={<SingleValueTooltip />} />
                   <Bar dataKey="amount" radius={[0, 4, 4, 0]} barSize={22}>
                     {categoryReport.items.map((entry, index) => (
                       <Cell key={`cat-cell-${index}`} fill={entry.color} />
