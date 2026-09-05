@@ -672,7 +672,10 @@ export class CardsService {
   /**
    * Paga de uma vez todas as parcelas em aberto da fatura de um mês: soma só
    * as parcelas ainda não pagas (uma parcela paga avulsa não entra de novo
-   * no total, já está liquidada) e debita o total da conta escolhida.
+   * no total, já está liquidada), abate os créditos/estornos lançados nesse
+   * mês (ver createCredit — é o valor líquido que o banco de fato cobra, do
+   * contrário a conta fica debitada a mais e diverge do extrato real) e
+   * debita o total da conta escolhida.
    */
   async payInvoice(cardId: string, userId: string, dto: PayInvoiceDto) {
     await this.assertOwnership(cardId, userId);
@@ -692,7 +695,15 @@ export class CardsService {
       throw new BadRequestException('Não há parcelas em aberto nessa fatura');
     }
 
-    const total = openInstallments.reduce((acc, i) => acc + Number(i.amount), 0);
+    const credits = await this.prisma.transaction.findMany({
+      where: { userId, cardId, isInstallment: false, amount: { lt: 0 }, date: { gte: startDate, lt: endDate } },
+    });
+
+    const installmentsTotal = openInstallments.reduce((acc, i) => acc + Number(i.amount), 0);
+    const creditsTotal = credits.reduce((acc, c) => acc + Number(c.amount), 0);
+    // Se o crédito for maior que as parcelas em aberto do mês, não há valor a
+    // pagar (a sobra vira saldo credor pro próximo mês, não dinheiro de volta).
+    const total = Math.max(0, installmentsTotal + creditsTotal);
     const paidAt = dto.date ? this.parseDateOnly(dto.date) : new Date();
 
     await this.prisma.$transaction(async (tx) => {
