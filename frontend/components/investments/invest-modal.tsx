@@ -51,6 +51,7 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
   const [assetCategory, setAssetCategory] = useState<'FIXED_INCOME' | 'STOCK' | 'FUND' | 'CRYPTO' | 'REAL_ESTATE' | 'OTHER'>('FIXED_INCOME');
   const [assetTicker, setAssetTicker] = useState('');
   const [assetQuantity, setAssetQuantity] = useState('');
+  const [assetUnitPrice, setAssetUnitPrice] = useState('');
   const [assetIndexer, setAssetIndexer] = useState<'CDI' | 'SELIC' | 'IPCA_PLUS' | 'PREFIXADO'>('CDI');
   const [assetRate, setAssetRate] = useState('');
   const [assetStartDate, setAssetStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -68,6 +69,7 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
     setAssetCategory('FIXED_INCOME');
     setAssetTicker('');
     setAssetQuantity('');
+    setAssetUnitPrice('');
     setAssetIndexer('CDI');
     setAssetRate('');
     setAssetStartDate(new Date().toISOString().split('T')[0]);
@@ -89,6 +91,8 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
   const investmentAccounts = accounts.filter((acc) => acc.type === 'INVESTMENT');
   const selectedAccount = accounts.find((acc) => acc.id === accountId);
   const skipTransfer = investMode === 'asset' && alreadyOwned;
+  const isStockLike = investMode === 'asset' && (assetCategory === 'STOCK' || assetCategory === 'FUND');
+  const stockTotal = Math.round(((parseFloat(assetUnitPrice) || 0) * (parseFloat(assetQuantity) || 0)) * 100) / 100;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,7 +106,9 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
       return;
     }
 
-    const parsedAmount = parseFloat(amount);
+    const parsedAmount = isStockLike
+      ? Math.round(parseFloat(assetUnitPrice) * parseFloat(assetQuantity) * 100) / 100
+      : parseFloat(amount);
 
     if (investMode === 'asset') {
       if (!description.trim()) {
@@ -113,8 +119,8 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
         alert('Informe a taxa contratada.');
         return;
       }
-      if ((assetCategory === 'STOCK' || assetCategory === 'FUND') && !assetQuantity) {
-        alert('Informe a quantidade.');
+      if (isStockLike && (!assetQuantity || !assetUnitPrice)) {
+        alert('Informe a quantidade e o preço unitário.');
         return;
       }
     }
@@ -300,28 +306,45 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
                       </div>
                     </div>
                   ) : assetCategory === 'STOCK' || assetCategory === 'FUND' ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <Label>Ticker (opcional)</Label>
-                        <Input
-                          type="text"
-                          placeholder="Ex: PETR4"
-                          value={assetTicker}
-                          onChange={(e) => setAssetTicker(e.target.value.toUpperCase())}
-                        />
+                    <div className="flex flex-col gap-3">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <Label>Ticker (opcional)</Label>
+                          <Input
+                            type="text"
+                            placeholder="Ex: PETR4"
+                            value={assetTicker}
+                            onChange={(e) => setAssetTicker(e.target.value.toUpperCase())}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label>Quantidade</Label>
+                          <Input
+                            type="number"
+                            step="0.00000001"
+                            min="0"
+                            placeholder="Ex: 3"
+                            value={assetQuantity}
+                            onChange={(e) => setAssetQuantity(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <Label>Preço unitário (R$)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Ex: 7,00"
+                            value={assetUnitPrice}
+                            onChange={(e) => setAssetUnitPrice(e.target.value)}
+                            required
+                          />
+                        </div>
                       </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label>Quantidade</Label>
-                        <Input
-                          type="number"
-                          step="0.00000001"
-                          min="0"
-                          placeholder="Ex: 10"
-                          value={assetQuantity}
-                          onChange={(e) => setAssetQuantity(e.target.value)}
-                          required
-                        />
-                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Total investido: <span className="font-medium text-foreground">{formatCurrency(stockTotal)}</span>
+                      </p>
                     </div>
                   ) : (
                     <p className="text-xs text-muted-foreground">
@@ -331,11 +354,13 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label>{skipTransfer ? 'Valor investido (total)' : 'Valor (R$)'}</Label>
-                  <Input type="number" step="0.01" required placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                </div>
+              <div className={isStockLike ? '' : 'grid grid-cols-2 gap-4'}>
+                {!isStockLike && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label>{skipTransfer ? 'Valor investido (total)' : 'Valor (R$)'}</Label>
+                    <Input type="number" step="0.01" required placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                  </div>
+                )}
                 <div className="flex flex-col gap-1.5">
                   <Label>{skipTransfer ? 'Data da compra' : 'Data'}</Label>
                   <Input type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
