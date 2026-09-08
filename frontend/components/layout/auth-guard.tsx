@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth-store';
 import { api } from '@/services/api';
 import { useIdleLogout } from '@/hooks/use-idle-logout';
+import { clearSessionCookie } from '@/utils/session-cookie';
 
 /**
  * Protege as rotas do grupo (dashboard). Aguarda o Zustand terminar de
@@ -21,6 +22,12 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (hasHydrated && !accessToken) {
+      // Sem token mas com o cookie de sessão ainda presente (ex: localStorage
+      // foi limpo, ou a chave usada pra persistir o Zustand mudou) o
+      // middleware manda de volta pra /dashboard achando que há sessão,
+      // criando um loop de redirecionamento — precisa limpar aqui, não só
+      // redirecionar.
+      clearSessionCookie();
       router.replace('/login');
     }
   }, [hasHydrated, accessToken, router]);

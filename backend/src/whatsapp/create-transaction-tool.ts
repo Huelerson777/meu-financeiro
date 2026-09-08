@@ -9,7 +9,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 export const CREATE_TRANSACTION_TOOL: Anthropic.Tool = {
   name: 'create_transaction',
   description:
-    'Registra uma transação (gasto ou receita) já confirmada no FinanceFlow. Só chame quando tiver certeza do tipo, descrição, valor e da conta a usar.',
+    'Registra uma transação (gasto ou receita) já confirmada no PouPay. Só chame quando tiver certeza do tipo, descrição, valor e da conta a usar.',
   input_schema: {
     type: 'object',
     properties: {

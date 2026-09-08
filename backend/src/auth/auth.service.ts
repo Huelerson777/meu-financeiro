@@ -123,7 +123,7 @@ export class AuthService {
       const resetUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/reset-password?token=${rawToken}`;
       await this.mailService.send(
         user.email,
-        'Recuperação de senha — FinanceFlow',
+        'Recuperação de senha — PouPay',
         `<p>Olá, ${user.name}.</p>` +
           `<p>Clique no link abaixo para redefinir sua senha. Ele expira em ${RESET_TOKEN_EXPIRES_MINUTES} minutos.</p>` +
           `<p><a href="${resetUrl}">${resetUrl}</a></p>` +

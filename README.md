@@ -1,4 +1,4 @@
-# FinanceFlow — Sistema de Gestão Financeira (SaaS)
+# PouPay — Sistema de Gestão Financeira (SaaS)
 
 Sistema web de gestão financeira pessoal: contas, transações, cartões, investimentos, metas, orçamentos e relatórios, com dashboard em tempo real.
 

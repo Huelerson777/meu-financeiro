@@ -11,7 +11,7 @@
 | `JWT_REFRESH_EXPIRES_IN` | Duração do refresh token | `7d` |
 | `PORT` | Porta HTTP da API | `3001` |
 | `NODE_ENV` | Ambiente de execução | `development` \| `production` |
-| `FRONTEND_URL` | Origem permitida no CORS | `https://app.financeflow.com` |
+| `FRONTEND_URL` | Base usada para montar o link de redefinição de senha no e-mail (CORS já é aberto via `origin: true`) | `https://usepoupay.com.br` |
 | `THROTTLE_TTL` | Janela do rate limit (segundos) | `60` |
 | `THROTTLE_LIMIT` | Máximo de requisições por janela | `100` |
 | `WHATSAPP_ACCESS_TOKEN` | Token de acesso do app WhatsApp Cloud API (Meta for Developers) | gerado via "System User" |

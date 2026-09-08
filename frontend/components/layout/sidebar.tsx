@@ -72,7 +72,7 @@ function Logo({ collapsed }: { collapsed?: boolean }) {
       <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary shrink-0">
         <Wallet className="h-4 w-4 text-primary-foreground" />
       </div>
-      {!collapsed && <span className="text-base font-semibold tracking-tight">FinanceFlow</span>}
+      {!collapsed && <span className="text-base font-semibold tracking-tight">PouPay</span>}
     </div>
   );
 }

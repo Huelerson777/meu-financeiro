@@ -9,7 +9,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
 export const metadata: Metadata = {
-  title: 'FinanceFlow',
+  title: 'PouPay',
   description: 'Controle suas contas, cartões, investimentos e metas em um só lugar.',
 };
 

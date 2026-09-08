@@ -18,6 +18,6 @@ export const useLastActivityStore = create<LastActivityState>()(
       lastActivityAt: null,
       touch: () => set({ lastActivityAt: Date.now() }),
     }),
-    { name: 'financeflow-last-activity' },
+    { name: 'poupay-last-activity' },
   ),
 );

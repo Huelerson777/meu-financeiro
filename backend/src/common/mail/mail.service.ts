@@ -35,7 +35,7 @@ export class MailService {
     }
 
     await this.transporter.sendMail({
-      from: process.env.SMTP_FROM ?? 'FinanceFlow <no-reply@financeflow.app>',
+      from: process.env.SMTP_FROM ?? 'PouPay <no-reply@usepoupay.com.br>',
       to,
       subject,
       html,

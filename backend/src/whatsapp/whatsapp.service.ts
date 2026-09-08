@@ -65,7 +65,7 @@ export class WhatsappService {
     if (!user) {
       await this.sendWhatsappMessage(
         from,
-        'Esse número não está vinculado a nenhuma conta FinanceFlow. Cadastre-o em Configurações → Perfil no app.',
+        'Esse número não está vinculado a nenhuma conta PouPay. Cadastre-o em Configurações → Perfil no app.',
       );
       return;
     }
@@ -171,7 +171,7 @@ export class WhatsappService {
     const accountsList = accounts.map((a) => `- ${a.name} (id: ${a.id})`).join('\n') || '(nenhuma conta cadastrada)';
     const categoriesList = categories.map((c) => `- ${c.name} (id: ${c.id})`).join('\n') || '(nenhuma categoria cadastrada)';
 
-    return `Você é o assistente financeiro do FinanceFlow, conversando por WhatsApp pra registrar um gasto ou receita que o usuário te manda por texto ou foto de comprovante.
+    return `Você é o assistente financeiro do PouPay, conversando por WhatsApp pra registrar um gasto ou receita que o usuário te manda por texto ou foto de comprovante.
 
 Contas disponíveis:
 ${accountsList}

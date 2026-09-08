@@ -46,7 +46,7 @@ export const useAuthStore = create<AuthState>()(
       setHasHydrated: (value) => set({ hasHydrated: value }),
     }),
     {
-      name: 'financeflow-auth',
+      name: 'poupay-auth',
       onRehydrateStorage: () => (state) => {
         // Resincroniza o cookie do middleware com o que veio do localStorage
         // — cobre o caso raro de alguém limpar só os cookies do navegador e

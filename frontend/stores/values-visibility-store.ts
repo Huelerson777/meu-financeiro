@@ -18,6 +18,6 @@ export const useValuesVisibilityStore = create<ValuesVisibilityState>()(
       hidden: false,
       toggle: () => set((s) => ({ hidden: !s.hidden })),
     }),
-    { name: 'financeflow-values-hidden' },
+    { name: 'poupay-values-hidden' },
   ),
 );

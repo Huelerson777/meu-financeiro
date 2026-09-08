@@ -16,6 +16,6 @@ export const useSidebarStore = create<SidebarState>()(
       collapsed: false,
       toggle: () => set((s) => ({ collapsed: !s.collapsed })),
     }),
-    { name: 'financeflow-sidebar-collapsed' },
+    { name: 'poupay-sidebar-collapsed' },
   ),
 );

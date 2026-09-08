@@ -1,7 +1,7 @@
 {
-  "name": "financeflow-backend",
+  "name": "poupay-backend",
   "version": "1.0.0",
-  "description": "API do sistema de gestão financeira FinanceFlow",
+  "description": "API do sistema de gestão financeira PouPay",
   "scripts": {
     "build": "nest build",
     "start": "nest start",

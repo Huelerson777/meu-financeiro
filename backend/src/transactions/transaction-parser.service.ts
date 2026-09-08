@@ -133,7 +133,7 @@ export class TransactionParserService {
     const cardsList = cards.map((c) => `- ${c.name} (id: ${c.id})`).join('\n') || '(nenhum cartão cadastrado)';
     const categoriesList = categories.map((c) => `- ${c.name} (id: ${c.id})`).join('\n') || '(nenhuma categoria cadastrada)';
 
-    return `Você interpreta um texto curto que um usuário do FinanceFlow digitou pra lançar um gasto, receita, transferência ou investimento rapidamente, ex: "blusa renner 100 cartao nubank", "recebi 15 da venda de um controle na conta nubank", "transferi 200 do nubank pro itau" ou "aportei 500 na xp vindo do nubank".
+    return `Você interpreta um texto curto que um usuário do PouPay digitou pra lançar um gasto, receita, transferência ou investimento rapidamente, ex: "blusa renner 100 cartao nubank", "recebi 15 da venda de um controle na conta nubank", "transferi 200 do nubank pro itau" ou "aportei 500 na xp vindo do nubank".
 
 Contas disponíveis:
 ${accountsList}

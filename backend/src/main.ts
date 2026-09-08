@@ -53,8 +53,8 @@ async function bootstrap() {
   // (endpoints, DTOs, estrutura de dados) publicamente, sem autenticação.
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
-      .setTitle('FinanceFlow API')
-      .setDescription('API completa do sistema de gestão financeira FinanceFlow')
+      .setTitle('PouPay API')
+      .setDescription('API completa do sistema de gestão financeira PouPay')
       .setVersion('1.0')
       .addBearerAuth()
       .build();
@@ -64,7 +64,7 @@ async function bootstrap() {
 
   const port = process.env.PORT ?? 3001;
   await app.listen(port);
-  console.log(`🚀 FinanceFlow API rodando em http://localhost:${port}/api`);
+  console.log(`🚀 PouPay API rodando em http://localhost:${port}/api`);
   console.log(`📚 Documentação Swagger em http://localhost:${port}/docs`);
 }
 
