@@ -153,6 +153,14 @@ export class InvestmentsService {
       });
     }
 
+    // Valor atual informado na hora do registro (ex.: ativo antigo que já vale
+    // diferente do que custou) — sem efeito em FIXED_INCOME, que sempre
+    // recalcula pelo indexador/taxa no próximo listPositions.
+    const currentPrice =
+      dto.currentAmount != null && dto.category !== 'FIXED_INCOME'
+        ? Math.round((dto.currentAmount / quantity) * 100) / 100
+        : averagePrice;
+
     return this.prisma.investment.create({
       data: {
         userId,
@@ -163,10 +171,11 @@ export class InvestmentsService {
         ticker: dto.ticker,
         quantity,
         averagePrice,
-        currentPrice: averagePrice,
+        currentPrice,
         indexer: dto.category === 'FIXED_INCOME' ? dto.indexer : undefined,
         rate: dto.category === 'FIXED_INCOME' ? dto.rate : undefined,
         startDate,
+        ...(currentPrice !== averagePrice ? { lastValuedAt: new Date() } : {}),
       },
     });
   }

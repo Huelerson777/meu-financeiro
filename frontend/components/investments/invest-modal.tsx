@@ -55,6 +55,9 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
   const [assetIndexer, setAssetIndexer] = useState<'CDI' | 'SELIC' | 'IPCA_PLUS' | 'PREFIXADO'>('CDI');
   const [assetRate, setAssetRate] = useState('');
   const [assetStartDate, setAssetStartDate] = useState(new Date().toISOString().split('T')[0]);
+  // Valor de hoje de um ativo antigo — só faz sentido pra "já possuía", já
+  // que um aporte novo vale o mesmo que custou no momento do registro.
+  const [assetCurrentAmount, setAssetCurrentAmount] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -73,6 +76,7 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
     setAssetIndexer('CDI');
     setAssetRate('');
     setAssetStartDate(new Date().toISOString().split('T')[0]);
+    setAssetCurrentAmount('');
 
     setLoadingAccounts(true);
     api
@@ -92,6 +96,7 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
   const selectedAccount = accounts.find((acc) => acc.id === accountId);
   const skipTransfer = investMode === 'asset' && alreadyOwned;
   const isStockLike = investMode === 'asset' && (assetCategory === 'STOCK' || assetCategory === 'FUND');
+  const isFixedIncome = investMode === 'asset' && assetCategory === 'FIXED_INCOME';
   const stockTotal = Math.round(((parseFloat(assetUnitPrice) || 0) * (parseFloat(assetQuantity) || 0)) * 100) / 100;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,6 +145,9 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
             : {}),
           ...(assetCategory === 'STOCK' || assetCategory === 'FUND'
             ? { quantity: parseFloat(assetQuantity), ticker: assetTicker || undefined }
+            : {}),
+          ...(skipTransfer && !isFixedIncome && assetCurrentAmount
+            ? { currentAmount: parseFloat(assetCurrentAmount) }
             : {}),
         });
       } else {
@@ -366,6 +374,27 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
                   <Input type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
                 </div>
               </div>
+
+              {skipTransfer && !isFixedIncome && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>
+                    Valor atual (R$) <span className="text-muted-foreground font-normal">— opcional</span>
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Deixe em branco pra usar o valor de compra"
+                    value={assetCurrentAmount}
+                    onChange={(e) => setAssetCurrentAmount(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {isStockLike
+                      ? 'Ação/fundo com ticker atualiza sozinho depois — isso aqui é só o ponto de partida.'
+                      : 'Quanto esse ativo vale hoje, se for diferente do que você pagou. Sem cotação automática pra essa categoria, então fica valendo até você editar de novo.'}
+                  </p>
+                </div>
+              )}
             </>
           )}
 

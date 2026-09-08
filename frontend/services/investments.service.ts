@@ -31,6 +31,7 @@ export interface CreatePositionPayload {
   startDate?: string;
   date?: string;
   description?: string;
+  currentAmount?: number;
 }
 
 export interface UpdatePositionPayload {

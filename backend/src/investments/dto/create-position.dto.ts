@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { InvestmentCategory, Indexer } from '@prisma/client';
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Min } from 'class-validator';
 
 export class CreatePositionDto {
   @ApiPropertyOptional({
@@ -58,6 +58,15 @@ export class CreatePositionDto {
   @IsOptional()
   @IsDateString()
   date?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Valor atual total do ativo (não o valor investido). Útil pra registrar um ativo antigo já com o valor de hoje, sem esperar o próximo recálculo automático — ignorado se vazio (usa o valor investido como ponto de partida). Sem efeito em FIXED_INCOME, que recalcula sozinho pelo indexador/taxa.',
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  currentAmount?: number;
 
   @ApiPropertyOptional()
   @IsOptional()
