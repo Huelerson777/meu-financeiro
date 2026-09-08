@@ -871,8 +871,9 @@ export class CardsService {
 
   /**
    * Calcula em qual fatura (mês) cada parcela vai cair, respeitando o dia de
-   * fechamento do cartão: uma compra feita até o dia de fechamento entra no
-   * ciclo que fecha naquele mês; feita depois, só entra no ciclo seguinte.
+   * fechamento do cartão: uma compra feita antes do dia de fechamento entra
+   * no ciclo que fecha naquele mês; feita no dia do fechamento (a fatura já
+   * fechou) ou depois, só entra no ciclo seguinte.
    * O vencimento cai no mesmo mês do fechamento quando dueDay >= closingDay
    * (ex: fecha dia 3, vence dia 10), ou no mês seguinte quando dueDay <
    * closingDay (ex: fecha dia 27, vence dia 3). Cada parcela seguinte cai um
@@ -887,7 +888,7 @@ export class CardsService {
     let cycleMonth = purchaseDate.getMonth();
     const cycleYear = purchaseDate.getFullYear();
 
-    if (purchaseDate.getDate() > closingDay) {
+    if (purchaseDate.getDate() >= closingDay) {
       cycleMonth += 1;
     }
 

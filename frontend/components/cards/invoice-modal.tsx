@@ -64,7 +64,16 @@ function parseInstallmentLabel(description: string) {
   return { installmentLabel: `${current}/${total}`, name };
 }
 
+// Lê o "YYYY-MM-DD" direto da string ISO que o backend manda, sem passar por
+// um Date — new Date(str).getDate() interpreta a string em UTC e depois lê os
+// campos no fuso local do navegador, o que troca o dia pra trás em fusos
+// negativos (ex: Brasil) exatamente como o parseDateOnly do backend evita.
 function formatDay(dateStr: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateStr);
+  if (match) {
+    const [, , month, day] = match;
+    return `${day}/${month}`;
+  }
   const d = new Date(dateStr);
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
