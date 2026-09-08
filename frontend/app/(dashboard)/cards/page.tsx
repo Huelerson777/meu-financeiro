@@ -168,7 +168,7 @@ export default function CardsPage() {
                   style={{ backgroundColor: `${cardColor}33` }}
                 />
 
-                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute top-4 right-4 flex gap-2 opacity-70 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={(e) => { e.stopPropagation(); handleEdit(c); }}
                     className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition"
