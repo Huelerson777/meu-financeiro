@@ -39,7 +39,7 @@ export class DashboardService {
       balanceAgg,
       { totalIncome: currentIncome, totalExpense: currentExpense },
       previousTotals,
-      previousInvestedAgg,
+      previousInvested,
       leftovers,
       previousLeftovers,
     ] = await Promise.all([
@@ -52,12 +52,7 @@ export class DashboardService {
         // Totais do mês anterior, só pra comparação de variação (▲/▼) nos cards
         this.getIncomeExpenseTotals(userId, { gte: prevStartDate, lt: prevEndDate }, investmentAccountIds),
         // Investido no mês anterior, mesma lógica de comparação
-        investmentAccountIds.length > 0
-          ? this.prisma.transfer.aggregate({
-              where: { toId: { in: investmentAccountIds }, date: { gte: prevStartDate, lt: prevEndDate } },
-              _sum: { amount: true },
-            })
-          : Promise.resolve({ _sum: { amount: null } }),
+        this.getInvestedAmount(userId, investmentAccountIds, prevStartDate, prevEndDate),
         // Sobras no fim do mês selecionado — reconstruído a partir do saldo
         // real de hoje (ver getCashBalanceAsOf), não zera a cada virada de mês.
         this.getCashBalanceAsOf(userId, cashAccountIds, cashCurrentTotal, endDate),
@@ -65,15 +60,9 @@ export class DashboardService {
         this.getCashBalanceAsOf(userId, cashAccountIds, cashCurrentTotal, startDate),
       ]);
 
-    // ITEM 2 — cálculo correto de investimentos via tabela Transfer (transação atômica)
-    let totalInvested = 0;
-    if (investmentAccountIds.length > 0) {
-      const transfersToInvestment = await this.prisma.transfer.aggregate({
-        where: { toId: { in: investmentAccountIds }, date: dateFilter },
-        _sum: { amount: true },
-      });
-      totalInvested = Number(transfersToInvestment._sum.amount ?? 0);
-    }
+    // ITEM 2 — investido no mês: aportes via Transfer + ativos "já possuía"
+    // registrados sem transferência (ver getInvestedAmount)
+    const totalInvested = await this.getInvestedAmount(userId, investmentAccountIds, startDate, endDate);
 
     const currentBalance = Number(balanceAgg._sum.currentBalance ?? 0);
     const totalIncome = currentIncome;
@@ -84,7 +73,6 @@ export class DashboardService {
       if (previous === 0) return current === 0 ? 0 : null; // sem base de comparação
       return Math.round(((current - previous) / previous) * 1000) / 10;
     };
-    const previousInvested = Number(previousInvestedAgg._sum.amount ?? 0);
     const comparison = {
       incomeChangePct: pctChange(totalIncome, previousTotals.totalIncome),
       expenseChangePct: pctChange(totalExpense, previousTotals.totalExpense),
@@ -133,7 +121,9 @@ export class DashboardService {
       monthlyFlow[i.paidAt!.getMonth()].despesas += Number(i.amount);
     });
 
-    // Linha de Investido — aportes (Transfer) recebidos por contas INVESTMENT no ano
+    // Linha de Investido — aportes (Transfer) recebidos por contas INVESTMENT no
+    // ano, mais ativos "já possuía" registrados sem transferência (contam pela
+    // data de compra informada)
     if (investmentAccountIds.length > 0) {
       const yearTransfers = await this.prisma.transfer.findMany({
         where: { toId: { in: investmentAccountIds }, date: { gte: yearStart, lt: yearEnd } },
@@ -144,6 +134,14 @@ export class DashboardService {
       });
     }
 
+    const yearStandalonePositions = await this.prisma.investment.findMany({
+      where: { userId, transferId: null, startDate: { gte: yearStart, lt: yearEnd } },
+      select: { quantity: true, averagePrice: true, startDate: true },
+    });
+    yearStandalonePositions.forEach((p) => {
+      monthlyFlow[p.startDate!.getMonth()].investido += Number(p.quantity) * Number(p.averagePrice);
+    });
+
     return {
       currentBalance,
       totalIncome,
@@ -153,6 +151,39 @@ export class DashboardService {
       monthlyFlow,
       comparison,
     };
+  }
+
+  /**
+   * Investido num período: aportes via Transfer pra contas INVESTMENT, mais
+   * ativos "já possuía" registrados sem transferência (ver
+   * InvestmentsService.createPosition) — contam pela data de compra
+   * informada (startDate), já que não passam pela tabela Transfer.
+   */
+  private async getInvestedAmount(
+    userId: string,
+    investmentAccountIds: string[],
+    gte: Date,
+    lt: Date,
+  ): Promise<number> {
+    if (investmentAccountIds.length === 0) return 0;
+
+    const [transferAgg, standalonePositions] = await Promise.all([
+      this.prisma.transfer.aggregate({
+        where: { toId: { in: investmentAccountIds }, date: { gte, lt } },
+        _sum: { amount: true },
+      }),
+      this.prisma.investment.findMany({
+        where: { userId, transferId: null, startDate: { gte, lt } },
+        select: { quantity: true, averagePrice: true },
+      }),
+    ]);
+
+    const transferTotal = Number(transferAgg._sum.amount ?? 0);
+    const positionsTotal = standalonePositions.reduce(
+      (acc, p) => acc + Number(p.quantity) * Number(p.averagePrice),
+      0,
+    );
+    return transferTotal + positionsTotal;
   }
 
   /**
@@ -329,6 +360,14 @@ export class DashboardService {
         monthlyFlow[t.date.getMonth()].investido += Number(t.amount);
       });
     }
+
+    const standalonePositions = await this.prisma.investment.findMany({
+      where: { userId, transferId: null, startDate: { gte: yearStart, lt: yearEnd } },
+      select: { quantity: true, averagePrice: true, startDate: true },
+    });
+    standalonePositions.forEach((p) => {
+      monthlyFlow[p.startDate!.getMonth()].investido += Number(p.quantity) * Number(p.averagePrice);
+    });
 
     return monthlyFlow;
   }

@@ -9,15 +9,13 @@ import { CreatePositionDto } from './dto/create-position.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
 
 /**
- * Investimentos aqui = aportes feitos via transferência para contas do tipo
- * INVESTMENT (mesmo fluxo já usado na tela de Transações > "Investir").
- * Não há controle de ativos/portfólio — apenas o histórico e total aportado,
- * já que o que importa pro usuário é acompanhar quanto foi investido por mês.
- *
- * Quem quiser acompanhar o rendimento de um ativo específico (CDB, ação...)
- * pode opcionalmente registrar uma "posição" (ver *Position abaixo) — o
- * aporte simples acima continua funcionando exatamente igual, sem nenhuma
- * posição vinculada.
+ * Aporte simples = transferência pra uma conta do tipo INVESTMENT.
+ * Aporte com ativo (createPosition) além disso cria uma posição (Investment)
+ * pra acompanhar rendimento — com transferência real (dinheiro saindo de uma
+ * conta) ou, pra ativo que o usuário já possuía antes do app, só crédito
+ * direto no saldo da conta de investimento, sem débito em nenhuma outra.
+ * Nos dois casos o valor entra no total investido/aportes por mês — ver
+ * getContributions, que soma Transfer + Investment sem transferId.
  */
 @Injectable()
 export class InvestmentsService {
@@ -44,39 +42,38 @@ export class InvestmentsService {
       return { totalInvested: 0, monthly: [], contributions: [], investmentAccounts: [] };
     }
 
-    const transfers = await this.prisma.transfer.findMany({
-      where: {
-        toId: { in: investmentAccountIds },
-        ...(filters?.startDate || filters?.endDate
-          ? {
-              date: {
-                ...(filters.startDate ? { gte: new Date(`${filters.startDate}T00:00:00.000Z`) } : {}),
-                ...(filters.endDate ? { lte: new Date(`${filters.endDate}T23:59:59.999Z`) } : {}),
-              },
-            }
-          : {}),
-      },
-      orderBy: { date: 'desc' },
-      include: {
-        fromAccount: { select: { name: true } },
-        toAccount: { select: { name: true, color: true } },
-      },
-    });
+    const dateRange =
+      filters?.startDate || filters?.endDate
+        ? {
+            ...(filters.startDate ? { gte: new Date(`${filters.startDate}T00:00:00.000Z`) } : {}),
+            ...(filters.endDate ? { lte: new Date(`${filters.endDate}T23:59:59.999Z`) } : {}),
+          }
+        : undefined;
 
-    const totalInvested = transfers.reduce((acc, t) => acc + Number(t.amount), 0);
+    const [transfers, standalonePositions] = await Promise.all([
+      this.prisma.transfer.findMany({
+        where: {
+          toId: { in: investmentAccountIds },
+          ...(dateRange ? { date: dateRange } : {}),
+        },
+        include: {
+          fromAccount: { select: { name: true } },
+          toAccount: { select: { name: true, color: true } },
+        },
+      }),
+      // Ativos registrados como "já possuía" (sem transferência) — contam como
+      // aporte pela data de compra informada, mesmo sem movimentar conta.
+      this.prisma.investment.findMany({
+        where: {
+          userId,
+          transferId: null,
+          ...(dateRange ? { startDate: dateRange } : {}),
+        },
+        include: { account: { select: { name: true, color: true } } },
+      }),
+    ]);
 
-    // Agrupa por mês/ano para o histórico resumido
-    const monthlyMap = new Map<string, number>();
-    transfers.forEach((t) => {
-      const key = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}`;
-      monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + Number(t.amount));
-    });
-
-    const monthly = Array.from(monthlyMap.entries())
-      .map(([key, total]) => ({ month: key, total }))
-      .sort((a, b) => (a.month > b.month ? -1 : 1));
-
-    const contributions = transfers.map((t) => ({
+    const transferContributions = transfers.map((t) => ({
       id: t.id,
       date: t.date,
       amount: Number(t.amount),
@@ -86,6 +83,33 @@ export class InvestmentsService {
       toAccountColor: t.toAccount.color,
     }));
 
+    const positionContributions = standalonePositions.map((p) => ({
+      id: p.id,
+      date: p.startDate ?? p.createdAt,
+      amount: Number(p.quantity) * Number(p.averagePrice),
+      description: p.name,
+      fromAccountName: 'Ativo já possuído',
+      toAccountName: p.account.name,
+      toAccountColor: p.account.color,
+    }));
+
+    const contributions = [...transferContributions, ...positionContributions].sort((a, b) =>
+      a.date > b.date ? -1 : 1,
+    );
+
+    const totalInvested = contributions.reduce((acc, c) => acc + c.amount, 0);
+
+    // Agrupa por mês/ano para o histórico resumido
+    const monthlyMap = new Map<string, number>();
+    contributions.forEach((c) => {
+      const key = `${c.date.getFullYear()}-${String(c.date.getMonth() + 1).padStart(2, '0')}`;
+      monthlyMap.set(key, (monthlyMap.get(key) ?? 0) + c.amount);
+    });
+
+    const monthly = Array.from(monthlyMap.entries())
+      .map(([key, total]) => ({ month: key, total }))
+      .sort((a, b) => (a.month > b.month ? -1 : 1));
+
     return { totalInvested, monthly, contributions, investmentAccounts };
   }
 
@@ -93,8 +117,10 @@ export class InvestmentsService {
    * Registra um aporte vinculado a um ativo específico. Quando `fromAccountId`
    * vem preenchido, cria a transferência (mesmo caminho do aporte simples, via
    * AccountsService) e a posição (Investment) linkada a ela na mesma operação.
-   * Quando vem vazio, registra só a posição — sem transferência nem impacto em
-   * saldo — pra ativos que o usuário já possuía antes de usar o app.
+   * Quando vem vazio (ativo que o usuário já possuía antes de usar o app), não
+   * há transferência — mas o saldo da conta de investimento é creditado do
+   * mesmo jeito, e o valor entra no total investido/aportes por mês, já que
+   * pra quem vê a tela o ativo passa a "estar" naquela conta.
    */
   async createPosition(userId: string, dto: CreatePositionDto) {
     const toAccount = await this.prisma.account.findFirst({ where: { id: dto.toAccountId, userId } });
@@ -110,16 +136,22 @@ export class InvestmentsService {
       throw new BadRequestException('Renda fixa precisa de indexador e taxa contratada');
     }
 
-    const transferId = dto.fromAccountId
-      ? (
-          await this.accountsService.transfer(userId, {
-            fromAccountId: dto.fromAccountId,
-            toAccountId: dto.toAccountId,
-            amount: dto.amount,
-            description: dto.description || `Aporte: ${dto.name}`,
-          })
-        ).id
-      : undefined;
+    let transferId: string | undefined;
+    if (dto.fromAccountId) {
+      transferId = (
+        await this.accountsService.transfer(userId, {
+          fromAccountId: dto.fromAccountId,
+          toAccountId: dto.toAccountId,
+          amount: dto.amount,
+          description: dto.description || `Aporte: ${dto.name}`,
+        })
+      ).id;
+    } else {
+      await this.prisma.account.update({
+        where: { id: dto.toAccountId },
+        data: { currentBalance: { increment: dto.amount } },
+      });
+    }
 
     return this.prisma.investment.create({
       data: {
@@ -134,7 +166,7 @@ export class InvestmentsService {
         currentPrice: averagePrice,
         indexer: dto.category === 'FIXED_INCOME' ? dto.indexer : undefined,
         rate: dto.category === 'FIXED_INCOME' ? dto.rate : undefined,
-        startDate: dto.category === 'FIXED_INCOME' ? startDate : undefined,
+        startDate,
       },
     });
   }
@@ -257,13 +289,21 @@ export class InvestmentsService {
 
   /**
    * Remove a posição e o aporte (Transfer) que a originou — os dois nascem
-   * juntos em createPosition, então saem juntos aqui também.
+   * juntos em createPosition, então saem juntos aqui também. Pra posição sem
+   * transferência (ativo "já possuía"), desfaz em vez disso o crédito direto
+   * que createPosition deu no saldo da conta.
    */
   async deletePosition(id: string, userId: string) {
     const position = await this.assertOwnership(id, userId);
 
     if (position.transferId) {
       await this.accountsService.removeTransfer(position.transferId, userId);
+    } else {
+      const invested = Number(position.quantity) * Number(position.averagePrice);
+      await this.prisma.account.update({
+        where: { id: position.accountId },
+        data: { currentBalance: { decrement: invested } },
+      });
     }
     await this.prisma.investment.delete({ where: { id } });
 
