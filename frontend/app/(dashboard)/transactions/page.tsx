@@ -654,7 +654,7 @@ function TransactionsPageContent() {
             <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-5">
 
               {!editingId && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1 bg-muted rounded-lg">
+                <div className="grid grid-cols-3 gap-2 p-1 bg-muted rounded-lg">
                   {TYPE_OPTIONS.map(({ value, label, icon: Icon, activeClass }) => (
                     <button
                       key={value}
