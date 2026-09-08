@@ -177,16 +177,22 @@ export class CardsService {
 
   /**
    * Lança um crédito/estorno na fatura: uma transação avulsa (sem parcela)
-   * de valor negativo, que abate diretamente o total e o saldo em aberto do
-   * mês em que cai (definido por dto.date) — é assim que operadoras mostram
-   * a devolução de uma compra cancelada. Libera limite de volta ao cartão,
-   * já que a compra original tinha consumido esse limite.
+   * de valor negativo, que abate diretamente o total e o saldo em aberto da
+   * fatura em que cai. A fatura é definida pelo mesmo ciclo de fechamento
+   * usado nas compras (calculateInstallmentDueDate): um estorno datado
+   * depois do fechamento do cartão só abate a fatura seguinte, mesmo que a
+   * data informada ainda esteja dentro do mês corrente — é assim que a
+   * operadora mostra a devolução de uma compra cancelada. Libera limite de
+   * volta ao cartão, já que a compra original tinha consumido esse limite.
    */
   async createCredit(cardId: string, userId: string, dto: CreateCreditDto) {
     const card = await this.prisma.card.findUnique({ where: { id: cardId } });
     if (!card) throw new NotFoundException('Cartão não encontrado');
     if (card.userId !== userId) throw new ForbiddenException('Este cartão não pertence a você');
     if (card.isArchived) throw new BadRequestException('Este cartão está arquivado');
+
+    const creditDate = this.parseDateOnly(dto.date);
+    const invoiceDate = this.calculateInstallmentDueDate(creditDate, card.closingDay, card.dueDay, 0);
 
     return this.prisma.$transaction(async (tx) => {
       const transaction = await tx.transaction.create({
@@ -198,7 +204,8 @@ export class CardsService {
           status: 'PAID',
           description: dto.description,
           amount: -Math.abs(dto.amount),
-          date: this.parseDateOnly(dto.date),
+          date: invoiceDate,
+          purchaseDate: creditDate,
           isInstallment: false,
         },
       });

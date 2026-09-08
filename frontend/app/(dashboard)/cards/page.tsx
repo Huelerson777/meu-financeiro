@@ -213,7 +213,7 @@ export default function CardsPage() {
                     className="flex-1 text-sm font-medium py-2 rounded-lg transition"
                     style={{ backgroundColor: `${cardColor}14`, color: cardColor }}
                   >
-                    + Compra parcelada
+                    + Compra
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); setRecurringCard(c); }}

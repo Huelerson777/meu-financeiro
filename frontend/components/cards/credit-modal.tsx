@@ -65,7 +65,7 @@ export function CreditModal({ card, defaultDate, onClose, onSuccess }: CreditMod
           </button>
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
-          No cartão <strong>{card.name}</strong> · o valor é descontado da fatura do mês escolhido.
+          No cartão <strong>{card.name}</strong> · o valor é descontado da fatura em que a data cair, respeitando o fechamento do cartão.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
