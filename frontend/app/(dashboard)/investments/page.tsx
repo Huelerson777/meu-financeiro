@@ -1,11 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PiggyBank, TrendingUp, Trash2 } from 'lucide-react';
+import { PiggyBank, Plus, TrendingUp, Trash2 } from 'lucide-react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { useInvestmentPositions } from '@/hooks/use-investments';
 import { investmentsService } from '@/services/investments.service';
+import { InvestModal } from '@/components/investments/invest-modal';
+import { Button } from '@/components/ui/button';
 
 const CATEGORY_LABELS: Record<string, string> = {
   FIXED_INCOME: 'Renda fixa',
@@ -60,6 +62,7 @@ export default function InvestmentsPage() {
   const [loading, setLoading] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [isInvestModalOpen, setIsInvestModalOpen] = useState(false);
   const { data: positions, isLoading: positionsLoading, refetch: refetchPositions } = useInvestmentPositions();
 
   const fetchContributions = () => {
@@ -93,11 +96,19 @@ export default function InvestmentsPage() {
 
   return (
     <div className="p-8">
-      <h1 className="text-3xl font-bold dark:text-white">Investimentos</h1>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-6">
-        Histórico dos seus aportes mensais — o mesmo valor que aparece no card
-        "Investido" do Dashboard.
-      </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-3xl font-bold dark:text-white">Investimentos</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-6">
+            Histórico dos seus aportes mensais — o mesmo valor que aparece no card
+            "Investido" do Dashboard.
+          </p>
+        </div>
+        <Button onClick={() => setIsInvestModalOpen(true)} className="gap-1.5">
+          <Plus className="w-4 h-4" />
+          Novo aporte
+        </Button>
+      </div>
 
       <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-4 mb-8 flex flex-wrap items-end gap-3">
         <div>
@@ -138,8 +149,8 @@ export default function InvestmentsPage() {
           <h2 className="text-lg font-semibold dark:text-white">Nenhuma conta de investimento ainda</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md">
             Cadastre uma conta do tipo "Investimento" na aba Contas e depois use
-            o botão "Investir" ao lançar uma movimentação em Transações — os
-            aportes vão aparecer aqui automaticamente.
+            o botão "Novo aporte" acima — os aportes vão aparecer aqui
+            automaticamente.
           </p>
         </div>
       ) : (
@@ -162,14 +173,14 @@ export default function InvestmentsPage() {
             <div className="p-6 pb-0">
               <h2 className="font-semibold dark:text-white mb-1">Minhas posições</h2>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                Ativos registrados com "Registrar ativo" ao investir — valor atualizado automaticamente pra renda fixa e ações/fundos com ticker.
+                Ativos registrados com "Registrar ativo" em "Novo aporte" — valor atualizado automaticamente pra renda fixa e ações/fundos com ticker.
               </p>
             </div>
             {positionsLoading ? (
               <div className="text-sm text-gray-500 dark:text-gray-400 p-6 pt-0">Carregando...</div>
             ) : !positions || positions.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400 p-6 pt-0">
-                Nenhuma posição registrada ainda. Use "Registrar ativo" ao lançar um aporte em Transações &gt; Investir.
+                Nenhuma posição registrada ainda. Clique em "Novo aporte" e escolha "Registrar ativo".
               </p>
             ) : (
               <table className="w-full text-left text-sm">
@@ -287,6 +298,15 @@ export default function InvestmentsPage() {
           </div>
         </>
       )}
+
+      <InvestModal
+        open={isInvestModalOpen}
+        onClose={() => setIsInvestModalOpen(false)}
+        onCreated={() => {
+          fetchContributions();
+          refetchPositions();
+        }}
+      />
     </div>
   );
 }

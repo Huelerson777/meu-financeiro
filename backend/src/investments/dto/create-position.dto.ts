@@ -3,9 +3,13 @@ import { InvestmentCategory, Indexer } from '@prisma/client';
 import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
 
 export class CreatePositionDto {
-  @ApiProperty({ description: 'Conta de onde sai o dinheiro do aporte' })
+  @ApiPropertyOptional({
+    description:
+      'Conta de onde sai o dinheiro do aporte. Omita para registrar um ativo que você já possui (comprado antes, fora do app) sem mover saldo de nenhuma conta.',
+  })
+  @IsOptional()
   @IsUUID()
-  fromAccountId: string;
+  fromAccountId?: string;
 
   @ApiProperty({ description: 'Conta de investimento (tipo INVESTMENT) que recebe o aporte' })
   @IsUUID()

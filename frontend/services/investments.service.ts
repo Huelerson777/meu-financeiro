@@ -16,7 +16,7 @@ export interface InvestmentPosition {
 }
 
 export interface CreatePositionPayload {
-  fromAccountId: string;
+  fromAccountId?: string;
   toAccountId: string;
   amount: number;
   name: string;

@@ -90,9 +90,11 @@ export class InvestmentsService {
   }
 
   /**
-   * Registra um aporte já vinculado a um ativo específico: cria a
-   * transferência (mesmo caminho do aporte simples, via AccountsService)
-   * e a posição (Investment) linkada a ela na mesma operação.
+   * Registra um aporte vinculado a um ativo específico. Quando `fromAccountId`
+   * vem preenchido, cria a transferência (mesmo caminho do aporte simples, via
+   * AccountsService) e a posição (Investment) linkada a ela na mesma operação.
+   * Quando vem vazio, registra só a posição — sem transferência nem impacto em
+   * saldo — pra ativos que o usuário já possuía antes de usar o app.
    */
   async createPosition(userId: string, dto: CreatePositionDto) {
     const toAccount = await this.prisma.account.findFirst({ where: { id: dto.toAccountId, userId } });
@@ -108,18 +110,22 @@ export class InvestmentsService {
       throw new BadRequestException('Renda fixa precisa de indexador e taxa contratada');
     }
 
-    const transfer = await this.accountsService.transfer(userId, {
-      fromAccountId: dto.fromAccountId,
-      toAccountId: dto.toAccountId,
-      amount: dto.amount,
-      description: dto.description || `Aporte: ${dto.name}`,
-    });
+    const transferId = dto.fromAccountId
+      ? (
+          await this.accountsService.transfer(userId, {
+            fromAccountId: dto.fromAccountId,
+            toAccountId: dto.toAccountId,
+            amount: dto.amount,
+            description: dto.description || `Aporte: ${dto.name}`,
+          })
+        ).id
+      : undefined;
 
     return this.prisma.investment.create({
       data: {
         userId,
         accountId: dto.toAccountId,
-        transferId: transfer.id,
+        transferId,
         name: dto.name,
         category: dto.category,
         ticker: dto.ticker,
