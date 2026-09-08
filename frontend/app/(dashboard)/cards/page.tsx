@@ -168,17 +168,20 @@ export default function CardsPage() {
                   style={{ backgroundColor: `${cardColor}33` }}
                 />
 
-                <div className="absolute top-4 right-4 flex gap-2 opacity-70 group-hover:opacity-100 transition-opacity">
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-2 right-2 z-10 flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
+                >
                   <button
                     onClick={(e) => { e.stopPropagation(); handleEdit(c); }}
-                    className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition"
+                    className="p-2.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition"
                     title="Editar"
                   >
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleArchive(c); }}
-                    className="p-1.5 rounded-md text-muted-foreground hover:text-danger hover:bg-danger/10 transition"
+                    className="p-2.5 rounded-md text-muted-foreground hover:text-danger hover:bg-danger/10 transition"
                     title="Excluir"
                   >
                     <Trash2 className="w-4 h-4" />
