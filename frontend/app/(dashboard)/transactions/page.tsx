@@ -2,9 +2,8 @@
 
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { X, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight, TrendingUp } from 'lucide-react';
+import { X, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight } from 'lucide-react';
 import { api } from '@/services/api';
-import { investmentsService } from '@/services/investments.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,11 +12,13 @@ import { formatCurrency } from '@/utils/currency';
 const selectClass =
   'h-10 w-full rounded-md border border-border bg-background px-3 text-sm transition-theme focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 
+// Investir só pela tela de Investimentos agora — aqui só dá pra editar/ver
+// aportes já existentes (por isso "INVESTMENT" continua em TYPE_FILTER_OPTIONS,
+// TYPE_HELP e no tipo de uiType, mas sumiu de TYPE_OPTIONS).
 const TYPE_OPTIONS = [
   { value: 'EXPENSE', label: 'Saída', icon: ArrowDownCircle, activeClass: 'bg-danger text-white shadow' },
   { value: 'INCOME', label: 'Entrada', icon: ArrowUpCircle, activeClass: 'bg-success text-white shadow' },
   { value: 'TRANSFER', label: 'Transferência', icon: ArrowLeftRight, activeClass: 'bg-purple-600 text-white shadow' },
-  { value: 'INVESTMENT', label: 'Investir', icon: TrendingUp, activeClass: 'bg-primary text-primary-foreground shadow' },
 ] as const;
 
 const TYPE_FILTER_OPTIONS = [
@@ -27,7 +28,7 @@ const TYPE_FILTER_OPTIONS = [
   { value: 'INVESTMENT', label: 'Investimentos' },
 ];
 
-const TYPE_HELP: Record<(typeof TYPE_OPTIONS)[number]['value'], string> = {
+const TYPE_HELP: Record<'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT', string> = {
   EXPENSE: 'Um gasto que saiu (ou vai sair) de uma conta.',
   INCOME: 'Um valor que entrou (ou vai entrar) em uma conta.',
   TRANSFER: 'Mover dinheiro de uma conta para outra.',
@@ -142,17 +143,6 @@ function TransactionsPageContent() {
   const [status, setStatus] = useState<'PAID' | 'PENDING'>('PAID');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // "Investir" pode ser um aporte simples (comportamento de sempre) ou um
-  // aporte já vinculado a um ativo específico (CDB, ação...) que passa a
-  // ter valor atualizado sozinho — ver tela de Investimentos.
-  const [investMode, setInvestMode] = useState<'simple' | 'asset'>('simple');
-  const [assetCategory, setAssetCategory] = useState<'FIXED_INCOME' | 'STOCK' | 'FUND' | 'CRYPTO' | 'REAL_ESTATE' | 'OTHER'>('FIXED_INCOME');
-  const [assetTicker, setAssetTicker] = useState('');
-  const [assetQuantity, setAssetQuantity] = useState('');
-  const [assetIndexer, setAssetIndexer] = useState<'CDI' | 'SELIC' | 'IPCA_PLUS' | 'PREFIXADO'>('CDI');
-  const [assetRate, setAssetRate] = useState('');
-  const [assetStartDate, setAssetStartDate] = useState(new Date().toISOString().split('T')[0]);
-
   // Sugestão automática de categoria: só sobrescreve o campo enquanto o
   // valor ali dentro ainda for uma sugestão (não uma escolha manual do usuário).
   const [categoryAutoSuggested, setCategoryAutoSuggested] = useState(false);
@@ -261,13 +251,6 @@ function TransactionsPageContent() {
     setCategoryAutoSuggested(false);
     setDestinationAccountId('');
     setDate(new Date().toISOString().split('T')[0]);
-    setInvestMode('simple');
-    setAssetCategory('FIXED_INCOME');
-    setAssetTicker('');
-    setAssetQuantity('');
-    setAssetIndexer('CDI');
-    setAssetRate('');
-    setAssetStartDate(new Date().toISOString().split('T')[0]);
     if (accounts.length > 0) setAccountId(accounts[0].id);
     setIsModalOpen(true);
   };
@@ -284,7 +267,6 @@ function TransactionsPageContent() {
       setEditingId(t.id);
       setEditingTransferId(t.transfer.id);
       setUiType(t.transfer.toAccount?.type === 'INVESTMENT' ? 'INVESTMENT' : 'TRANSFER');
-      setInvestMode('simple');
       setDescription(t.description);
       setAmount(t.amount.toString());
       setStatus('PAID');
@@ -366,37 +348,6 @@ function TransactionsPageContent() {
 
         if (editingTransferId) {
           await api.patch(`/accounts/transfer/${editingTransferId}`, { ...transferPayload, date: isoDate });
-        } else if (uiType === 'INVESTMENT' && investMode === 'asset') {
-          if (!description.trim()) {
-            alert('Dê um nome pro ativo.');
-            setIsSubmitting(false);
-            return;
-          }
-          if (assetCategory === 'FIXED_INCOME' && !assetRate) {
-            alert('Informe a taxa contratada.');
-            setIsSubmitting(false);
-            return;
-          }
-          if ((assetCategory === 'STOCK' || assetCategory === 'FUND') && !assetQuantity) {
-            alert('Informe a quantidade.');
-            setIsSubmitting(false);
-            return;
-          }
-
-          await investmentsService.createPosition({
-            fromAccountId: accountId,
-            toAccountId: destinationAccountId,
-            amount: parsedAmount,
-            name: description,
-            category: assetCategory,
-            date,
-            ...(assetCategory === 'FIXED_INCOME'
-              ? { indexer: assetIndexer, rate: parseFloat(assetRate), startDate: assetStartDate }
-              : {}),
-            ...(assetCategory === 'STOCK' || assetCategory === 'FUND'
-              ? { quantity: parseFloat(assetQuantity), ticker: assetTicker || undefined }
-              : {}),
-          });
         } else {
           await api.post('/accounts/transfer', transferPayload);
         }
@@ -758,113 +709,15 @@ function TransactionsPageContent() {
                 </div>
               )}
 
-              {uiType === 'INVESTMENT' && !editingId && (
-                <div className="flex gap-1 p-0.5 bg-muted rounded-md w-fit">
-                  {(['simple', 'asset'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setInvestMode(mode)}
-                      className={`px-3 py-1 text-xs font-medium rounded transition ${
-                        investMode === mode ? 'bg-background shadow text-foreground' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {mode === 'simple' ? 'Aporte simples' : 'Registrar ativo'}
-                    </button>
-                  ))}
-                </div>
-              )}
-
               <div className="flex flex-col gap-1.5">
-                <Label>{uiType === 'INVESTMENT' && investMode === 'asset' ? 'Nome do ativo' : 'Descrição'}</Label>
+                <Label>Descrição</Label>
                 <Input
                   type="text"
-                  placeholder={uiType === 'INVESTMENT' ? (investMode === 'asset' ? 'Ex: CDB Banco XP...' : 'Ex: Aporte CDB...') : 'Ex: Mercado...'}
+                  placeholder={uiType === 'INVESTMENT' ? 'Ex: Aporte CDB...' : 'Ex: Mercado...'}
                   value={description}
                   onChange={(e) => handleDescriptionChange(e.target.value)}
                 />
               </div>
-
-              {uiType === 'INVESTMENT' && investMode === 'asset' && (
-                <div className="flex flex-col gap-3 bg-muted/50 p-3 rounded-lg border border-border">
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Categoria do ativo</Label>
-                    <select
-                      className={selectClass}
-                      value={assetCategory}
-                      onChange={(e) => setAssetCategory(e.target.value as typeof assetCategory)}
-                    >
-                      <option value="FIXED_INCOME">Renda fixa (CDB, Tesouro, LCI/LCA...)</option>
-                      <option value="STOCK">Ação</option>
-                      <option value="FUND">Fundo/FII</option>
-                      <option value="CRYPTO">Criptomoeda</option>
-                      <option value="REAL_ESTATE">Imóvel</option>
-                      <option value="OTHER">Outro</option>
-                    </select>
-                  </div>
-
-                  {assetCategory === 'FIXED_INCOME' ? (
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <Label>Indexador</Label>
-                        <select
-                          className={selectClass}
-                          value={assetIndexer}
-                          onChange={(e) => setAssetIndexer(e.target.value as typeof assetIndexer)}
-                        >
-                          <option value="CDI">% do CDI</option>
-                          <option value="SELIC">% da Selic</option>
-                          <option value="IPCA_PLUS">IPCA + juros</option>
-                          <option value="PREFIXADO">Prefixado</option>
-                        </select>
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label>{assetIndexer === 'PREFIXADO' ? 'Taxa a.a. (%)' : assetIndexer === 'IPCA_PLUS' ? 'Juros a.a. (%)' : '% do indexador'}</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder={assetIndexer === 'CDI' || assetIndexer === 'SELIC' ? 'Ex: 110' : 'Ex: 6.5'}
-                          value={assetRate}
-                          onChange={(e) => setAssetRate(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label>Início do rendimento</Label>
-                        <Input type="date" value={assetStartDate} onChange={(e) => setAssetStartDate(e.target.value)} />
-                      </div>
-                    </div>
-                  ) : assetCategory === 'STOCK' || assetCategory === 'FUND' ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <Label>Ticker (opcional)</Label>
-                        <Input
-                          type="text"
-                          placeholder="Ex: PETR4"
-                          value={assetTicker}
-                          onChange={(e) => setAssetTicker(e.target.value.toUpperCase())}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <Label>Quantidade</Label>
-                        <Input
-                          type="number"
-                          step="0.00000001"
-                          min="0"
-                          placeholder="Ex: 10"
-                          value={assetQuantity}
-                          onChange={(e) => setAssetQuantity(e.target.value)}
-                          required
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">
-                      Sem cotação automática pra essa categoria — o valor atual fica manual, editável a qualquer momento na tela de Investimentos.
-                    </p>
-                  )}
-                </div>
-              )}
 
               {uiType !== 'TRANSFER' && uiType !== 'INVESTMENT' && (
                 <div className="flex flex-col gap-1.5">
