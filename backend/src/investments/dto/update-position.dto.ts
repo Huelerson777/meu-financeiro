@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Indexer } from '@prisma/client';
-import { IsDateString, IsEnum, IsNumber, IsOptional, IsPositive, IsString } from 'class-validator';
+import { IsDateString, IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class UpdatePositionDto {
   @ApiPropertyOptional()
@@ -31,12 +31,18 @@ export class UpdatePositionDto {
   @ApiPropertyOptional({ description: 'Preço/valor atual manual — categorias sem fonte automática (CRYPTO/REAL_ESTATE/OTHER), ou para sobrescrever' })
   @IsOptional()
   @IsNumber()
-  @IsPositive()
+  @Min(0)
   currentPrice?: number;
 
-  @ApiPropertyOptional({ description: 'Quantidade de cotas/ações — só STOCK/FUND' })
+  @ApiPropertyOptional({ description: 'Preço médio pago — corrige o custo/valor investido registrado' })
   @IsOptional()
   @IsNumber()
-  @IsPositive()
+  @Min(0)
+  averagePrice?: number;
+
+  @ApiPropertyOptional({ description: 'Quantidade de cotas/ações/unidades — zere pra marcar a posição como vendida/encerrada' })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   quantity?: number;
 }

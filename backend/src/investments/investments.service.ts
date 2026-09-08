@@ -197,6 +197,9 @@ export class InvestmentsService {
         indexer: p.indexer,
         rate: p.rate ? Number(p.rate) : null,
         startDate: p.startDate,
+        quantity: Number(p.quantity),
+        averagePrice: Number(p.averagePrice),
+        currentPrice: Number(p.currentPrice),
         invested,
         current,
         profit: current - invested,
@@ -269,8 +272,28 @@ export class InvestmentsService {
     });
   }
 
+  /**
+   * Edita uma posição — inclusive quantidade e preço médio, o que permite
+   * "zerar" (quantity: 0) pra marcar como vendida sem excluir o histórico.
+   * Numa posição sem transferência (ativo "já possuía"), o saldo da conta foi
+   * creditado direto na criação (ver createPosition) — se o valor investido
+   * muda aqui, ajusta o saldo pela mesma diferença, senão saldo e total
+   * investido divergem do que a posição passa a mostrar.
+   */
   async updatePosition(id: string, userId: string, dto: UpdatePositionDto) {
-    await this.assertOwnership(id, userId);
+    const position = await this.assertOwnership(id, userId);
+
+    if (!position.transferId && (dto.quantity != null || dto.averagePrice != null)) {
+      const oldInvested = Number(position.quantity) * Number(position.averagePrice);
+      const newInvested = (dto.quantity ?? Number(position.quantity)) * (dto.averagePrice ?? Number(position.averagePrice));
+      const delta = newInvested - oldInvested;
+      if (delta !== 0) {
+        await this.prisma.account.update({
+          where: { id: position.accountId },
+          data: { currentBalance: { increment: delta } },
+        });
+      }
+    }
 
     return this.prisma.investment.update({
       where: { id },
@@ -282,6 +305,7 @@ export class InvestmentsService {
         startDate: dto.startDate ? this.parseDateOnly(dto.startDate) : undefined,
         currentPrice: dto.currentPrice,
         quantity: dto.quantity,
+        averagePrice: dto.averagePrice,
         ...(dto.currentPrice != null ? { lastValuedAt: new Date() } : {}),
       },
     });

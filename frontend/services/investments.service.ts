@@ -8,6 +8,9 @@ export interface InvestmentPosition {
   indexer: 'CDI' | 'SELIC' | 'IPCA_PLUS' | 'PREFIXADO' | null;
   rate: number | null;
   startDate: string | null;
+  quantity: number;
+  averagePrice: number;
+  currentPrice: number;
   invested: number;
   current: number;
   profit: number;
@@ -30,13 +33,24 @@ export interface CreatePositionPayload {
   description?: string;
 }
 
+export interface UpdatePositionPayload {
+  name?: string;
+  ticker?: string;
+  indexer?: InvestmentPosition['indexer'];
+  rate?: number;
+  startDate?: string;
+  currentPrice?: number;
+  averagePrice?: number;
+  quantity?: number;
+}
+
 export const investmentsService = {
   listPositions: () => api.get<{ data: InvestmentPosition[] }>('/investments/positions').then((r) => r.data.data),
 
   createPosition: (payload: CreatePositionPayload) =>
     api.post('/investments/positions', payload).then((r) => r.data.data),
 
-  updatePosition: (id: string, payload: Partial<CreatePositionPayload> & { currentPrice?: number }) =>
+  updatePosition: (id: string, payload: UpdatePositionPayload) =>
     api.patch(`/investments/positions/${id}`, payload).then((r) => r.data.data),
 
   deletePosition: (id: string) => api.delete(`/investments/positions/${id}`).then((r) => r.data.data),

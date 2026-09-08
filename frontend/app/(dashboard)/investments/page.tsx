@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { PiggyBank, Plus, TrendingUp, Trash2 } from 'lucide-react';
+import { PiggyBank, Plus, TrendingUp, Trash2, Pencil } from 'lucide-react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { useInvestmentPositions } from '@/hooks/use-investments';
-import { investmentsService } from '@/services/investments.service';
+import { investmentsService, InvestmentPosition } from '@/services/investments.service';
 import { InvestModal } from '@/components/investments/invest-modal';
+import { EditPositionModal } from '@/components/investments/edit-position-modal';
 import { Button } from '@/components/ui/button';
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -63,6 +64,7 @@ export default function InvestmentsPage() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isInvestModalOpen, setIsInvestModalOpen] = useState(false);
+  const [editingPosition, setEditingPosition] = useState<InvestmentPosition | null>(null);
   const { data: positions, isLoading: positionsLoading, refetch: refetchPositions } = useInvestmentPositions();
 
   const fetchContributions = () => {
@@ -212,13 +214,22 @@ export default function InvestmentsPage() {
                         {p.profit >= 0 ? '+' : ''}{formatCurrency(p.profit)} ({p.profitPct.toFixed(2)}%)
                       </td>
                       <td className="px-6 py-3 text-right">
-                        <button
-                          onClick={() => handleDeletePosition(p.id, p.name)}
-                          className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition"
-                          title="Excluir posição"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center justify-end gap-3">
+                          <button
+                            onClick={() => setEditingPosition(p)}
+                            className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition"
+                            title="Editar posição"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDeletePosition(p.id, p.name)}
+                            className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition"
+                            title="Excluir posição"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -303,6 +314,15 @@ export default function InvestmentsPage() {
         open={isInvestModalOpen}
         onClose={() => setIsInvestModalOpen(false)}
         onCreated={() => {
+          fetchContributions();
+          refetchPositions();
+        }}
+      />
+
+      <EditPositionModal
+        position={editingPosition}
+        onClose={() => setEditingPosition(null)}
+        onSaved={() => {
           fetchContributions();
           refetchPositions();
         }}
