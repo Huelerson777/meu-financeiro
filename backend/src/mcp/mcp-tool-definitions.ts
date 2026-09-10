@@ -38,6 +38,11 @@ const TRANSACTION_ENTRY_SCHEMA = {
       type: 'string',
       description: 'id de uma categoria (ver list_categories) — só se aplica a EXPENSE/INCOME, opcional',
     },
+    force: {
+      type: 'boolean',
+      description:
+        'Deixe de fora (ou false) na primeira tentativa. Antes de lançar, o servidor confere se já existe um lançamento igual (mesma conta, valor, descrição e dia) e, se achar, NÃO lança — devolve o existente pra você avisar o usuário e perguntar se quer lançar mesmo assim. Só mande true depois que o usuário confirmar isso.',
+    },
   },
   required: ['type', 'description', 'amount', 'date', 'accountId'],
 };
@@ -87,13 +92,14 @@ export const MCP_TOOLS: Tool[] = [
   },
   {
     name: 'create_transaction',
-    description: 'Registra um único lançamento: gasto, receita, transferência entre contas ou aporte em investimento.',
+    description:
+      'Registra um único lançamento: gasto, receita, transferência entre contas ou aporte em investimento. Se já existir um lançamento igual (mesma conta/valor/descrição/dia), não lança nada e devolve o existente em "possibleDuplicate" — avise o usuário e só chame de novo com force:true se ele confirmar que quer lançar mesmo assim.',
     inputSchema: TRANSACTION_ENTRY_SCHEMA,
   },
   {
     name: 'create_transactions_batch',
     description:
-      'Registra vários lançamentos de uma vez — use ao importar uma planilha ou extrato bancário colado/anexado na conversa. Cada item segue o mesmo formato de create_transaction. Itens inválidos não impedem os demais de serem lançados.',
+      'Registra vários lançamentos de uma vez — use ao importar uma planilha ou extrato bancário colado/anexado na conversa. Cada item segue o mesmo formato de create_transaction. Itens que já existirem (mesma conta/valor/descrição/dia) NÃO são lançados e voltam em "possibleDuplicates" — mostre esses casos pro usuário e pergunte se quer lançar mesmo assim; se sim, chame de novo só com esses itens e force:true. Itens inválidos (em "failed") não impedem os demais de serem lançados.',
     inputSchema: {
       type: 'object',
       properties: {

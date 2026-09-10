@@ -18,7 +18,13 @@ type TransactionEntry = {
   accountId: string;
   toAccountId?: string;
   categoryId?: string;
+  /** Confirma o lançamento mesmo que já exista um possível duplicado (ver findPossibleDuplicate). */
+  force?: boolean;
 };
+
+type CreateEntryResult =
+  | { outcome: 'created'; transaction: unknown }
+  | { outcome: 'possible_duplicate'; attempted: TransactionEntry; existing: unknown };
 
 /**
  * Executa as tools MCP — cada handler chama diretamente o Service de domínio
@@ -57,7 +63,7 @@ export class McpToolsService {
         case 'search_transactions':
           return this.ok(await this.searchTransactions(userId, args));
         case 'create_transaction':
-          return this.ok(await this.createEntry(userId, args as unknown as TransactionEntry));
+          return this.ok(await this.createSingleEntry(userId, args as unknown as TransactionEntry));
         case 'create_transactions_batch':
           return this.ok(await this.createTransactionsBatch(userId, args));
         case 'create_card_purchase':
@@ -101,20 +107,32 @@ export class McpToolsService {
    * transactions/transaction-parser.service.ts: EXPENSE/INCOME vão pro
    * TransactionsService; TRANSFER/INVESTMENT (aporte) vão pro
    * AccountsService.transfer (accountId = origem, toAccountId = destino).
+   *
+   * Antes de criar, checa se já existe um lançamento igual (mesma conta,
+   * valor, data e descrição) — se achar e `force` não vier true, NÃO cria:
+   * devolve o existente pra quem chamou decidir (avisar o usuário e pedir
+   * confirmação antes de tentar de novo com force:true). Evita duplicar
+   * silenciosamente ao importar o mesmo extrato duas vezes.
    */
-  private createEntry(userId: string, entry: TransactionEntry) {
+  private async createEntry(userId: string, entry: TransactionEntry): Promise<CreateEntryResult> {
+    if (!entry.force) {
+      const existing = await this.findPossibleDuplicate(userId, entry);
+      if (existing) return { outcome: 'possible_duplicate', attempted: entry, existing };
+    }
+
     if (entry.type === 'TRANSFER' || entry.type === 'INVESTMENT') {
       if (!entry.toAccountId) throw new Error('toAccountId é obrigatório para TRANSFER/INVESTMENT');
-      return this.accountsService.transfer(userId, {
+      const transaction = await this.accountsService.transfer(userId, {
         fromAccountId: entry.accountId,
         toAccountId: entry.toAccountId,
         amount: entry.amount,
         description: entry.description,
         date: entry.date,
       });
+      return { outcome: 'created', transaction };
     }
 
-    return this.transactionsService.create(userId, {
+    const transaction = await this.transactionsService.create(userId, {
       type: entry.type,
       description: entry.description,
       amount: entry.amount,
@@ -123,22 +141,77 @@ export class McpToolsService {
       status: entry.status ?? 'PAID',
       date: `${entry.date}T12:00:00.000Z`,
     });
+    return { outcome: 'created', transaction };
+  }
+
+  /**
+   * "Possível duplicado" = mesma conta, valor e descrição (sem diferenciar
+   * maiúsculas/acentos/espaço nas pontas) já lançados no mesmo dia — critério
+   * deliberadamente estrito (as 4 coisas juntas) pra não confundir duas
+   * compras legítimas parecidas (ex: dois cafés de R$ 8 no mesmo dia) com uma
+   * duplicata de importação.
+   */
+  private async findPossibleDuplicate(userId: string, entry: TransactionEntry) {
+    const dayStart = new Date(`${entry.date}T00:00:00.000Z`);
+    const dayEnd = new Date(`${entry.date}T23:59:59.999Z`);
+
+    return this.prisma.transaction.findFirst({
+      where: {
+        userId,
+        accountId: entry.accountId,
+        // Comparar um número JS puro contra uma coluna Decimal(14,2) falha
+        // silenciosamente (89.9 em ponto flutuante não é exatamente 89.90) —
+        // precisa mandar como string de precisão fixa pro Postgres comparar certo.
+        amount: entry.amount.toFixed(2),
+        description: { equals: entry.description.trim(), mode: 'insensitive' },
+        date: { gte: dayStart, lte: dayEnd },
+      },
+      select: { id: true, description: true, amount: true, date: true, status: true, type: true },
+    });
+  }
+
+  private async createSingleEntry(userId: string, entry: TransactionEntry) {
+    const result = await this.createEntry(userId, entry);
+    if (result.outcome === 'created') return result.transaction;
+
+    return {
+      possibleDuplicate: true,
+      existing: result.existing,
+      note: 'Não lançado por já existir um lançamento igual (mesma conta, valor, descrição e dia). Confirme com o usuário e chame de novo com force:true se ele quiser lançar mesmo assim.',
+    };
   }
 
   private async createTransactionsBatch(userId: string, args: Record<string, unknown>) {
     const entries = Array.isArray(args.transactions) ? (args.transactions as TransactionEntry[]) : [];
     const created: unknown[] = [];
+    const possibleDuplicates: { index: number; attempted: TransactionEntry; existing: unknown }[] = [];
     const failed: { index: number; error: string }[] = [];
 
     for (let index = 0; index < entries.length; index++) {
       try {
-        created.push(await this.createEntry(userId, entries[index]));
+        const result = await this.createEntry(userId, entries[index]);
+        if (result.outcome === 'created') {
+          created.push(result.transaction);
+        } else {
+          possibleDuplicates.push({ index, attempted: result.attempted, existing: result.existing });
+        }
       } catch (err) {
         failed.push({ index, error: (err as Error).message ?? 'Erro desconhecido' });
       }
     }
 
-    return { createdCount: created.length, failedCount: failed.length, created, failed };
+    return {
+      createdCount: created.length,
+      possibleDuplicateCount: possibleDuplicates.length,
+      failedCount: failed.length,
+      created,
+      possibleDuplicates,
+      failed,
+      note:
+        possibleDuplicates.length > 0
+          ? 'Itens em possibleDuplicates NÃO foram lançados por parecerem já existir. Mostre os detalhes pro usuário e, se ele confirmar que quer lançar mesmo assim, chame de novo só esses itens com force:true.'
+          : undefined,
+    };
   }
 
   private createCardPurchase(userId: string, args: Record<string, unknown>) {
