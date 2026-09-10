@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
 
 export class CreateTransferDto {
   @ApiProperty()
@@ -19,4 +19,9 @@ export class CreateTransferDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ example: '2026-08-15', description: 'Data da transferência/aporte. Padrão: agora.' })
+  @IsOptional()
+  @IsDateString()
+  date?: string;
 }

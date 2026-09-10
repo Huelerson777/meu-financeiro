@@ -67,11 +67,12 @@ export class AccountsService {
     await this.ensureOwnership(dto.toAccountId, userId);
 
     return this.accountsRepository.createTransfer({
-      userId, 
+      userId,
       fromAccountId: dto.fromAccountId,
       toAccountId: dto.toAccountId,
       amount: dto.amount,
       description: dto.description,
+      date: dto.date ? new Date(dto.date) : undefined,
     });
   }
 

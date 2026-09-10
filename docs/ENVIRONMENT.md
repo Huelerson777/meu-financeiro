@@ -23,6 +23,8 @@
 
 Veja `backend/.env.example` para o arquivo pronto para copiar.
 
+> O módulo MCP (`backend/src/mcp/`, ver `docs/ARCHITECTURE.md`) não precisa de nenhuma variável nova — os tokens usam `crypto.randomBytes` + hash (igual ao refresh token do JWT) e a tela de consentimento reaproveita o `FRONTEND_URL` já existente.
+
 ## Frontend (`frontend/.env.local`)
 
 | Variável | Descrição | Exemplo |

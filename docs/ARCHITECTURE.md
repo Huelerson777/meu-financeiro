@@ -77,6 +77,28 @@ Junto com os tokens, `useAuthStore.setTokens()` seta um cookie leve (`ff_session
 
 Isso é só uma camada de UX/roteamento — **não substitui** a autenticação real. O `AuthGuard` client-side e o JWT validado pelo backend continuam sendo a autoridade final; se o token/refresh for inválido, a chamada de API falha, `logout()` roda (limpando o cookie também) e o usuário é enviado ao login mesmo que o cookie ainda existisse.
 
+## MCP — lançamentos via Claude (`backend/src/mcp/`)
+
+Servidor MCP remoto que permite lançar dados no PouPay direto de uma conversa com o Claude (colando/anexando planilha, extrato bancário ou nota da B3) — a interpretação do arquivo acontece na própria conversa; o backend só expõe operações estruturadas de leitura/escrita que reaproveitam os Services de domínio já existentes **em processo** (sem HTTP interno), na mesma linha das integrações `whatsapp/` e `transactions/transaction-parser.service.ts` (que fazem o caminho inverso: o backend chama a Anthropic API).
+
+```
+Claude (cliente MCP) ──HTTPS/OAuth──▶ POST /mcp (guard + tools) ──▶ TransactionsService, AccountsService,
+                                                                     CategoriesService, CardsService,
+                                                                     InvestmentsService, InstallmentPurchasesService
+```
+
+**Autenticação — OAuth 2.1 mínimo (exigido pela spec de MCP remoto):**
+
+1. O Claude descobre o authorization server via `GET /.well-known/oauth-authorization-server` (e `oauth-protected-resource`, quando recebe 401 sem token).
+2. Se registra sozinho em `POST /mcp/oauth/register` (Dynamic Client Registration) — sem secret, é um cliente público (PKCE).
+3. `GET /mcp/oauth/authorize` valida `client_id`/`redirect_uri` e redireciona pro frontend (`/mcp/authorize`), que pede login (se preciso) e mostra a tela de consentimento.
+4. Ao autorizar, o frontend (já autenticado pelo JWT normal) chama `POST /api/mcp/oauth/consent`, que gera um authorization code de uso único.
+5. O Claude troca esse code por um access+refresh token em `POST /mcp/oauth/token` (com verificação PKCE). Esse token funciona como um Personal Access Token de verdade: só o hash SHA-256 fica no banco (`McpToken`), nunca o valor em texto puro — mesmo padrão do `RefreshToken` do JWT — e é revogável/rotacionado a cada refresh.
+
+Todas essas rotas ficam **fora** do prefixo global `/api` (ver `app.setGlobalPrefix` em `main.ts`), exceto `mcp/oauth/consent` — o único endpoint chamado já autenticado pela sessão normal do navegador.
+
+**O endpoint `/mcp` em si** é protegido pelo `McpTokenGuard` (valida o access token OAuth) e implementado em modo *stateless* com `@modelcontextprotocol/sdk` (`Server` + `StreamableHTTPServerTransport` novos a cada requisição — sem sessão nem stream de servidor guardados em memória, o que evita problemas com múltiplas instâncias do Render). As tools (`list_accounts`, `create_transaction`, `create_transactions_batch`, `create_investment_position`, etc. — ver `mcp-tool-definitions.ts`/`mcp-tools.service.ts`) nunca confiam num id que o Claude mandou além do que o próprio Service já valida (`ensureAccountOwnership` e afins).
+
 ## Extensibilidade futura (sem reescrever a arquitetura)
 
 - **Múltiplos usuários / famílias**: adicionar tabela `Workspace` e `WorkspaceMember`, com `workspaceId` nas tabelas de domínio no lugar de `userId` direto — os Repositories já isolam esse detalhe.

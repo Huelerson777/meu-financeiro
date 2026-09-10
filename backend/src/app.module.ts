@@ -23,6 +23,7 @@ import { InstallmentPurchasesModule } from './installment-purchases/installment-
 import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { LogsModule } from './logs/logs.module';
 import { FeedbackModule } from './feedback/feedback.module';
+import { McpModule } from './mcp/mcp.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { FeedbackModule } from './feedback/feedback.module';
     WhatsappModule,
     LogsModule,
     FeedbackModule,
+    McpModule,
   ],
   providers: [
     {

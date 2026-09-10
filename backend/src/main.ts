@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { ValidationPipe } from '@nestjs/common';
+import { RequestMethod, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -47,7 +47,22 @@ async function bootstrap() {
   // LogsService) — aqui só os que não dependem de nada.
   app.useGlobalInterceptors(new LoggingInterceptor(), new TransformInterceptor());
 
-  app.setGlobalPrefix('api');
+  // As rotas do módulo MCP (backend/src/mcp/) precisam ficar fora do prefixo
+  // /api: `.well-known/*` é path fixo por spec (RFC 8414/9728) e o Claude
+  // descobre o authorization server a partir da URL raiz que você cola em
+  // "Add MCP server". `mcp/oauth/consent` fica de fora dessa lista de
+  // propósito — é o único endpoint deste módulo chamado já autenticado pelo
+  // login normal (via frontend), então mantém o prefixo/interceptors padrão.
+  app.setGlobalPrefix('api', {
+    exclude: [
+      { path: '.well-known/oauth-authorization-server', method: RequestMethod.GET },
+      { path: '.well-known/oauth-protected-resource', method: RequestMethod.GET },
+      { path: 'mcp/oauth/register', method: RequestMethod.POST },
+      { path: 'mcp/oauth/authorize', method: RequestMethod.GET },
+      { path: 'mcp/oauth/token', method: RequestMethod.POST },
+      { path: 'mcp', method: RequestMethod.ALL },
+    ],
+  });
 
   // Swagger — só em dev/staging. Em produção ele expõe todo o mapa da API
   // (endpoints, DTOs, estrutura de dados) publicamente, sem autenticação.

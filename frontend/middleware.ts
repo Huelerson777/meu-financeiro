@@ -14,8 +14,19 @@ const SESSION_COOKIE_NAME = 'ff_session';
 
 const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password'];
 
+// Tela de consentimento do MCP (ver backend/src/mcp/) — precisa ficar
+// acessível tanto logado quanto deslogado (a própria página decide o que
+// mostrar), então não pode cair nem na regra de "exige sessão" nem na de
+// "esconde de quem já tem sessão" usada pelas rotas de auth abaixo.
+const NEUTRAL_PATHS = ['/mcp/authorize'];
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (NEUTRAL_PATHS.some((p) => pathname.startsWith(p))) {
+    return NextResponse.next();
+  }
+
   const hasSession = request.cookies.has(SESSION_COOKIE_NAME);
 
   if (pathname === '/') {

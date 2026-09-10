@@ -2,7 +2,7 @@
 
 Sistema web de gestão financeira pessoal: contas, transações, cartões, investimentos, metas, orçamentos e relatórios, com dashboard em tempo real.
 
-> **Status deste repositório:** em produção real, de ponta a ponta (backend + frontend + banco + auth). A maioria dos módulos de domínio já está implementada — `accounts`, `categories`, `transactions`, `cards`, `investments`, `goals`, `dashboard`, `reports`, `settings`, `notifications`, `recurring-bills` e a integração `whatsapp` (lançamento de transações por mensagem, interpretado via Anthropic). Só `budgets` segue como esqueleto (`*.module.ts` / `*.controller.ts` / `*.service.ts`), pronto para receber a implementação — ver `docs/ARCHITECTURE.md` → "Como implementar um novo módulo".
+> **Status deste repositório:** em produção real, de ponta a ponta (backend + frontend + banco + auth). A maioria dos módulos de domínio já está implementada — `accounts`, `categories`, `transactions`, `cards`, `investments`, `goals`, `dashboard`, `reports`, `settings`, `notifications`, `recurring-bills`, a integração `whatsapp` (lançamento de transações por mensagem, interpretado via Anthropic) e o servidor `mcp` (lançamentos direto pelo Claude — ver seção abaixo). Só `budgets` segue como esqueleto (`*.module.ts` / `*.controller.ts` / `*.service.ts`), pronto para receber a implementação — ver `docs/ARCHITECTURE.md` → "Como implementar um novo módulo".
 
 ## Stack
 
@@ -34,6 +34,7 @@ gestao-financeira-saas/
 │   │   ├── notifications/   # ✅ Central de notificações
 │   │   ├── recurring-bills/ # ✅ Contas fixas recorrentes
 │   │   ├── whatsapp/        # ✅ Lançamento de transações via WhatsApp (texto/foto, interpretado por IA)
+│   │   ├── mcp/             # ✅ Servidor MCP remoto (OAuth 2.1 + tools) — lançamentos direto pelo Claude
 │   │   └── common/          # Prisma service, filtros, interceptors, guards, DTOs
 │   ├── prisma/
 │   │   ├── schema.prisma  # Todas as tabelas, relacionamentos e índices
@@ -69,6 +70,16 @@ cp .env.example .env.local
 npm install
 npm run dev
 ```
+
+## Conectar o Claude (MCP)
+
+O backend expõe um servidor MCP remoto em `/mcp` (autenticado via OAuth 2.1 — ver `docs/ARCHITECTURE.md`), que permite lançar transações, aportes e compras parceladas direto de uma conversa com o Claude, colando/anexando uma planilha, extrato bancário ou nota da B3.
+
+```bash
+claude mcp add --transport http poupay https://<seu-dominio-do-backend>/mcp
+```
+
+Na primeira chamada o Claude registra-se automaticamente (Dynamic Client Registration) e abre o navegador para você fazer login no PouPay e autorizar o acesso — nenhuma chave é copiada manualmente.
 
 ## Documentação
 

@@ -82,8 +82,10 @@ export class AccountsRepository {
     toAccountId: string;
     amount: number;
     description?: string;
+    date?: Date;
   }) {
-    const { userId, fromAccountId, toAccountId, amount, description } = params;
+    const { userId, fromAccountId, toAccountId, amount, description, date } = params;
+    const effectiveDate = date ?? new Date();
 
     // Transação atômica: debita, credita, registra o transfer E a transaction visual numa única operação
     return this.prisma.$transaction(async (tx) => {
@@ -101,7 +103,7 @@ export class AccountsRepository {
 
       // 3. Registra a transferência na tabela interna `transfers`
       const transfer = await tx.transfer.create({
-        data: { fromId: fromAccountId, toId: toAccountId, amount, description },
+        data: { fromId: fromAccountId, toId: toAccountId, amount, description, date: effectiveDate },
       });
 
       // 4. Cria a transação visual para a tela e dashboard (vinculada à conta de origem)
@@ -113,7 +115,7 @@ export class AccountsRepository {
           description: description || 'Transferência entre contas',
           amount,
           status: 'PAID',
-          date: new Date(),
+          date: effectiveDate,
           transferId: transfer.id,
         },
       });
