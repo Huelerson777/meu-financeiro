@@ -62,7 +62,14 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="email">E-mail</Label>
-            <Input id="email" type="email" placeholder="voce@email.com" {...register('email')} error={errors.email?.message} />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="username"
+              placeholder="voce@email.com"
+              {...register('email')}
+              error={errors.email?.message}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -76,6 +83,7 @@ export default function LoginPage() {
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 className="pr-10"
                 {...register('password')}

@@ -60,17 +60,17 @@ export default function RegisterPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="name">Nome</Label>
-            <Input id="name" placeholder="Seu nome completo" {...register('name')} error={errors.name?.message} />
+            <Input id="name" autoComplete="name" placeholder="Seu nome completo" {...register('name')} error={errors.name?.message} />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="email">E-mail</Label>
-            <Input id="email" type="email" placeholder="voce@email.com" {...register('email')} error={errors.email?.message} />
+            <Input id="email" type="email" autoComplete="username" placeholder="voce@email.com" {...register('email')} error={errors.email?.message} />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="password">Senha</Label>
-            <Input id="password" type="password" placeholder="••••••••" {...register('password')} error={errors.password?.message} />
+            <Input id="password" type="password" autoComplete="new-password" placeholder="••••••••" {...register('password')} error={errors.password?.message} />
           </div>
 
           <Button type="submit" isLoading={isSubmitting} className="mt-2 w-full">

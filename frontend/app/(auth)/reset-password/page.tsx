@@ -104,6 +104,7 @@ function ResetPasswordForm() {
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
                 placeholder="••••••••"
                 className="pr-10"
                 {...register('password')}
@@ -126,6 +127,7 @@ function ResetPasswordForm() {
             <Input
               id="confirmPassword"
               type={showPassword ? 'text' : 'password'}
+              autoComplete="new-password"
               placeholder="••••••••"
               {...register('confirmPassword')}
               error={errors.confirmPassword?.message}

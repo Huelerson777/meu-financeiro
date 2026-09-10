@@ -238,14 +238,14 @@ export default function SettingsPage() {
             <div>
               <label className="block text-sm font-medium dark:text-gray-300 mb-1">Senha atual</label>
               <input
-                type="password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
+                type="password" autoComplete="current-password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
               />
             </div>
             <div>
               <label className="block text-sm font-medium dark:text-gray-300 mb-1">Nova senha</label>
               <input
-                type="password" required minLength={6} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                type="password" autoComplete="new-password" required minLength={6} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
               />
             </div>
