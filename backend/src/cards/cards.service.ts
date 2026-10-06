@@ -92,6 +92,7 @@ export class CardsService {
         closingDay: dto.closingDay,
         dueDay: dto.dueDay,
         color: dto.color,
+        icon: dto.icon ?? undefined,
       },
     });
   }

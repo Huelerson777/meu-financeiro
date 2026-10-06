@@ -416,6 +416,8 @@ model Card {
   closingDay  Int      @map("closing_day")
   dueDay      Int      @map("due_day")
   color       String?
+  /// logo do cartão (imagem pequena em data URL), como em Account.icon
+  icon        String?
   isArchived  Boolean  @default(false) @map("is_archived")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")

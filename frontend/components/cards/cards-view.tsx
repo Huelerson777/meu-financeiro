@@ -3,6 +3,9 @@
 import { notifyAlert, confirmDialog } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { CreditCard, Plus, Pencil, Trash2 } from 'lucide-react';
+import { LogoField } from '@/components/accounts/logo-field';
+import { AccountAvatar } from '@/components/accounts/account-avatar';
+import { isImageIcon } from '@/utils/image-resize';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { PurchaseModal } from '@/components/cards/purchase-modal';
@@ -17,6 +20,7 @@ interface Card {
   closingDay: number;
   dueDay: number;
   color?: string;
+  icon?: string;
   currentInvoiceOpenTotal?: number | string;
 }
 
@@ -38,6 +42,9 @@ export function CardsView() {
   const [closingDay, setClosingDay] = useState('10');
   const [dueDay, setDueDay] = useState('17');
   const [color, setColor] = useState(DEFAULT_COLOR);
+  // logo: undefined = sem mudança | string = nova imagem | null = remover
+  const [logo, setLogo] = useState<string | null | undefined>(undefined);
+  const [currentIcon, setCurrentIcon] = useState<string | undefined>(undefined);
 
   const extractList = (raw: any): Card[] => {
     if (Array.isArray(raw)) return raw;
@@ -65,6 +72,8 @@ export function CardsView() {
   }, []);
 
   const handleOpenCreate = () => {
+    setLogo(undefined);
+    setCurrentIcon(undefined);
     setEditingId(null);
     setName('');
     setLimitAmount('');
@@ -81,6 +90,8 @@ export function CardsView() {
     setClosingDay(c.closingDay.toString());
     setDueDay(c.dueDay.toString());
     setColor(c.color || DEFAULT_COLOR);
+    setLogo(undefined);
+    setCurrentIcon(c.icon);
     setIsModalOpen(true);
   };
 
@@ -104,6 +115,7 @@ export function CardsView() {
         closingDay: parseInt(closingDay, 10),
         dueDay: parseInt(dueDay, 10),
         color,
+        ...(logo !== undefined ? { icon: logo } : {}),
       };
 
       if (editingId) {
@@ -197,12 +209,16 @@ export function CardsView() {
                 </div>
 
                 <div className="relative flex items-center gap-3">
-                  <div
-                    className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: `${cardColor}20` }}
-                  >
-                    <CreditCard className="w-5 h-5" style={{ color: cardColor }} />
-                  </div>
+                  {isImageIcon(c.icon) ? (
+                    <AccountAvatar name={c.name} color={cardColor} icon={c.icon} className="h-11 w-11" />
+                  ) : (
+                    <div
+                      className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `${cardColor}20` }}
+                    >
+                      <CreditCard className="w-5 h-5" style={{ color: cardColor }} />
+                    </div>
+                  )}
                   <div className="min-w-0">
                     <h3 className="text-lg font-bold text-foreground truncate">{c.name}</h3>
                     <p className="text-xs text-muted-foreground">
@@ -211,7 +227,30 @@ export function CardsView() {
                   </div>
                 </div>
 
-                <div className="mt-5 flex items-center justify-between rounded-lg bg-muted/60 px-3 py-2.5">
+                {(() => {
+                  const limit = Number(c.limitAmount ?? 0);
+                  const used = Number(c.usedLimit ?? 0);
+                  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+                  return (
+                    <div className="mt-5">
+                      <div className="flex items-baseline justify-between text-xs text-muted-foreground">
+                        <span>Limite usado</span>
+                        <span>
+                          <strong className="font-num text-sm text-foreground">{formatCurrency(used)}</strong> de {formatCurrency(limit)}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-500 ${pct >= 90 ? 'bg-danger' : pct >= 70 ? 'bg-warning' : ''}`}
+                          style={{ width: `${pct}%`, ...(pct < 70 ? { backgroundColor: cardColor } : {}) }}
+                        />
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Disponível {formatCurrency(Math.max(0, limit - used))}</p>
+                    </div>
+                  );
+                })()}
+
+                <div className="mt-4 flex items-center justify-between rounded-lg bg-muted/60 px-3 py-2.5">
                   <span className="text-sm text-muted-foreground">Próxima fatura em aberto</span>
                   <span className={`font-semibold ${openInvoice > 0 ? 'text-warning' : 'text-success'}`}>
                     {formatCurrency(openInvoice)}
@@ -290,6 +329,8 @@ export function CardsView() {
                   />
                 </div>
               </div>
+
+              <LogoField name={name} color={color} currentIcon={currentIcon} value={logo} onChange={setLogo} />
 
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-1">Cor</label>
