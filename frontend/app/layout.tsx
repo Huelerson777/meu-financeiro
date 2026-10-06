@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Bricolage_Grotesque, Figtree } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { ThemeProvider } from '@/components/layout/theme-provider';
@@ -13,6 +13,18 @@ const body = Figtree({ subsets: ['latin'], variable: '--font-body' });
 export const metadata: Metadata = {
   title: 'PouPay',
   description: 'Controle suas contas, cartões, investimentos e metas em um só lugar.',
+  applicationName: 'PouPay',
+  appleWebApp: { capable: true, title: 'PouPay', statusBarStyle: 'default' },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8f6f1' },
+    { media: '(prefers-color-scheme: dark)', color: '#0c1512' },
+  ],
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

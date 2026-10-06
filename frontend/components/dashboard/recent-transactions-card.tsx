@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { AccountAvatar } from '@/components/accounts/account-avatar';
+import { useAccounts } from '@/hooks/use-accounts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/services/api';
@@ -17,6 +19,7 @@ interface RecentTransaction {
   type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
   status: 'PAID' | 'PENDING';
   date: string;
+  accountId?: string;
   installments?: { paid: boolean; paidAt?: string | null }[] | null;
   category?: { name: string; color: string } | null;
   account?: { name: string } | null;
@@ -34,6 +37,8 @@ function dayLabel(iso: string) {
 
 /** Últimos lançamentos agrupados por dia (Hoje, Ontem, …) com categoria e valor. */
 export function RecentTransactionsCard() {
+  const { data: accountsData } = useAccounts();
+  const accountsById = new Map((accountsData?.items ?? []).map((a: any) => [a.id, a]));
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', 'recent-transactions'],
     queryFn: async () => {
@@ -85,6 +90,10 @@ export function RecentTransactionsCard() {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{t.description}</p>
                           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            {(() => {
+                              const acc = accountsById.get(t.accountId ?? '');
+                              return acc ? <AccountAvatar name={acc.name} color={acc.color} icon={acc.icon} className="h-5 w-5 rounded-md text-[9px]" /> : null;
+                            })()}
                             {t.account?.name}
                             {!isEffectivelyPaid(t) && <span className="rounded bg-warning/10 px-1.5 py-px text-[10px] font-semibold text-warning">pendente</span>}
                           </p>

@@ -114,7 +114,7 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
     <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
         <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
         <div className="flex justify-between items-center mb-1">
-          <h2 className="text-xl font-bold">{editingPurchase ? 'Editar compra' : 'Lançar compra'}</h2>
+          <h2 className="font-display text-xl font-bold tracking-tight">{editingPurchase ? 'Editar compra' : 'Lançar compra'}</h2>
           <button onClick={onClose} className="text-foreground hover:text-foreground/80 font-bold text-lg">
             ✕
           </button>
@@ -129,7 +129,7 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
             <input
               type="text" required placeholder="Ex: Notebook novo"
               value={description} onChange={(e) => handleDescriptionChange(e.target.value)}
-              className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+              className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
             />
           </div>
 
@@ -158,7 +158,7 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
             <input
               type="number" step="0.01" required placeholder={amountMode === 'installment' ? 'Ex: 10,00' : undefined}
               value={amountValue} onChange={(e) => setAmountValue(e.target.value)}
-              className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+              className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
             />
             {amountMode === 'installment' && parsedCount > 0 && parsedAmount > 0 && (
               <p className="text-xs text-foreground mt-1">
@@ -173,7 +173,7 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
               <input
                 type="number" min="1" max="48" required
                 value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
             <div>
@@ -181,7 +181,7 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
               <input
                 type="date" required
                 value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
           </div>
@@ -195,7 +195,7 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
             </label>
             <select
               value={categoryId} onChange={(e) => handleCategoryChange(e.target.value)}
-              className="w-full px-3 py-2 border border-input rounded-lg bg-card"
+              className="w-full h-11 px-3 border border-input rounded-md bg-card focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
             >
               <option value="">Sem categoria</option>
               {categories.map((cat) => (

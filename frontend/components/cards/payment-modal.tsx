@@ -80,7 +80,7 @@ export function PaymentModal({
     <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-[60] sm:items-center sm:p-4">
         <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
         <div className="flex justify-between items-center mb-1">
-          <h2 className="text-xl font-bold">{title}</h2>
+          <h2 className="font-display text-xl font-bold tracking-tight">{title}</h2>
           <button onClick={onClose} className="text-foreground hover:text-foreground/80 font-bold text-lg">
             ✕
           </button>
@@ -102,7 +102,7 @@ export function PaymentModal({
               <input
                 type="number" step="0.01" required
                 value={amountValue} onChange={(e) => setAmountValue(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
           ) : (
@@ -116,7 +116,7 @@ export function PaymentModal({
             <label className="block text-sm font-medium mb-1">Pagar com a conta</label>
             <select
               required value={accountId} onChange={(e) => setAccountId(e.target.value)}
-              className="w-full px-3 py-2 border border-input rounded-lg bg-card"
+              className="w-full h-11 px-3 border border-input rounded-md bg-card focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
             >
               {accounts.length === 0 && <option value="">Nenhuma conta encontrada</option>}
               {accounts.map((acc) => (
@@ -130,7 +130,7 @@ export function PaymentModal({
             <input
               type="date" required
               value={date} onChange={(e) => setDate(e.target.value)}
-              className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+              className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
             />
           </div>
 
