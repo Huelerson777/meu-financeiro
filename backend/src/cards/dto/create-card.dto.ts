@@ -27,4 +27,9 @@ export class CreateCardDto {
   @IsOptional()
   @IsString()
   color?: string;
+
+  @ApiPropertyOptional({ description: 'Logo do cartão (data URL de imagem pequena); null/vazio remove' })
+  @IsOptional()
+  @IsString()
+  icon?: string | null;
 }
