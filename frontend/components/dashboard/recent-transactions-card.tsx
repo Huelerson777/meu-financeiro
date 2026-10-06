@@ -42,7 +42,7 @@ export function RecentTransactionsCard() {
       const end = new Date();
       const start = new Date();
       start.setDate(start.getDate() - 60);
-      const res = await api.get('/transactions', { params: { limit: 30, startDate: iso(start), endDate: iso(end) } });
+      const res = await api.get('/transactions', { params: { limit: 100, startDate: iso(start), endDate: iso(end) } });
       const raw = res.data;
       const list: RecentTransaction[] = Array.isArray(raw?.data?.items) ? raw.data.items : Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
       // ordena pela data em que de fato aconteceu (pagamento da parcela, quando for o caso)
