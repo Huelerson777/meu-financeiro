@@ -113,14 +113,14 @@ export default function InvestmentsPage() {
         </Button>
       </div>
 
-      <div className="bg-card rounded-xl shadow border border-border p-4 mb-8 flex flex-wrap items-end gap-3">
+      <div className="bg-card rounded-xl shadow-soft border border-border/70 p-4 mb-8 flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-xs font-medium text-foreground mb-1">De</label>
           <input
             type="date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
-            className="px-3 py-2 border border-input rounded-lg bg-transparent text-sm"
+            className="h-11 px-3 border border-input rounded-md bg-transparent text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
           />
         </div>
         <div>
@@ -129,7 +129,7 @@ export default function InvestmentsPage() {
             type="date"
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
-            className="px-3 py-2 border border-input rounded-lg bg-transparent text-sm"
+            className="h-11 px-3 border border-input rounded-md bg-transparent text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
           />
         </div>
         {(startDate || endDate) && (
@@ -145,7 +145,7 @@ export default function InvestmentsPage() {
       {loading ? (
         <div className="text-foreground py-8">Carregando...</div>
       ) : !hasInvestmentAccount ? (
-        <div className="bg-card rounded-xl shadow border border-border p-10 flex flex-col items-center text-center gap-3">
+        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-10 flex flex-col items-center text-center gap-3">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
             <PiggyBank className="w-7 h-7 text-primary" />
           </div>
@@ -159,7 +159,7 @@ export default function InvestmentsPage() {
       ) : (
         <>
           {/* Card de total acumulado */}
-          <div className="bg-card rounded-xl shadow border border-border p-6 mb-6 flex items-center justify-between">
+          <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6 mb-6 flex items-center justify-between">
             <div>
               <p className="text-sm text-foreground">Total investido (histórico)</p>
               <p className="text-3xl font-bold text-primary mt-1">
@@ -172,7 +172,7 @@ export default function InvestmentsPage() {
           </div>
 
           {/* Posições registradas (opcional — quem só usa aporte simples não tem nenhuma aqui) */}
-          <div className="bg-card rounded-xl shadow border border-border overflow-hidden mb-8">
+          <div className="bg-card rounded-xl shadow-soft border border-border/70 overflow-hidden mb-8">
             <div className="p-6 pb-0">
               <h2 className="font-semibold mb-1">Minhas posições</h2>
               <p className="text-xs text-foreground mb-4">
@@ -275,7 +275,7 @@ export default function InvestmentsPage() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Resumo mensal */}
-            <div className="lg:col-span-1 bg-card rounded-xl shadow border border-border p-6">
+            <div className="lg:col-span-1 bg-card rounded-xl shadow-soft border border-border/70 p-6">
               <h2 className="font-semibold mb-4">Aportes por mês</h2>
               {(data?.monthly?.length ?? 0) === 0 ? (
                 <p className="text-sm text-foreground">Nenhum aporte registrado ainda.</p>
@@ -294,7 +294,7 @@ export default function InvestmentsPage() {
             </div>
 
             {/* Extrato detalhado */}
-            <div className="lg:col-span-2 bg-card rounded-xl shadow border border-border overflow-hidden">
+            <div className="lg:col-span-2 bg-card rounded-xl shadow-soft border border-border/70 overflow-hidden">
               <div className="p-6 pb-0">
                 <h2 className="font-semibold mb-4">Extrato de aportes</h2>
               </div>

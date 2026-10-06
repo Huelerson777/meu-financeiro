@@ -521,7 +521,7 @@ function TransactionsPageContent() {
         )}
       </div>
 
-      <div className="bg-card rounded-xl shadow border border-border overflow-hidden">
+      <div className="bg-card rounded-xl shadow-soft border border-border/70 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-foreground">Carregando transações...</div>
         ) : transactions.length === 0 ? (
