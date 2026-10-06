@@ -13,6 +13,7 @@ import {
   Repeat,
   LineChart,
   PiggyBank,
+  ScrollText,
   X,
   PanelLeftClose,
   PanelLeftOpen,
@@ -34,6 +35,7 @@ const navItems = [
   { href: '/reports', label: 'Fluxo de Caixa', icon: FileBarChart },
   { href: '/projection', label: 'Projeção', icon: LineChart },
   { href: '/budgets', label: 'Orçamento', icon: PiggyBank },
+  { href: '/summary', label: 'Resumo do mês', icon: ScrollText },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
@@ -89,7 +91,7 @@ export function Sidebar() {
           menu alterna entre expandida e uma "trilha" só com os ícones (nomes ficam ocultos) */}
       <aside
         className={cn(
-          'hidden shrink-0 border-r border-border bg-card lg:flex lg:flex-col transition-[width] duration-150',
+          'hidden shrink-0 border-r border-border bg-card lg:flex lg:flex-col transition-[width] duration-150 print:hidden',
           'lg:sticky lg:top-0 lg:h-screen',
           collapsed ? 'w-16' : 'w-64',
         )}
