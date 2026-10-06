@@ -131,7 +131,7 @@ export function InsightsHero(props: InsightsHeroProps) {
           </p>
         )}
         <p className="relative mt-5 max-w-sm text-sm leading-relaxed text-[hsl(42_45%_97%)]/70">
-          Sobras do mês ({formatCurrency(props.leftovers)}) menos {formatCurrency(props.openExpenseTotal)} em contas
+          Saldo do mês ({formatCurrency(props.leftovers)}) menos {formatCurrency(props.openExpenseTotal)} em contas
           ainda em aberto.
         </p>
       </div>
