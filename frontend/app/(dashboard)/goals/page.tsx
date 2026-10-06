@@ -143,7 +143,7 @@ export default function GoalsPage() {
         </div>
         <button
           onClick={handleOpenCreate}
-          className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow flex items-center gap-2"
+          className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow flex items-center gap-2"
         >
           <Plus className="w-4 h-4" /> Nova Meta
         </button>
@@ -296,7 +296,7 @@ export default function GoalsPage() {
                 </button>
                 <button
                   type="submit" disabled={isSubmitting}
-                  className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
+                  className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
                 >
                   {isSubmitting ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Criar Meta'}
                 </button>
@@ -335,7 +335,7 @@ export default function GoalsPage() {
                 </button>
                 <button
                   type="submit" disabled={contributing}
-                  className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
+                  className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
                 >
                   {contributing ? 'Salvando...' : 'Adicionar'}
                 </button>

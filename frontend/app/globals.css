@@ -66,6 +66,36 @@
   }
 }
 
+@layer components {
+  /* Brilho que varre o botão no hover (só em dispositivos com mouse) */
+  .btn-sheen {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+  }
+  .btn-sheen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 30%, hsl(0 0% 100% / 0.3) 50%, transparent 70%);
+    transform: translateX(-120%);
+    transition: transform 0.65s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  @media (hover: hover) {
+    .btn-sheen:hover:not(:disabled)::after {
+      transform: translateX(120%);
+    }
+    .btn-sheen:hover:not(:disabled) svg {
+      transform: scale(1.08);
+    }
+  }
+  .btn-sheen svg {
+    transition: transform 0.2s ease;
+  }
+}
+
 @layer utilities {
   .transition-theme {
     transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease,

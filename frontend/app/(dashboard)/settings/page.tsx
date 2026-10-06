@@ -221,7 +221,7 @@ export default function SettingsPage() {
             <div className="flex justify-end">
               <button
                 type="submit" disabled={profileSaving}
-                className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
+                className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
               >
                 {profileSaving ? 'Salvando...' : 'Salvar Perfil'}
               </button>
@@ -253,7 +253,7 @@ export default function SettingsPage() {
             <div className="flex justify-end">
               <button
                 type="submit" disabled={passwordSaving}
-                className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
+                className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
               >
                 {passwordSaving ? 'Salvando...' : 'Trocar Senha'}
               </button>
@@ -293,7 +293,7 @@ export default function SettingsPage() {
             <div className="flex justify-end">
               <button
                 type="submit" disabled={prefsSaving}
-                className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
+                className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
               >
                 {prefsSaving ? 'Salvando...' : 'Salvar Preferências'}
               </button>
@@ -310,7 +310,7 @@ export default function SettingsPage() {
             </div>
             <button
               onClick={handleOpenCreateCategory}
-              className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-4 py-2 rounded-md text-sm font-medium transition"
+              className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-4 py-2 rounded-md text-sm font-medium transition"
             >
               + Nova Categoria
             </button>
@@ -414,7 +414,7 @@ export default function SettingsPage() {
 
               <div className="flex justify-end gap-3 pt-3">
                 <button type="button" onClick={() => setIsCategoryModalOpen(false)} className="px-4 py-2 text-sm text-foreground hover:underline">Cancelar</button>
-                <button type="submit" disabled={categorySaving} className="px-5 py-2 rounded-md text-sm font-semibold text-primary-foreground shadow bg-primary hover:brightness-110 active:scale-[0.97]">
+                <button type="submit" disabled={categorySaving} className="px-5 py-2 rounded-md text-sm font-semibold text-primary-foreground shadow bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen">
                   {categorySaving ? 'Salvando...' : 'Confirmar'}
                 </button>
               </div>

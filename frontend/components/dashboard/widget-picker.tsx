@@ -14,15 +14,23 @@ export const DASHBOARD_WIDGETS: { key: string; label: string }[] = [
   { key: 'invested', label: 'Investido' },
   { key: 'leftovers', label: 'Saldo' },
   { key: 'paymentsStatus', label: 'Pago x Em Aberto' },
-  { key: 'balanceChart', label: 'Balanço do Mês' },
+  { key: 'balanceChart', label: 'Resultado do Mês' },
   { key: 'yearlyChart', label: 'Evolução Anual' },
   { key: 'categoryChart', label: 'Despesas por Categoria' },
+  { key: 'recentTransactions', label: 'Transações recentes' },
   { key: 'accountBalances', label: 'Saldo por Conta' },
   { key: 'goalsSummary', label: 'Resumo de Metas' },
   { key: 'netWorth', label: 'Patrimônio ao longo do tempo' },
 ];
 
 const ALL_KEYS = DASHBOARD_WIDGETS.map((w) => w.key);
+
+// Widgets que já existiam antes do sistema de "novos widgets" — não contam como novidade.
+const LEGACY_WIDGET_KEYS = [
+  'aiQuickAdd', 'income', 'expense', 'invested', 'leftovers', 'paymentsStatus',
+  'balanceChart', 'yearlyChart', 'categoryChart', 'accountBalances', 'goalsSummary',
+];
+const SEEN_WIDGETS_KEY = 'poupay:seen-widgets';
 
 /**
  * Quantas colunas cada widget ocupa numa grade `grid-cols-1 sm:grid-cols-2
@@ -39,7 +47,8 @@ export const WIDGET_SPANS: Record<string, string> = {
   paymentsStatus: 'sm:col-span-2 lg:col-span-4',
   balanceChart: 'sm:col-span-2 lg:col-span-2',
   yearlyChart: 'sm:col-span-2 lg:col-span-2',
-  categoryChart: 'sm:col-span-2 lg:col-span-4',
+  categoryChart: 'sm:col-span-2 lg:col-span-2',
+  recentTransactions: 'sm:col-span-2 lg:col-span-2',
   accountBalances: 'sm:col-span-2 lg:col-span-4',
   goalsSummary: 'sm:col-span-2 lg:col-span-4',
   netWorth: 'sm:col-span-2 lg:col-span-4',
@@ -71,6 +80,38 @@ export function useDashboardWidgetOrder(): {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     });
   };
+
+  // Widgets lançados depois que o usuário personalizou o dashboard entram uma única vez
+  // (guardamos no navegador quais já foram "apresentados"; se ele ocultar depois, respeitamos).
+  useEffect(() => {
+    if (isLoading) return;
+    let seen: string[] = LEGACY_WIDGET_KEYS;
+    try {
+      const raw = localStorage.getItem(SEEN_WIDGETS_KEY);
+      if (raw) seen = JSON.parse(raw);
+    } catch {
+      /* usa o padrão */
+    }
+    const fresh = ALL_KEYS.filter((k) => !seen.includes(k));
+    if (fresh.length === 0) return;
+    const saved = data?.dashboardWidgets;
+    if (saved) {
+      let next = [...saved];
+      fresh.forEach((k) => {
+        if (next.includes(k)) return;
+        const anchor = k === 'recentTransactions' ? next.indexOf('categoryChart') : -1;
+        if (anchor >= 0) next.splice(anchor + 1, 0, k);
+        else next.push(k);
+      });
+      setOrder(next);
+    }
+    try {
+      localStorage.setItem(SEEN_WIDGETS_KEY, JSON.stringify(ALL_KEYS));
+    } catch {
+      /* ignora */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading]);
 
   return { order, setOrder, loaded: !isLoading };
 }

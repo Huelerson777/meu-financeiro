@@ -10,6 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ChartTooltip, SingleValueTooltip } from '@/components/dashboard/chart-tooltips';
+import { MoneyFlow } from '@/components/reports/money-flow';
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { useCashFlowReport, useCategoryReport, useAccountStatement } from '@/hooks/use-reports';
 import { reportsService } from '@/services/reports.service';
@@ -34,6 +35,24 @@ function presetRange(preset: 'thisMonth' | 'lastMonth' | 'thisYear') {
     return { startDate: toISODate(new Date(now.getFullYear(), now.getMonth() - 1, 1)), endDate: toISODate(new Date(now.getFullYear(), now.getMonth(), 0)) };
   }
   return { startDate: toISODate(new Date(now.getFullYear(), 0, 1)), endDate: toISODate(new Date(now.getFullYear(), 11, 31)) };
+}
+
+
+/** Período imediatamente anterior, com o mesmo número de dias. */
+function previousRange(range: { startDate: string; endDate: string }) {
+  const start = new Date(range.startDate + 'T00:00:00');
+  const end = new Date(range.endDate + 'T00:00:00');
+  const days = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
+  const prevEnd = new Date(start);
+  prevEnd.setDate(prevEnd.getDate() - 1);
+  const prevStart = new Date(prevEnd);
+  prevStart.setDate(prevStart.getDate() - (days - 1));
+  return { startDate: toISODate(prevStart), endDate: toISODate(prevEnd) };
+}
+
+function changePct(current: number, previous: number | undefined) {
+  if (previous == null || previous === 0) return null;
+  return Math.round(((current - previous) / Math.abs(previous)) * 100);
 }
 
 function formatSeriesLabel(key: string) {
@@ -77,6 +96,8 @@ export default function ReportsPage() {
   }, []);
 
   const { data: cashFlow, isLoading: cashFlowLoading } = useCashFlowReport(range);
+  const { data: prevCashFlow } = useCashFlowReport(previousRange(range));
+  const { data: expenseReport } = useCategoryReport({ ...range, type: 'EXPENSE' });
   const { data: categoryReport, isLoading: categoryLoading } = useCategoryReport({ ...range, type: categoryType });
   const { data: statement, isLoading: statementLoading } = useAccountStatement(selectedAccountId, range);
 
@@ -96,8 +117,8 @@ export default function ReportsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Relatórios</h1>
-          <p className="text-sm text-muted-foreground">Fluxo de caixa, categorias e extrato por período.</p>
+          <h1 className="font-display text-3xl font-bold tracking-tight">Fluxo de Caixa</h1>
+          <p className="text-sm text-muted-foreground">Para onde o dinheiro foi, comparado ao período anterior.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -125,14 +146,21 @@ export default function ReportsPage() {
 
       {/* Fluxo de caixa: 3 cards + série temporal */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <SummaryCard label="Receitas no período" value={cashFlow?.totalIncome} icon={TrendingUp} tone="success" isLoading={cashFlowLoading} />
-        <SummaryCard label="Despesas no período" value={cashFlow?.totalExpense} icon={TrendingDown} tone="danger" isLoading={cashFlowLoading} />
+        <SummaryCard
+          label="Receitas no período" value={cashFlow?.totalIncome} icon={TrendingUp} tone="success" isLoading={cashFlowLoading}
+          changePct={changePct(cashFlow?.totalIncome ?? 0, prevCashFlow?.totalIncome)} compareLabel="vs. período anterior"
+        />
+        <SummaryCard
+          label="Despesas no período" value={cashFlow?.totalExpense} icon={TrendingDown} tone="danger" isLoading={cashFlowLoading}
+          changePct={changePct(cashFlow?.totalExpense ?? 0, prevCashFlow?.totalExpense)} compareLabel="vs. período anterior" invertChangeTone
+        />
         <SummaryCard
           label="Saldo do período"
           value={cashFlow?.balance}
           icon={Scale}
           tone={(cashFlow?.balance ?? 0) >= 0 ? 'success' : 'danger'}
           isLoading={cashFlowLoading}
+          changePct={changePct(cashFlow?.balance ?? 0, prevCashFlow?.balance)} compareLabel="vs. período anterior"
         />
       </div>
 
@@ -152,22 +180,43 @@ export default function ReportsPage() {
               <AreaChart data={cashFlow.series.map((s) => ({ ...s, label: formatSeriesLabel(s.key) }))} margin={{ left: 8, right: 8, top: 20 }}>
                 <defs>
                   <linearGradient id="repColorReceitas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
+                    <stop offset="5%" stopColor="hsl(155 62% 32%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(155 62% 32%)" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="repColorDespesas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#dc2626" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
+                    <stop offset="5%" stopColor="hsl(8 62% 50%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(8 62% 50%)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
                 <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} width={70} />
                 <RechartsTooltip content={<ChartTooltip />} />
-                <Area type="monotone" dataKey="receitas" name="Receitas" stroke="#16a34a" fill="url(#repColorReceitas)" strokeWidth={2} />
-                <Area type="monotone" dataKey="despesas" name="Despesas" stroke="#dc2626" fill="url(#repColorDespesas)" strokeWidth={2} />
+                <Area type="monotone" dataKey="receitas" name="Receitas" stroke="hsl(155 62% 32%)" fill="url(#repColorReceitas)" strokeWidth={2} />
+                <Area type="monotone" dataKey="despesas" name="Despesas" stroke="hsl(8 62% 50%)" fill="url(#repColorDespesas)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Para onde foi */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Para onde foi</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {cashFlowLoading ? (
+            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">Carregando...</div>
+          ) : !cashFlow || (cashFlow.totalIncome <= 0 && cashFlow.totalExpense <= 0) ? (
+            <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">
+              Nenhuma movimentação paga neste período.
+            </div>
+          ) : (
+            <MoneyFlow
+              income={cashFlow.totalIncome}
+              expenses={(expenseReport?.items ?? []).map((i) => ({ name: i.name, color: i.color, amount: i.amount }))}
+            />
           )}
         </CardContent>
       </Card>

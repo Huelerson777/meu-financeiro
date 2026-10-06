@@ -17,6 +17,11 @@ import { ChartTooltip, SingleValueTooltip } from '@/components/dashboard/chart-t
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
+import { useCashFlowReport } from '@/hooks/use-reports';
+import { useMonthlyLimit } from '@/hooks/use-monthly-limit';
+import { CategoryDonutCard } from '@/components/dashboard/category-donut-card';
+import { ResultCard } from '@/components/dashboard/result-card';
+import { RecentTransactionsCard } from '@/components/dashboard/recent-transactions-card';
 import { NetWorthCard } from '@/components/dashboard/net-worth-card';
 import { InsightsHero } from '@/components/dashboard/insights-hero';
 import { AiQuickAddCard } from '@/components/dashboard/ai-quick-add-card';
@@ -78,11 +83,19 @@ export default function DashboardPage() {
     isLoading: paymentsLoading,
     refetch: refetchPaymentsStatus,
   } = useDashboardPaymentsStatus({ month: selectedMonth, year: selectedYear });
+  const prevDate = new Date(selectedYear, selectedMonth - 2, 1);
+  const prevParams = { month: prevDate.getMonth() + 1, year: prevDate.getFullYear() };
+  const { data: prevData } = useDashboardSummary(prevParams);
+  const { data: prevCategoryData } = useDashboardExpensesByCategory(prevParams);
   const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
   const { data: netWorthData, isLoading: netWorthLoading } = useNetWorthTrend(12);
   const { data: accountsData, isLoading: accountsLoading } = useAccounts();
   const { hiddenIds: hiddenAccountIds, setHiddenIds: setHiddenAccountIds } = useHiddenAccountIds();
   const [showAllOpen, setShowAllOpen] = useState(false);
+  const { limit: monthlyLimit, setLimit: setMonthlyLimit } = useMonthlyLimit();
+  const monthStartStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+  const monthEndStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+  const { data: monthCashFlow } = useCashFlowReport({ startDate: monthStartStr, endDate: monthEndStr });
   const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
   const { order, setOrder } = useDashboardWidgetOrder();
   const firstName = useAuthStore((s) => s.user?.name)?.split(' ')[0];
@@ -259,6 +272,7 @@ export default function DashboardPage() {
         expense={data?.totalExpense ?? 0}
         leftovers={data?.leftovers ?? 0}
         openExpenseTotal={paymentsStatus?.openExpenseTotal ?? 0}
+        openExpenseCount={paymentsStatus?.openItems.filter((i) => i.type === 'EXPENSE').length ?? 0}
         overdueCount={paymentsStatus?.openItems.filter((i) => i.isOverdue && i.type === 'EXPENSE').length ?? 0}
         nextDue={
           paymentsStatus?.openItems
@@ -267,6 +281,9 @@ export default function DashboardPage() {
         }
         expenseChangePct={data?.comparison?.expenseChangePct}
         topCategory={sortedCategoryData[0] ?? null}
+        dailyExpenses={monthCashFlow?.series}
+        limit={monthlyLimit}
+        onChangeLimit={setMonthlyLimit}
       />
 
       {/* Cada widget abaixo pode ser ocultado em "Personalizar" e reordenado
@@ -465,54 +482,14 @@ export default function DashboardPage() {
         </Card>
           ),
           balanceChart: (
-        <Card>
-          <CardHeader>
-            <CardTitle>Balanço do Mês</CardTitle>
-          </CardHeader>
-          <CardContent className="h-72 pt-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={comparisonData} margin={{ top: 30 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis hide />
-                <RechartsTooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                <Legend />
-                <Bar dataKey="Receitas" fill="hsl(var(--success))" radius={[4, 4, 0, 0]}>
-                  <LabelList
-                    dataKey="Receitas"
-                    position="top"
-                    formatter={(val: number) => formatCurrency(val)}
-                    style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                  />
-                </Bar>
-                <Bar dataKey="Despesas" fill="hsl(var(--danger))" radius={[4, 4, 0, 0]}>
-                  <LabelList
-                    dataKey="Despesas"
-                    position="top"
-                    formatter={(val: number) => formatCurrency(val)}
-                    style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                  />
-                </Bar>
-                <Bar dataKey="Investimentos" fill="hsl(200 55% 45%)" radius={[4, 4, 0, 0]}>
-                  <LabelList
-                    dataKey="Investimentos"
-                    position="top"
-                    formatter={(val: number) => formatCurrency(val)}
-                    style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                  />
-                </Bar>
-                <Bar dataKey="Saldo" fill="hsl(34 90% 50%)" radius={[4, 4, 0, 0]}>
-                  <LabelList
-                    dataKey="Saldo"
-                    position="top"
-                    formatter={(val: number) => formatCurrency(val)}
-                    style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+            <ResultCard
+              income={data?.totalIncome ?? 0}
+              expense={data?.totalExpense ?? 0}
+              invested={data?.totalInvested ?? 0}
+              result={(data?.totalIncome ?? 0) - (data?.totalExpense ?? 0)}
+              previousResult={prevData ? prevData.totalIncome - prevData.totalExpense : undefined}
+              isLoading={isLoading}
+            />
           ),
           yearlyChart: (
         <Card>
@@ -557,65 +534,14 @@ export default function DashboardPage() {
         </Card>
           ),
           categoryChart: (
-      <Card>
-        <CardHeader>
-          <CardTitle>Despesas por Categoria</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {catLoading ? (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
-              Carregando...
-            </div>
-          ) : !categoryData || categoryData.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
-              Nenhuma despesa com categoria registrada neste mês.
-            </div>
-          ) : (
-            // Gráfico de barras horizontais, ordenado do maior pro menor gasto,
-            // com o valor exato escrito no final de cada barra (estilo planilha)
-            <div style={{ height: Math.max(64 * categoryData.length, 240) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  layout="vertical"
-                  data={sortedCategoryData}
-                  margin={{ left: 20, right: 60 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" hide />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={150}
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <RechartsTooltip content={<SingleValueTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                  <Bar
-                    dataKey="total"
-                    radius={[0, 4, 4, 0]}
-                    barSize={22}
-                    cursor="pointer"
-                    onClick={(entry: any) => goToCategoryTransactions(entry.categoryId ?? null)}
-                  >
-                    {sortedCategoryData.map((entry, index) => (
-                      <Cell key={`cat-cell-${index}`} fill={entry.color} />
-                    ))}
-                    <LabelList
-                      dataKey="total"
-                      position="right"
-                      formatter={(val: number) => formatCurrency(val)}
-                      style={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 600 }}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <CategoryDonutCard
+              data={categoryData}
+              previous={prevCategoryData}
+              isLoading={catLoading}
+              onSelect={goToCategoryTransactions}
+            />
           ),
+          recentTransactions: <RecentTransactionsCard />,
           accountBalances: (
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0">

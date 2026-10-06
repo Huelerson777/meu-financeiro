@@ -15,6 +15,8 @@ interface SummaryCardProps {
   changePct?: number | null;
   /** Se true, uma alta (%) é ruim e uma queda é boa — usado em cards de despesa. */
   invertChangeTone?: boolean;
+  /** Texto após o percentual. Padrão: "vs. mês anterior". */
+  compareLabel?: string;
 }
 
 export function SummaryCard({
@@ -26,6 +28,7 @@ export function SummaryCard({
   onClick,
   changePct,
   invertChangeTone,
+  compareLabel = 'vs. mês anterior',
 }: SummaryCardProps) {
   const isGoodChange = changePct != null && (invertChangeTone ? changePct < 0 : changePct > 0);
   const isBadChange = changePct != null && (invertChangeTone ? changePct > 0 : changePct < 0);
@@ -61,7 +64,7 @@ export function SummaryCard({
                   )}
                 >
                   {changePct > 0 ? <ArrowUp className="h-3 w-3" /> : changePct < 0 ? <ArrowDown className="h-3 w-3" /> : null}
-                  {Math.abs(changePct)}% vs. mês anterior
+                  {Math.abs(changePct)}% {compareLabel}
                 </span>
               )}
             </>
