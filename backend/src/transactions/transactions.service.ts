@@ -107,16 +107,43 @@ export class TransactionsService {
       },
     } satisfies Prisma.TransactionInclude;
 
-    const [items, total] = await this.prisma.$transaction([
-      this.prisma.transaction.findMany({
+    const total = await this.prisma.transaction.count({ where });
+
+    // Ordem pela data em que a coisa de fato aconteceu: parcelas pagas contam pela data do pagamento
+    // (installment.paidAt), não pelo vencimento. O Prisma não ordena por esse COALESCE, então, até um
+    // volume razoável, ordenamos só (id, data) em memória e buscamos os itens completos da página.
+    // Acima disso cai para a ordem por data do lançamento, que é barata no banco.
+    const MAX_IN_MEMORY_SORT = 5000;
+    let items;
+    if (total > 0 && total <= MAX_IN_MEMORY_SORT) {
+      const light = await this.prisma.transaction.findMany({
+        where,
+        select: { id: true, date: true, installments: { select: { paid: true, paidAt: true } } },
+      });
+      const effective = (t: (typeof light)[number]) => {
+        const paidAt = t.installments
+          .filter((i) => i.paid && i.paidAt)
+          .map((i) => i.paidAt!.getTime())
+          .sort((a, b) => b - a)[0];
+        return paidAt ?? t.date.getTime();
+      };
+      const pageIds = light
+        .sort((a, b) => effective(b) - effective(a) || (a.id < b.id ? -1 : 1))
+        .slice((page - 1) * limit, page * limit)
+        .map((t) => t.id);
+
+      const rows = await this.prisma.transaction.findMany({ where: { id: { in: pageIds } }, include });
+      const byId = new Map(rows.map((r) => [r.id, r]));
+      items = pageIds.map((id) => byId.get(id)!).filter(Boolean);
+    } else {
+      items = await this.prisma.transaction.findMany({
         where,
         include,
         orderBy: { date: 'desc' },
         skip: (page - 1) * limit,
         take: limit,
-      }),
-      this.prisma.transaction.count({ where }),
-    ]);
+      });
+    }
 
     return {
       items,
