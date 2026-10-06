@@ -68,7 +68,8 @@ function buildInsights(p: InsightsHeroProps): Insight[] {
   }
 
   if (p.income > 0) {
-    const rate = Math.round((p.leftovers / p.income) * 100);
+    // quanto da renda do mês não foi gasto (receitas - despesas), não o saldo acumulado das contas
+    const rate = Math.round(((p.income - p.expense) / p.income) * 100);
     list.push({
       icon: Sparkles,
       tone: rate >= 20 ? 'good' : rate >= 0 ? 'neutral' : 'bad',
