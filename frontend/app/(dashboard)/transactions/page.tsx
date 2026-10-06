@@ -1,5 +1,6 @@
 'use client';
 
+import { AccountAvatar } from '@/components/accounts/account-avatar';
 import { isEffectivelyPaid } from '@/utils/transaction-status';
 import { notifyAlert, confirmDialog } from '@/utils/notify';
 import React, { Suspense, useEffect, useRef, useState } from 'react';
@@ -57,6 +58,8 @@ interface AccountOption {
   name: string;
   type: string;
   currentBalance?: number | string;
+  color?: string;
+  icon?: string;
 }
 
 interface CategoryOption {
@@ -624,9 +627,17 @@ function TransactionsPageContent() {
                       )}
                     </td>
                     <td className="p-4 text-foreground text-sm">
-                      {isTransfer || isInvestment
-                        ? `${t.account?.name || '—'} → ${t.transfer?.toAccount?.name || '—'}`
-                        : t.account?.name || '-'}
+                      {isTransfer || isInvestment ? (
+                        `${t.account?.name || '—'} → ${t.transfer?.toAccount?.name || '—'}`
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          {(() => {
+                            const acc = accounts.find((a) => a.id === t.accountId);
+                            return acc ? <AccountAvatar name={acc.name} color={acc.color} icon={acc.icon} className="h-6 w-6 rounded-md text-[10px]" /> : null;
+                          })()}
+                          {t.account?.name || '-'}
+                        </span>
+                      )}
                     </td>
                     <td className="p-4 text-foreground text-sm">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
                     <td className="p-4">
