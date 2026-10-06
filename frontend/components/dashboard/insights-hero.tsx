@@ -24,6 +24,8 @@ interface InsightsHeroProps {
   expenseChangePct?: number | null;
   topCategory?: { name: string; total: number } | null;
   limit: number | null;
+  /** Categoria que mais passou do orçamento no mês, se alguma passou. */
+  budgetAlert?: { name: string; over: number; pct: number } | null;
   onChangeLimit: (value: number | null) => void;
   /** Despesas pagas por dia do mês (série diária do fluxo de caixa). */
   dailyExpenses?: { key: string; despesas: number }[];
@@ -50,6 +52,15 @@ function buildInsights(p: InsightsHeroProps): Insight[] {
       tone: 'bad',
       title: `${p.overdueCount} ${p.overdueCount === 1 ? 'conta atrasada' : 'contas atrasadas'}`,
       text: 'Regularize para evitar juros e multa.',
+    });
+  }
+
+  if (p.budgetAlert) {
+    list.push({
+      icon: AlertTriangle,
+      tone: 'bad',
+      title: `${p.budgetAlert.name} passou do orçamento`,
+      text: `${formatCurrency(p.budgetAlert.over)} acima do planejado (${p.budgetAlert.pct}% do valor definido).`,
     });
   }
 

@@ -12,6 +12,7 @@ import {
   FileBarChart,
   Repeat,
   LineChart,
+  PiggyBank,
   X,
   PanelLeftClose,
   PanelLeftOpen,
@@ -32,6 +33,7 @@ const navItems = [
   { href: '/goals', label: 'Metas', icon: Target },
   { href: '/reports', label: 'Fluxo de Caixa', icon: FileBarChart },
   { href: '/projection', label: 'Projeção', icon: LineChart },
+  { href: '/budgets', label: 'Orçamento', icon: PiggyBank },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
