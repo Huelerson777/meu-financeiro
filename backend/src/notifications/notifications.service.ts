@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { DashboardService } from '../dashboard/dashboard.service';
 
 const DUE_SOON_DAYS = 5;
 
@@ -11,7 +12,13 @@ const MONTH_NAMES = [
 
 @Injectable()
 export class NotificationsService {
-  constructor(private prisma: PrismaService) {}
+  // evita refazer as consultas de orçamento/metas a cada refetch do sino (que roda a cada minuto)
+  private lastPlanningSync = new Map<string, number>();
+
+  constructor(
+    private prisma: PrismaService,
+    private dashboardService: DashboardService,
+  ) {}
 
   /**
    * Cria uma notificação avulsa — usado por outros módulos (ex: Feedback,
@@ -31,6 +38,7 @@ export class NotificationsService {
   async list(userId: string) {
     await this.syncDueSoon(userId);
     await this.syncInvoiceClosed(userId);
+    await this.syncPlanning(userId);
     return this.prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -41,6 +49,7 @@ export class NotificationsService {
   async unreadCount(userId: string) {
     await this.syncDueSoon(userId);
     await this.syncInvoiceClosed(userId);
+    await this.syncPlanning(userId);
     return this.prisma.notification.count({ where: { userId, read: false } });
   }
 
@@ -55,6 +64,80 @@ export class NotificationsService {
   async markAllRead(userId: string) {
     await this.prisma.notification.updateMany({ where: { userId, read: false }, data: { read: true } });
     return { success: true };
+  }
+
+
+  /**
+   * Avisos de planejamento: orçamento por categoria chegando perto (90%) ou estourado, e marcos das metas
+   * (metade e conclusão). Cada aviso tem um referenceId próprio (inclui mês/nível), então não repete.
+   */
+  private async syncPlanning(userId: string) {
+    const last = this.lastPlanningSync.get(userId) ?? 0;
+    if (Date.now() - last < 60_000) return;
+    this.lastPlanningSync.set(userId, Date.now());
+
+    const now = new Date();
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+
+    const [budgets, spentByCategory, goals, existingRefs] = await Promise.all([
+      this.prisma.budget.findMany({ where: { userId, month, year }, include: { category: { select: { name: true } } } }),
+      this.dashboardService.getExpensesByCategory(userId, month, year),
+      this.prisma.goal.findMany({ where: { userId } }),
+      this.prisma.notification.findMany({
+        where: { userId, referenceId: { not: null }, type: { in: ['BUDGET_EXCEEDED', 'GOAL_PROGRESS'] } },
+        select: { referenceId: true },
+      }),
+    ]);
+    const existing = new Set(existingRefs.map((n) => n.referenceId));
+    const toCreate: { userId: string; type: 'BUDGET_EXCEEDED' | 'GOAL_PROGRESS'; title: string; message: string; referenceId: string }[] = [];
+    const brl = (v: number) => `R$ ${v.toFixed(2).replace('.', ',')}`;
+
+    const spentMap = new Map((spentByCategory as { categoryId: string | null; total: number }[]).map((c) => [c.categoryId, Number(c.total)]));
+    for (const budget of budgets) {
+      const amount = Number(budget.amount);
+      const spent = spentMap.get(budget.categoryId) ?? 0;
+      if (amount <= 0) continue;
+      const ratio = spent / amount;
+      if (ratio < 0.9) continue;
+
+      const level = ratio >= 1 ? 'over' : 'near';
+      const referenceId = `budget-${budget.id}-${year}-${month}-${level}`;
+      // se já avisou que estourou, não manda o "perto" depois; e vice-versa não há problema
+      if (existing.has(referenceId) || existing.has(`budget-${budget.id}-${year}-${month}-over`)) continue;
+
+      toCreate.push({
+        userId,
+        type: 'BUDGET_EXCEEDED',
+        title: level === 'over' ? `${budget.category.name} passou do orçamento` : `${budget.category.name} perto do limite`,
+        message:
+          level === 'over'
+            ? `Você gastou ${brl(spent)} de ${brl(amount)} planejados — ${brl(spent - amount)} acima.`
+            : `Você já usou ${Math.round(ratio * 100)}% do orçamento (${brl(spent)} de ${brl(amount)}).`,
+        referenceId,
+      });
+    }
+
+    // metas: só avisa marcos de metas mexidas recentemente (evita uma enxurrada para metas antigas)
+    const recent = Date.now() - 7 * 24 * 3600 * 1000;
+    for (const goal of goals) {
+      const target = Number(goal.targetAmount);
+      if (target <= 0 || goal.updatedAt.getTime() < recent) continue;
+      const progress = Number(goal.currentAmount) / target;
+
+      const milestones: [string, boolean, string, string][] = [
+        ['100', progress >= 1, `Meta concluída: ${goal.name}`, `Você chegou aos ${brl(target)} planejados.`],
+        ['50', progress >= 0.5 && progress < 1, `Metade da meta: ${goal.name}`, `Você já juntou ${brl(Number(goal.currentAmount))} de ${brl(target)}.`],
+      ];
+      for (const [mark, reached, title, message] of milestones) {
+        const referenceId = `goal-${goal.id}-${mark}`;
+        if (reached && !existing.has(referenceId)) {
+          toCreate.push({ userId, type: 'GOAL_PROGRESS', title, message, referenceId });
+        }
+      }
+    }
+
+    if (toCreate.length > 0) await this.prisma.notification.createMany({ data: toCreate });
   }
 
   private async syncDueSoon(userId: string) {
