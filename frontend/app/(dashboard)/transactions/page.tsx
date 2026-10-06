@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { AccountAvatar } from '@/components/accounts/account-avatar';
 import { effectiveDate, isEffectivelyPaid } from '@/utils/transaction-status';
 import { notifyAlert, confirmDialog } from '@/utils/notify';
@@ -403,14 +404,22 @@ function TransactionsPageContent() {
             Gerencie suas entradas, saídas e movimentações
           </p>
         </div>
-        <Button
-          onClick={() => {
-            fetchData();
-            handleOpenCreate();
-          }}
-        >
-          + Nova Movimentação
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/import"
+            className="inline-flex h-10 items-center gap-2 rounded-md border border-input bg-card px-4 text-sm font-semibold transition-theme hover:-translate-y-px hover:bg-muted active:scale-[0.97]"
+          >
+            Importar extrato
+          </Link>
+          <Button
+            onClick={() => {
+              fetchData();
+              handleOpenCreate();
+            }}
+          >
+            + Nova Movimentação
+          </Button>
+        </div>
       </div>
 
       {/* Filtro de período, tipo, categoria, descrição e valor */}

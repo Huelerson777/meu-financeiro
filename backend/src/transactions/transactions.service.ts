@@ -4,6 +4,7 @@ import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CATEGORY_KEYWORDS, normalize } from './category-keywords';
+import { ImportPreviewDto, ImportTransactionsDto } from './dto/import-transactions.dto';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -307,6 +308,125 @@ export class TransactionsService {
     }
 
     return empty;
+  }
+
+
+  /**
+   * Prévia de importação de extrato: para cada linha devolve a categoria sugerida (mesma lógica de
+   * suggestCategory, mas carregando o histórico uma única vez) e se parece duplicada de algo que já
+   * existe na conta (mesma data, valor e sentido). Duplicatas dentro do próprio arquivo contam
+   * contra o que já existe: 2 linhas iguais no arquivo e 1 no banco marcam só a primeira.
+   */
+  async previewImport(userId: string, dto: ImportPreviewDto) {
+    await this.ensureAccountOwnership(dto.accountId, userId);
+
+    const dayKey = (d: Date | string) => new Date(d).toISOString().slice(0, 10);
+    const dates = dto.rows.map((r) => new Date(r.date).getTime());
+    const from = new Date(Math.min(...dates) - 24 * 3600 * 1000);
+    const to = new Date(Math.max(...dates) + 24 * 3600 * 1000);
+
+    const existing = await this.prisma.transaction.findMany({
+      where: { userId, accountId: dto.accountId, type: { in: ['INCOME', 'EXPENSE'] }, date: { gte: from, lte: to } },
+      select: { date: true, amount: true, type: true },
+    });
+    const pool = new Map<string, number>();
+    existing.forEach((t) => {
+      const key = `${dayKey(t.date)}|${t.type}|${Number(t.amount).toFixed(2)}`;
+      pool.set(key, (pool.get(key) ?? 0) + 1);
+    });
+
+    const suggest = await this.buildCategorySuggester(userId);
+
+    return dto.rows.map((row) => {
+      const type = row.amount >= 0 ? 'INCOME' : 'EXPENSE';
+      const key = `${dayKey(row.date)}|${type}|${Math.abs(row.amount).toFixed(2)}`;
+      const left = pool.get(key) ?? 0;
+      const duplicate = left > 0;
+      if (duplicate) pool.set(key, left - 1);
+
+      const suggestion = suggest(row.description);
+      return { duplicate, categoryId: suggestion?.id ?? null, categoryName: suggestion?.name ?? null };
+    });
+  }
+
+  /** Grava as linhas escolhidas como transações pagas e ajusta o saldo da conta, tudo ou nada. */
+  async importTransactions(userId: string, dto: ImportTransactionsDto) {
+    await this.ensureAccountOwnership(dto.accountId, userId);
+
+    const categoryIds = [...new Set(dto.rows.map((r) => r.categoryId).filter(Boolean))] as string[];
+    if (categoryIds.length > 0) {
+      const owned = await this.prisma.category.count({ where: { id: { in: categoryIds }, userId } });
+      if (owned !== categoryIds.length) throw new ForbiddenException('Categoria não encontrada ou não pertence ao usuário');
+    }
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        let created = 0;
+        for (const row of dto.rows) {
+          const transaction = await tx.transaction.create({
+            data: {
+              userId,
+              accountId: dto.accountId,
+              categoryId: row.categoryId,
+              type: row.type,
+              description: row.description.trim(),
+              amount: row.amount,
+              status: 'PAID',
+              date: new Date(row.date),
+            },
+          });
+          await this.applyBalanceEffect(tx, dto.accountId, transaction.type, Number(transaction.amount), 1);
+          created++;
+        }
+        return { created };
+      },
+      { timeout: 60_000 },
+    );
+  }
+
+  /** Mesmo critério de suggestCategory (histórico do usuário, depois palavras-chave), com tudo carregado uma vez. */
+  private async buildCategorySuggester(userId: string) {
+    const [history, categories] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: { userId, categoryId: { not: null }, type: { in: ['INCOME', 'EXPENSE'] } },
+        select: { description: true, categoryId: true },
+        orderBy: { date: 'desc' },
+        take: 1000,
+      }),
+      this.prisma.category.findMany({ where: { userId }, select: { id: true, name: true } }),
+    ]);
+    const byId = new Map(categories.map((c) => [c.id, c]));
+    const byName = new Map(categories.map((c) => [c.name, c]));
+    const normalizedHistory = history.map((h) => ({ desc: normalize(h.description), categoryId: h.categoryId! }));
+
+    return (description: string): { id: string; name: string } | null => {
+      const query = normalize(description);
+      if (!query) return null;
+
+      const score = new Map<string, number>();
+      const queryWords = new Set(query.split(/\s+/).filter((w) => w.length > 2));
+      for (const h of normalizedHistory) {
+        if (!h.desc) continue;
+        let points = 0;
+        if (h.desc === query) points = 100;
+        else if (h.desc.includes(query) || query.includes(h.desc)) points = 60;
+        else points = h.desc.split(/\s+/).filter((w) => w.length > 2 && queryWords.has(w)).length * 20;
+        if (points > 0) score.set(h.categoryId, (score.get(h.categoryId) ?? 0) + points);
+      }
+      if (score.size > 0) {
+        const [best] = [...score.entries()].sort((a, b) => b[1] - a[1])[0];
+        const found = byId.get(best);
+        if (found) return found;
+      }
+
+      for (const [keyword, categoryName] of Object.entries(CATEGORY_KEYWORDS)) {
+        if (query.includes(normalize(keyword))) {
+          const found = byName.get(categoryName);
+          if (found) return found;
+        }
+      }
+      return null;
+    };
   }
 
   private typeCondition(type: 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT'): Prisma.TransactionWhereInput {
