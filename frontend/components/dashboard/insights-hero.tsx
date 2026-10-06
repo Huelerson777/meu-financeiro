@@ -35,8 +35,6 @@ interface Insight {
   text: string;
 }
 
-const CREAM = 'text-[hsl(42_45%_97%)]';
-
 function buildInsights(p: InsightsHeroProps): Insight[] {
   const list: Insight[] = [];
   const now = new Date();
@@ -115,8 +113,14 @@ function buildInsights(p: InsightsHeroProps): Insight[] {
   return list.slice(0, 6);
 }
 
-/** Carrossel de dicas dentro do card principal — troca sozinho, pausa com o mouse em cima. */
-function TipsCarousel({ insights }: { insights: Insight[] }) {
+const toneStyles: Record<Tone, string> = {
+  good: 'bg-success/10 text-success',
+  bad: 'bg-danger/10 text-danger',
+  neutral: 'bg-warning/10 text-warning',
+};
+
+/** Carrossel de dicas — troca sozinho, pausa com o mouse em cima. */
+function TipsCarousel({ insights, isLoading }: { insights: Insight[]; isLoading: boolean }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const count = insights.length;
@@ -127,31 +131,39 @@ function TipsCarousel({ insights }: { insights: Insight[] }) {
     return () => clearInterval(id);
   }, [count, paused]);
 
-  if (count === 0) {
-    return (
-      <p className={cn('text-sm leading-relaxed opacity-70', CREAM)}>
-        Lance receitas e despesas deste mês para começar a ver leituras sobre o seu dinheiro.
-      </p>
-    );
-  }
-
-  const current = Math.min(index, count - 1);
+  const current = Math.min(index, Math.max(count - 1, 0));
   const tip = insights[current];
   const go = (delta: number) => setIndex((i) => (Math.min(i, count - 1) + delta + count) % count);
 
   return (
     <div
-      className="rounded-lg bg-black/20 p-4 backdrop-blur-[2px]"
+      className="flex flex-col justify-between rounded-xl border border-border/70 bg-card p-4 shadow-soft"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <div key={current} className="flex min-h-[3.75rem] animate-fade-in items-start gap-3">
-        <tip.icon className={cn('mt-0.5 h-[18px] w-[18px] shrink-0', CREAM)} strokeWidth={1.75} />
-        <div className="min-w-0">
-          <p className={cn('text-sm font-semibold leading-snug', CREAM)}>{tip.title}</p>
-          <p className={cn('mt-0.5 text-xs leading-relaxed opacity-70', CREAM)}>{tip.text}</p>
+      <p className="flex items-center gap-2 text-sm font-semibold">
+        <Sparkles className="h-[18px] w-[18px] text-primary" strokeWidth={1.75} />
+        Dicas do mês
+      </p>
+
+      {isLoading ? (
+        <Skeleton className="mt-3 h-14" />
+      ) : !tip ? (
+        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+          Lance receitas e despesas deste mês para começar a ver leituras sobre o seu dinheiro.
+        </p>
+      ) : (
+        <div key={current} className="mt-3 flex min-h-[3.5rem] animate-fade-in items-start gap-3">
+          <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-md', toneStyles[tip.tone])}>
+            <tip.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold leading-snug">{tip.title}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{tip.text}</p>
+          </div>
         </div>
-      </div>
+      )}
+
       {count > 1 && (
         <div className="mt-3 flex items-center justify-between">
           <div className="flex gap-1.5" role="tablist" aria-label="Dicas">
@@ -162,16 +174,16 @@ function TipsCarousel({ insights }: { insights: Insight[] }) {
                 aria-selected={i === current}
                 aria-label={`Dica ${i + 1}`}
                 onClick={() => setIndex(i)}
-                className={cn('h-1.5 rounded-full bg-white transition-all', i === current ? 'w-5 opacity-90' : 'w-1.5 opacity-35 hover:opacity-60')}
+                className={cn('h-1.5 rounded-full bg-primary transition-all', i === current ? 'w-5' : 'w-1.5 opacity-30 hover:opacity-60')}
               />
             ))}
           </div>
           <div className="flex gap-1">
-            <button onClick={() => go(-1)} aria-label="Dica anterior" className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 transition-theme hover:bg-white/20 active:scale-90">
-              <ChevronLeft className={cn('h-4 w-4', CREAM)} />
+            <button onClick={() => go(-1)} aria-label="Dica anterior" className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-muted hover:text-foreground active:scale-90">
+              <ChevronLeft className="h-4 w-4" />
             </button>
-            <button onClick={() => go(1)} aria-label="Próxima dica" className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 transition-theme hover:bg-white/20 active:scale-90">
-              <ChevronRight className={cn('h-4 w-4', CREAM)} />
+            <button onClick={() => go(1)} aria-label="Próxima dica" className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-muted hover:text-foreground active:scale-90">
+              <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -250,57 +262,41 @@ function LimitCard({ limit, expense, onChange, isLoading }: { limit: number | nu
 }
 
 export function InsightsHero(props: InsightsHeroProps) {
-  const free = props.leftovers - props.openExpenseTotal;
   const insights = buildInsights(props);
-  const positive = free >= 0;
   const nextDate = props.nextDue
     ? new Date(props.nextDue.dueDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
     : null;
 
   return (
-    <section className="grid animate-rise gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-      {/* Número-âncora + dicas */}
-      <div className={cn('relative flex flex-col overflow-hidden rounded-xl p-6 shadow-lift sm:p-8', CREAM, positive ? 'bg-[hsl(163_72%_19%)]' : 'bg-[hsl(8_55%_33%)]')}>
-        <div aria-hidden className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-[radial-gradient(circle,hsl(158_58%_52%/0.22),transparent_65%)]" />
-        <p className="relative text-sm font-medium opacity-70">{positive ? 'Você ainda pode gastar' : 'Faltam para fechar o mês'}</p>
-        {props.isLoading ? (
-          <Skeleton className="relative mt-3 h-12 w-56 bg-white/15" />
-        ) : (
-          <p className="font-num relative mt-2 text-5xl font-bold leading-none sm:text-6xl">{formatCurrency(Math.abs(free))}</p>
-        )}
-        <p className="relative mt-4 max-w-sm text-sm leading-relaxed opacity-70">
-          Saldo do mês ({formatCurrency(props.leftovers)}) menos {formatCurrency(props.openExpenseTotal)} em contas ainda em aberto.
-        </p>
-        <div className="relative mt-6">
-          {props.isLoading ? <Skeleton className="h-24 bg-white/10" /> : <TipsCarousel insights={insights} />}
+    <section className="grid animate-rise gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <TipsCarousel insights={insights} isLoading={props.isLoading} />
+
+      <div className="flex items-start gap-4 rounded-xl border border-border/70 bg-card p-4 shadow-soft">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
+          <Receipt className="h-5 w-5" strokeWidth={1.75} />
+        </span>
+        <div className="min-w-0">
+          {props.isLoading ? (
+            <Skeleton className="h-12 w-40" />
+          ) : props.openExpenseCount === 0 ? (
+            <p className="text-sm font-semibold">Nenhuma conta a pagar neste mês</p>
+          ) : (
+            <>
+              <p className="text-sm font-semibold">
+                {props.openExpenseCount} {props.openExpenseCount === 1 ? 'conta a pagar' : 'contas a pagar'}
+              </p>
+              <p className="font-num mt-1 text-2xl font-bold leading-none">{formatCurrency(props.openExpenseTotal)}</p>
+              {nextDate && props.nextDue && (
+                <p className="mt-2 truncate text-xs text-muted-foreground">
+                  Próxima: {props.nextDue.description}, {nextDate}
+                </p>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      <div className="grid content-start gap-4">
-        <div className="flex items-center gap-4 rounded-xl border border-border/70 bg-card p-4 shadow-soft">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
-            <Receipt className="h-5 w-5" strokeWidth={1.75} />
-          </span>
-          <div className="min-w-0">
-            {props.isLoading ? (
-              <Skeleton className="h-10 w-48" />
-            ) : props.openExpenseCount === 0 ? (
-              <p className="text-sm font-semibold">Nenhuma conta a pagar neste mês</p>
-            ) : (
-              <>
-                <p className="text-sm font-semibold">
-                  {props.openExpenseCount} {props.openExpenseCount === 1 ? 'conta a pagar' : 'contas a pagar'}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                  Total de {formatCurrency(props.openExpenseTotal)}
-                  {nextDate && props.nextDue ? ` · próxima: ${props.nextDue.description}, ${nextDate}` : ''}
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-        <LimitCard limit={props.limit} expense={props.expense} onChange={props.onChangeLimit} isLoading={props.isLoading} />
-      </div>
+      <LimitCard limit={props.limit} expense={props.expense} onChange={props.onChangeLimit} isLoading={props.isLoading} />
     </section>
   );
 }
