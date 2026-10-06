@@ -19,6 +19,7 @@ import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
 import { useCashFlowReport } from '@/hooks/use-reports';
 import { useMonthlyLimit } from '@/hooks/use-monthly-limit';
+import { AccountBalancesCard } from '@/components/dashboard/account-balances-card';
 import { CategoryDonutCard } from '@/components/dashboard/category-donut-card';
 import { ResultCard } from '@/components/dashboard/result-card';
 import { RecentTransactionsCard } from '@/components/dashboard/recent-transactions-card';
@@ -96,7 +97,6 @@ export default function DashboardPage() {
   const monthStartStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
   const monthEndStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
   const { data: monthCashFlow } = useCashFlowReport({ startDate: monthStartStr, endDate: monthEndStr });
-  const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
   const { order, setOrder } = useDashboardWidgetOrder();
   const firstName = useAuthStore((s) => s.user?.name)?.split(' ')[0];
 
@@ -222,7 +222,6 @@ export default function DashboardPage() {
     : [];
 
   const hideAccountFromChart = (accountId: string) => {
-    setHoveredAccountId(null);
     setHiddenAccountIds([...hiddenAccountIds, accountId]);
   };
 
@@ -543,109 +542,13 @@ export default function DashboardPage() {
           ),
           recentTransactions: <RecentTransactionsCard />,
           accountBalances: (
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle>Saldo por Conta</CardTitle>
-          <AccountVisibilityPicker accounts={accountsData?.items ?? []} />
-        </CardHeader>
-        <CardContent>
-          {accountsLoading ? (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
-              Carregando...
-            </div>
-          ) : sortedAccountBalances.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm text-center px-4">
-              {accountsData && accountsData.items.length > 0
-                ? 'Todas as contas foram ocultadas deste gráfico. Use o botão de olho acima para reexibir alguma.'
-                : 'Nenhuma conta cadastrada.'}
-            </div>
-          ) : (
-            // Mesmo padrão visual do gráfico de categorias: barras horizontais
-            // ordenadas da maior pra menor, com o valor exato no final da barra.
-            // O overlay de linhas abaixo replica o espaçamento vertical que o
-            // Recharts usa internamente (margin top/bottom padrão de 5px,
-            // categorias distribuídas em altura igual) só pra posicionar o
-            // botão de remover — ele não desenha nada, é invisível até o hover.
-            // pointer-events-none nele é essencial: sem isso ele intercepta o
-            // mouse antes de chegar nas barras do gráfico por baixo, e o
-            // tooltip/hover do Recharts nunca dispara (só a barra em si e o
-            // botão, via pointer-events-auto, voltam a responder ao mouse).
-            <div className="relative" style={{ height: Math.max(64 * sortedAccountBalances.length, 240) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  layout="vertical"
-                  data={sortedAccountBalances.map((acc) => ({
-                    name: acc.name,
-                    total: Number(acc.currentBalance),
-                  }))}
-                  margin={{ left: 20, right: 60 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" hide />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={150}
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <RechartsTooltip content={<SingleValueTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                  <Bar
-                    dataKey="total"
-                    radius={[0, 4, 4, 0]}
-                    barSize={22}
-                    cursor="pointer"
-                    onClick={() => router.push('/accounts')}
-                  >
-                    {sortedAccountBalances.map((acc, index) => (
-                      <Cell
-                        key={`acc-cell-${index}`}
-                        fill={acc.color || '#64748B'}
-                        onMouseEnter={() => setHoveredAccountId(acc.id)}
-                        onMouseLeave={() => setHoveredAccountId(null)}
-                      />
-                    ))}
-                    <LabelList
-                      dataKey="total"
-                      position="right"
-                      formatter={(val: number) => formatCurrency(val)}
-                      style={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 600 }}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-
-              {(() => {
-                const chartHeight = Math.max(64 * sortedAccountBalances.length, 240);
-                const rowHeight = (chartHeight - 10) / sortedAccountBalances.length;
-                return sortedAccountBalances.map((acc, index) => (
-                  <div
-                    key={acc.id}
-                    className="pointer-events-none absolute left-0 right-0 flex items-start justify-end pr-2 pt-1"
-                    style={{ top: 5 + rowHeight * index, height: rowHeight }}
-                  >
-                    <button
-                      type="button"
-                      title={`Remover "${acc.name}" deste gráfico`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        hideAccountFromChart(acc.id);
-                      }}
-                      className={`pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-opacity hover:border-destructive hover:text-destructive ${
-                        hoveredAccountId === acc.id ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ));
-              })()}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <AccountBalancesCard
+              allAccounts={accountsData?.items ?? []}
+              accounts={sortedAccountBalances}
+              isLoading={accountsLoading}
+              onHide={hideAccountFromChart}
+              onOpen={() => router.push('/accounts')}
+            />
           ),
         };
 
