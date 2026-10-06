@@ -29,7 +29,7 @@ const navItems = [
   { href: '/recurring-bills', label: 'Contas Fixas', icon: Repeat },
   { href: '/investments', label: 'Investimentos', icon: TrendingUp },
   { href: '/goals', label: 'Metas', icon: Target },
-  { href: '/reports', label: 'Relatórios', icon: FileBarChart },
+  { href: '/reports', label: 'Fluxo de Caixa', icon: FileBarChart },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
