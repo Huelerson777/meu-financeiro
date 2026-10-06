@@ -11,6 +11,7 @@ import {
   Settings,
   FileBarChart,
   Repeat,
+  LineChart,
   X,
   PanelLeftClose,
   PanelLeftOpen,
@@ -30,6 +31,7 @@ const navItems = [
   { href: '/investments', label: 'Investimentos', icon: TrendingUp },
   { href: '/goals', label: 'Metas', icon: Target },
   { href: '/reports', label: 'Fluxo de Caixa', icon: FileBarChart },
+  { href: '/projection', label: 'Projeção', icon: LineChart },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
