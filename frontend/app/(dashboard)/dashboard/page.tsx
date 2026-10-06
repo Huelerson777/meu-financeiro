@@ -19,6 +19,9 @@ import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
 import { useCashFlowReport } from '@/hooks/use-reports';
 import { useMonthlyLimit } from '@/hooks/use-monthly-limit';
+import { PaymentsStatusCard } from '@/components/dashboard/payments-status-card';
+import { GoalsSummaryCard } from '@/components/dashboard/goals-summary-card';
+import { YearlyChartCard } from '@/components/dashboard/yearly-chart-card';
 import { AccountBalancesCard } from '@/components/dashboard/account-balances-card';
 import { CategoryDonutCard } from '@/components/dashboard/category-donut-card';
 import { ResultCard } from '@/components/dashboard/result-card';
@@ -92,7 +95,6 @@ export default function DashboardPage() {
   const { data: netWorthData, isLoading: netWorthLoading } = useNetWorthTrend(12);
   const { data: accountsData, isLoading: accountsLoading } = useAccounts();
   const { hiddenIds: hiddenAccountIds, setHiddenIds: setHiddenAccountIds } = useHiddenAccountIds();
-  const [showAllOpen, setShowAllOpen] = useState(false);
   const { limit: monthlyLimit, setLimit: setMonthlyLimit } = useMonthlyLimit();
   const monthStartStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
   const monthEndStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
@@ -325,161 +327,9 @@ export default function DashboardPage() {
               changePct={data?.comparison?.leftoversChangePct}
             />
           ),
-          paymentsStatus: (
-        <Card>
-          <CardHeader>
-            <CardTitle>Pago x Em Aberto</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-              <div className="flex items-center gap-3 rounded-lg border border-border p-4">
-                <CircleCheck className="h-8 w-8 text-success shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Pago no mês</p>
-                  <p className="font-num text-xl font-bold">{formatCurrency(paymentsStatus?.paidExpenseTotal ?? 0)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg border border-border p-4">
-                <CircleDashed className="h-8 w-8 text-amber-500 shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Em aberto no mês</p>
-                  <p className="font-num text-xl font-bold">{formatCurrency(paymentsStatus?.openExpenseTotal ?? 0)}</p>
-                </div>
-              </div>
-            </div>
-
-            {paymentsLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p>
-            ) : !paymentsStatus || paymentsStatus.openItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                Nada em aberto neste mês — tudo pago!
-              </p>
-            ) : (
-              <div className="flex flex-col divide-y divide-border">
-                {(showAllOpen ? paymentsStatus.openItems : paymentsStatus.openItems.slice(0, 6)).map((item) => (
-                  <div key={item.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {item.description}
-                        {item.isOverdue && (
-                          <span className="ml-2 inline-flex items-center rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
-                            Atrasado
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.source} · vence em {new Date(item.dueDate).toLocaleDateString('pt-BR')}
-                      </p>
-                      {item.category && (
-                        <span
-                          className="mt-1 inline-flex w-fit items-center text-xs font-normal px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: `${item.category.color}20`, color: item.category.color }}
-                        >
-                          {item.category.name}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className={`text-sm font-semibold ${item.type === 'INCOME' ? 'text-success' : 'text-foreground'}`}>
-                        {item.type === 'INCOME' ? '+ ' : ''}{formatCurrency(item.amount)}
-                      </span>
-                      <button
-                        onClick={() => setPayingItem(item)}
-                        className="text-xs font-semibold text-primary hover:underline shrink-0"
-                      >
-                        {item.type === 'INCOME' ? 'Receber' : 'Pagar'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {paymentsStatus.openItems.length > 6 && (
-                  <button
-                    onClick={() => setShowAllOpen((v) => !v)}
-                    className="pt-3 text-center text-sm font-semibold text-primary hover:underline"
-                  >
-                    {showAllOpen ? 'Mostrar menos' : `Ver todas (${paymentsStatus.openItems.length})`}
-                  </button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-          ),
+          paymentsStatus: <PaymentsStatusCard status={paymentsStatus} isLoading={paymentsLoading} onPay={setPayingItem} />,
           netWorth: <NetWorthCard points={netWorthData} isLoading={netWorthLoading} />,
-          goalsSummary: (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                Metas
-              </span>
-              {goalsSummary && goalsSummary.count > 0 && (
-                <button
-                  onClick={() => router.push('/goals')}
-                  className="text-xs font-normal text-primary hover:underline"
-                >
-                  Ver todas
-                </button>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {goalsLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p>
-            ) : !goalsSummary || goalsSummary.count === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-sm text-muted-foreground mb-3">Você ainda não tem metas cadastradas.</p>
-                <button
-                  onClick={() => router.push('/goals')}
-                  className="text-sm font-semibold text-primary hover:underline"
-                >
-                  Criar sua primeira meta
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-5">
-                <div>
-                  <div className="flex items-baseline justify-between mb-1">
-                    <span className="text-sm text-muted-foreground">Progresso geral</span>
-                    <span className="text-sm font-semibold">{goalsSummary.overallProgress}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-2 rounded-full bg-primary transition-all"
-                      style={{ width: `${Math.min(100, goalsSummary.overallProgress)}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatCurrency(goalsSummary.totalCurrent)} de {formatCurrency(goalsSummary.totalTarget)}
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  {goalsSummary.goals.map((g) => (
-                    <div key={g.id}>
-                      <div className="flex items-baseline justify-between mb-1 gap-2">
-                        <span className="text-sm font-medium truncate">{g.name}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">{g.progress}%</span>
-                      </div>
-                      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-1.5 rounded-full bg-success"
-                          style={{ width: `${Math.min(100, g.progress)}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatCurrency(g.currentAmount)} de {formatCurrency(g.targetAmount)}
-                        {g.deadline ? ` · até ${new Date(g.deadline).toLocaleDateString('pt-BR')}` : ''}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-          ),
+          goalsSummary: <GoalsSummaryCard summary={goalsSummary} isLoading={goalsLoading} />,
           balanceChart: (
             <ResultCard
               income={data?.totalIncome ?? 0}
@@ -490,48 +340,7 @@ export default function DashboardPage() {
               isLoading={isLoading}
             />
           ),
-          yearlyChart: (
-        <Card>
-          <CardHeader>
-            <CardTitle>Evolução Anual {selectedYear}</CardTitle>
-          </CardHeader>
-          <CardContent className="h-72 pt-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyFlow} margin={{ left: 8, right: 8, top: 20 }}>
-                <defs>
-                  <linearGradient id="colorReceitas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(155 62% 32%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(155 62% 32%)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorDespesas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(8 62% 50%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(8 62% 50%)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorInvestido" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(200 55% 45%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(200 55% 45%)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                  width={70}
-                  tickFormatter={(v) => formatCompactCurrency(v)}
-                />
-                <RechartsTooltip content={<ChartTooltip />} />
-                <Legend />
-                <Area type="monotone" dataKey="receitas" name="Receitas" stroke="hsl(155 62% 32%)" fill="url(#colorReceitas)" strokeWidth={2} />
-                <Area type="monotone" dataKey="despesas" name="Despesas" stroke="hsl(8 62% 50%)" fill="url(#colorDespesas)" strokeWidth={2} />
-                <Area type="monotone" dataKey="investido" name="Investido" stroke="hsl(200 55% 45%)" fill="url(#colorInvestido)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-          ),
+          yearlyChart: <YearlyChartCard year={selectedYear} data={monthlyFlow} />,
           categoryChart: (
             <CategoryDonutCard
               data={categoryData}
