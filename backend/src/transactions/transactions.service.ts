@@ -96,6 +96,8 @@ export class TransactionsService {
     const include = {
       account: { select: { name: true } },
       category: { select: { name: true, color: true } },
+      // Parcelas (cartão ou financiamento) guardam o "pago" aqui, não em transaction.status
+      installments: { select: { number: true, totalCount: true, paid: true, paidAt: true } },
       transfer: {
         select: {
           id: true,

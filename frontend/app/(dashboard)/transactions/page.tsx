@@ -1,5 +1,6 @@
 'use client';
 
+import { isEffectivelyPaid } from '@/utils/transaction-status';
 import { notifyAlert, confirmDialog } from '@/utils/notify';
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -48,6 +49,7 @@ interface Transaction {
   categoryId?: string | null;
   category?: { name: string; color: string } | null;
   transfer?: { id: string; toId: string; toAccount?: { name: string; type: string } } | null;
+  installments?: { paid: boolean; paidAt?: string | null }[] | null;
 }
 
 interface AccountOption {
@@ -555,9 +557,9 @@ function TransactionsPageContent() {
                         {isIncome ? 'Entrada' : isInvestment ? 'Investimento' : isTransfer ? 'Transferência' : 'Saída'}
                       </span>
                       <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                        t.status === 'PAID' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
+                        isEffectivelyPaid(t) ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
                       }`}>
-                        {t.status === 'PAID' ? 'Feito' : 'Pendente'}
+                        {isEffectivelyPaid(t) ? 'Feito' : 'Pendente'}
                       </span>
                       {t.category && (
                         <span
@@ -629,11 +631,11 @@ function TransactionsPageContent() {
                     <td className="p-4 text-foreground text-sm">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
                     <td className="p-4">
                       <span className={`text-xs font-bold px-2 py-1 rounded ${
-                        t.status === 'PAID' 
+                        isEffectivelyPaid(t) 
                           ? 'bg-primary/10 text-primary' 
                           : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
                       }`}>
-                        {t.status === 'PAID' ? 'Feito' : 'Pendente'}
+                        {isEffectivelyPaid(t) ? 'Feito' : 'Pendente'}
                       </span>
                     </td>
                     <td className={`p-4 text-right font-semibold text-lg ${
