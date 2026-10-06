@@ -1,6 +1,7 @@
 import { EyeOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AccountAvatar } from '@/components/accounts/account-avatar';
 import { AccountVisibilityPicker } from '@/components/dashboard/account-visibility-picker';
 import { formatCurrency } from '@/utils/currency';
 import { cn } from '@/utils/cn';
@@ -77,12 +78,7 @@ export function AccountBalancesCard({ allAccounts, accounts, isLoading, onHide, 
                   <li key={a.id} className="group">
                     <div className="flex items-center gap-3 py-3">
                       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left transition-theme hover:translate-x-0.5">
-                        <span
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-bold"
-                          style={{ backgroundColor: `${color}1f`, color }}
-                        >
-                          {a.name.charAt(0).toUpperCase()}
-                        </span>
+                        <AccountAvatar name={a.name} color={a.color} icon={a.icon} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-semibold">{a.name}</span>
                           <span className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">

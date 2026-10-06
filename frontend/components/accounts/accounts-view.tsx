@@ -1,6 +1,8 @@
 'use client';
 
-import { Landmark } from 'lucide-react';
+import { ImagePlus, Landmark, X } from 'lucide-react';
+import { AccountAvatar } from '@/components/accounts/account-avatar';
+import { fileToLogoDataUrl, isImageIcon } from '@/utils/image-resize';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { notifyAlert, confirmDialog } from '@/utils/notify';
@@ -39,6 +41,10 @@ export function AccountsView() {
   const [type, setType] = useState('CHECKING');
   const [initialBalance, setInitialBalance] = useState('');
   const [color, setColor] = useState('#3b82f6');
+  // logo: undefined = sem mudança | string = nova imagem | null = remover
+  const [logo, setLogo] = useState<string | null | undefined>(undefined);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [currentIcon, setCurrentIcon] = useState<string | undefined>(undefined);
   const [includeInDashboard, setIncludeInDashboard] = useState(true);
 
   const extractList = (rawResponse: any): Account[] => {
@@ -65,6 +71,9 @@ export function AccountsView() {
   useEffect(() => { fetchAccounts(); }, []);
 
   const handleOpenCreate = () => {
+    setLogo(undefined);
+    setLogoError(null);
+    setCurrentIcon(undefined);
     setEditingId(null);
     setName('');
     setType('CHECKING');
@@ -82,6 +91,9 @@ export function AccountsView() {
     // criação) — é o que aparece na aba Contas e no Saldo Geral.
     setInitialBalance((acc.currentBalance ?? acc.initialBalance)?.toString() || '0');
     setColor(acc.color || '#3b82f6');
+    setLogo(undefined);
+    setLogoError(null);
+    setCurrentIcon(acc.icon);
     setIncludeInDashboard(acc.includeInDashboard ?? true);
     setIsModalOpen(true);
   };
@@ -114,6 +126,21 @@ export function AccountsView() {
     }
   };
 
+
+  const handleLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setLogoError(null);
+    try {
+      setLogo(await fileToLogoDataUrl(file));
+    } catch (err: any) {
+      setLogoError(err?.message ?? 'Não foi possível usar essa imagem.');
+    }
+  };
+
+  const previewIcon = logo !== undefined ? logo : currentIcon;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -128,6 +155,7 @@ export function AccountsView() {
             currentBalance: balanceValue,
             color: color || '#3b82f6',
             includeInDashboard,
+            ...(logo !== undefined ? { icon: logo } : {}),
           }
         : {
             name,
@@ -135,6 +163,7 @@ export function AccountsView() {
             initialBalance: balanceValue,
             color: color || '#3b82f6',
             includeInDashboard, // ITEM 1 — enviado ao backend
+            ...(logo ? { icon: logo } : {}),
           };
 
       if (editingId) {
@@ -240,10 +269,15 @@ export function AccountsView() {
                 </button>
               </div>
 
-              <span className="text-xs uppercase font-bold tracking-wider text-primary bg-primary/10 px-2 py-1 rounded">
-                {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
-              </span>
-              <h3 className="text-xl font-bold mt-3">{acc.name}</h3>
+              <div className="flex items-center gap-3">
+                <AccountAvatar name={acc.name} color={acc.color} icon={acc.icon} className="h-12 w-12" />
+                <div className="min-w-0">
+                  <span className="text-xs uppercase font-bold tracking-wider text-primary bg-primary/10 px-2 py-1 rounded">
+                    {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
+                  </span>
+                  <h3 className="mt-1.5 truncate text-xl font-bold">{acc.name}</h3>
+                </div>
+              </div>
               <p
                 className={`text-2xl font-semibold mt-2 ${
                   Number(acc.currentBalance ?? acc.initialBalance ?? 0) < 0
@@ -341,6 +375,31 @@ export function AccountsView() {
                     Corrige o saldo desta conta diretamente — use se o valor mostrado estiver divergente do real.
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Logo (opcional)</label>
+                <div className="flex items-center gap-3">
+                  <AccountAvatar name={name || 'Conta'} color={color} icon={previewIcon} className="h-14 w-14" />
+                  <div className="flex flex-wrap gap-2">
+                    <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input bg-card px-3 text-sm font-semibold transition-theme hover:bg-muted active:scale-[0.97]">
+                      <ImagePlus className="h-4 w-4" strokeWidth={1.75} />
+                      {isImageIcon(previewIcon) ? 'Trocar imagem' : 'Escolher imagem'}
+                      <input type="file" accept="image/*" className="sr-only" onChange={handleLogoFile} />
+                    </label>
+                    {isImageIcon(previewIcon) && (
+                      <button
+                        type="button"
+                        onClick={() => setLogo(null)}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm font-semibold text-muted-foreground transition-theme hover:bg-muted hover:text-danger active:scale-[0.97]"
+                      >
+                        <X className="h-4 w-4" /> Remover
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">PNG, JPG, SVG ou WebP. A imagem é reduzida automaticamente.</p>
+                {logoError && <p className="mt-1 text-xs text-danger">{logoError}</p>}
               </div>
 
               <div>
