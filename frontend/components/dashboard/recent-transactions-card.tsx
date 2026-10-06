@@ -3,11 +3,14 @@
 import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { AccountAvatar } from '@/components/accounts/account-avatar';
+import { useAccounts } from '@/hooks/use-accounts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { cn } from '@/utils/cn';
+import { effectiveDate, isEffectivelyPaid } from '@/utils/transaction-status';
 
 interface RecentTransaction {
   id: string;
@@ -16,6 +19,8 @@ interface RecentTransaction {
   type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
   status: 'PAID' | 'PENDING';
   date: string;
+  accountId?: string;
+  installments?: { paid: boolean; paidAt?: string | null }[] | null;
   category?: { name: string; color: string } | null;
   account?: { name: string } | null;
 }
@@ -32,20 +37,28 @@ function dayLabel(iso: string) {
 
 /** Últimos lançamentos agrupados por dia (Hoje, Ontem, …) com categoria e valor. */
 export function RecentTransactionsCard() {
+  const { data: accountsData } = useAccounts();
+  const accountsById = new Map((accountsData?.items ?? []).map((a: any) => [a.id, a]));
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', 'recent-transactions'],
     queryFn: async () => {
-      const res = await api.get('/transactions', { params: { limit: 8 } });
+      // Só o que já aconteceu: até hoje (parcelas futuras ficam de fora) e nos últimos 60 dias
+      const iso = (d: Date) => d.toISOString().split('T')[0];
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 60);
+      const res = await api.get('/transactions', { params: { limit: 100, startDate: iso(start), endDate: iso(end) } });
       const raw = res.data;
-      const list = Array.isArray(raw?.data?.items) ? raw.data.items : Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
-      return list as RecentTransaction[];
+      const list: RecentTransaction[] = Array.isArray(raw?.data?.items) ? raw.data.items : Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
+      // ordena pela data em que de fato aconteceu (pagamento da parcela, quando for o caso)
+      return list.sort((a, b) => effectiveDate(b).localeCompare(effectiveDate(a))).slice(0, 8);
     },
     refetchInterval: 60_000,
   });
 
   const groups: { label: string; items: RecentTransaction[] }[] = [];
   (data ?? []).forEach((t) => {
-    const label = dayLabel(t.date);
+    const label = dayLabel(effectiveDate(t));
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.items.push(t);
     else groups.push({ label, items: [t] });
@@ -77,8 +90,12 @@ export function RecentTransactionsCard() {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{t.description}</p>
                           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+                            {(() => {
+                              const acc = accountsById.get(t.accountId ?? '');
+                              return acc ? <AccountAvatar name={acc.name} color={acc.color} icon={acc.icon} className="h-5 w-5 rounded-md text-[9px]" /> : null;
+                            })()}
                             {t.account?.name}
-                            {t.status === 'PENDING' && <span className="rounded bg-warning/10 px-1.5 py-px text-[10px] font-semibold text-warning">pendente</span>}
+                            {!isEffectivelyPaid(t) && <span className="rounded bg-warning/10 px-1.5 py-px text-[10px] font-semibold text-warning">pendente</span>}
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2.5">

@@ -18,7 +18,12 @@ import { SummaryCard } from '@/components/dashboard/summary-card';
 import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
 import { useCashFlowReport } from '@/hooks/use-reports';
+import { useBudgets } from '@/hooks/use-budgets';
 import { useMonthlyLimit } from '@/hooks/use-monthly-limit';
+import { PaymentsStatusCard } from '@/components/dashboard/payments-status-card';
+import { GoalsSummaryCard } from '@/components/dashboard/goals-summary-card';
+import { YearlyChartCard } from '@/components/dashboard/yearly-chart-card';
+import { AccountBalancesCard } from '@/components/dashboard/account-balances-card';
 import { CategoryDonutCard } from '@/components/dashboard/category-donut-card';
 import { ResultCard } from '@/components/dashboard/result-card';
 import { RecentTransactionsCard } from '@/components/dashboard/recent-transactions-card';
@@ -91,12 +96,12 @@ export default function DashboardPage() {
   const { data: netWorthData, isLoading: netWorthLoading } = useNetWorthTrend(12);
   const { data: accountsData, isLoading: accountsLoading } = useAccounts();
   const { hiddenIds: hiddenAccountIds, setHiddenIds: setHiddenAccountIds } = useHiddenAccountIds();
-  const [showAllOpen, setShowAllOpen] = useState(false);
   const { limit: monthlyLimit, setLimit: setMonthlyLimit } = useMonthlyLimit();
+  const { data: budgetList } = useBudgets(selectedMonth, selectedYear);
+  const budgetMap = new Map((budgetList ?? []).map((b) => [b.categoryId, b.amount]));
   const monthStartStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
   const monthEndStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
   const { data: monthCashFlow } = useCashFlowReport({ startDate: monthStartStr, endDate: monthEndStr });
-  const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
   const { order, setOrder } = useDashboardWidgetOrder();
   const firstName = useAuthStore((s) => s.user?.name)?.split(' ')[0];
 
@@ -221,8 +226,19 @@ export default function DashboardPage() {
         .sort((a, b) => Number(b.currentBalance) - Number(a.currentBalance))
     : [];
 
+  // categoria que mais estourou o orçamento do mês (se houver)
+  const budgetAlert = (() => {
+    let worst: { name: string; over: number; pct: number } | null = null;
+    sortedCategoryData.forEach((c) => {
+      const budget = c.categoryId ? budgetMap.get(c.categoryId) : undefined;
+      if (budget && c.total > budget && (!worst || c.total - budget > worst.over)) {
+        worst = { name: c.name, over: c.total - budget, pct: Math.round((c.total / budget) * 100) };
+      }
+    });
+    return worst;
+  })();
+
   const hideAccountFromChart = (accountId: string) => {
-    setHoveredAccountId(null);
     setHiddenAccountIds([...hiddenAccountIds, accountId]);
   };
 
@@ -282,6 +298,7 @@ export default function DashboardPage() {
         expenseChangePct={data?.comparison?.expenseChangePct}
         topCategory={sortedCategoryData[0] ?? null}
         dailyExpenses={monthCashFlow?.series}
+        budgetAlert={budgetAlert}
         limit={monthlyLimit}
         onChangeLimit={setMonthlyLimit}
       />
@@ -326,161 +343,9 @@ export default function DashboardPage() {
               changePct={data?.comparison?.leftoversChangePct}
             />
           ),
-          paymentsStatus: (
-        <Card>
-          <CardHeader>
-            <CardTitle>Pago x Em Aberto</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
-              <div className="flex items-center gap-3 rounded-lg border border-border p-4">
-                <CircleCheck className="h-8 w-8 text-success shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Pago no mês</p>
-                  <p className="font-num text-xl font-bold">{formatCurrency(paymentsStatus?.paidExpenseTotal ?? 0)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 rounded-lg border border-border p-4">
-                <CircleDashed className="h-8 w-8 text-amber-500 shrink-0" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Em aberto no mês</p>
-                  <p className="font-num text-xl font-bold">{formatCurrency(paymentsStatus?.openExpenseTotal ?? 0)}</p>
-                </div>
-              </div>
-            </div>
-
-            {paymentsLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p>
-            ) : !paymentsStatus || paymentsStatus.openItems.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                Nada em aberto neste mês — tudo pago!
-              </p>
-            ) : (
-              <div className="flex flex-col divide-y divide-border">
-                {(showAllOpen ? paymentsStatus.openItems : paymentsStatus.openItems.slice(0, 6)).map((item) => (
-                  <div key={item.id} className="flex items-center justify-between gap-3 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">
-                        {item.description}
-                        {item.isOverdue && (
-                          <span className="ml-2 inline-flex items-center rounded-full bg-danger/10 px-2 py-0.5 text-xs font-semibold text-danger">
-                            Atrasado
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.source} · vence em {new Date(item.dueDate).toLocaleDateString('pt-BR')}
-                      </p>
-                      {item.category && (
-                        <span
-                          className="mt-1 inline-flex w-fit items-center text-xs font-normal px-2 py-0.5 rounded-full"
-                          style={{ backgroundColor: `${item.category.color}20`, color: item.category.color }}
-                        >
-                          {item.category.name}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className={`text-sm font-semibold ${item.type === 'INCOME' ? 'text-success' : 'text-foreground'}`}>
-                        {item.type === 'INCOME' ? '+ ' : ''}{formatCurrency(item.amount)}
-                      </span>
-                      <button
-                        onClick={() => setPayingItem(item)}
-                        className="text-xs font-semibold text-primary hover:underline shrink-0"
-                      >
-                        {item.type === 'INCOME' ? 'Receber' : 'Pagar'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {paymentsStatus.openItems.length > 6 && (
-                  <button
-                    onClick={() => setShowAllOpen((v) => !v)}
-                    className="pt-3 text-center text-sm font-semibold text-primary hover:underline"
-                  >
-                    {showAllOpen ? 'Mostrar menos' : `Ver todas (${paymentsStatus.openItems.length})`}
-                  </button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-          ),
+          paymentsStatus: <PaymentsStatusCard status={paymentsStatus} isLoading={paymentsLoading} onPay={setPayingItem} />,
           netWorth: <NetWorthCard points={netWorthData} isLoading={netWorthLoading} />,
-          goalsSummary: (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span className="flex items-center gap-2">
-                <Target className="h-4 w-4" />
-                Metas
-              </span>
-              {goalsSummary && goalsSummary.count > 0 && (
-                <button
-                  onClick={() => router.push('/goals')}
-                  className="text-xs font-normal text-primary hover:underline"
-                >
-                  Ver todas
-                </button>
-              )}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {goalsLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Carregando...</p>
-            ) : !goalsSummary || goalsSummary.count === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-sm text-muted-foreground mb-3">Você ainda não tem metas cadastradas.</p>
-                <button
-                  onClick={() => router.push('/goals')}
-                  className="text-sm font-semibold text-primary hover:underline"
-                >
-                  Criar sua primeira meta
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-5">
-                <div>
-                  <div className="flex items-baseline justify-between mb-1">
-                    <span className="text-sm text-muted-foreground">Progresso geral</span>
-                    <span className="text-sm font-semibold">{goalsSummary.overallProgress}%</span>
-                  </div>
-                  <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-2 rounded-full bg-primary transition-all"
-                      style={{ width: `${Math.min(100, goalsSummary.overallProgress)}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {formatCurrency(goalsSummary.totalCurrent)} de {formatCurrency(goalsSummary.totalTarget)}
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-3">
-                  {goalsSummary.goals.map((g) => (
-                    <div key={g.id}>
-                      <div className="flex items-baseline justify-between mb-1 gap-2">
-                        <span className="text-sm font-medium truncate">{g.name}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">{g.progress}%</span>
-                      </div>
-                      <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                        <div
-                          className="h-1.5 rounded-full bg-success"
-                          style={{ width: `${Math.min(100, g.progress)}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {formatCurrency(g.currentAmount)} de {formatCurrency(g.targetAmount)}
-                        {g.deadline ? ` · até ${new Date(g.deadline).toLocaleDateString('pt-BR')}` : ''}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-          ),
+          goalsSummary: <GoalsSummaryCard summary={goalsSummary} isLoading={goalsLoading} />,
           balanceChart: (
             <ResultCard
               income={data?.totalIncome ?? 0}
@@ -491,161 +356,25 @@ export default function DashboardPage() {
               isLoading={isLoading}
             />
           ),
-          yearlyChart: (
-        <Card>
-          <CardHeader>
-            <CardTitle>Evolução Anual {selectedYear}</CardTitle>
-          </CardHeader>
-          <CardContent className="h-72 pt-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={monthlyFlow} margin={{ left: 8, right: 8, top: 20 }}>
-                <defs>
-                  <linearGradient id="colorReceitas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(155 62% 32%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(155 62% 32%)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorDespesas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(8 62% 50%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(8 62% 50%)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorInvestido" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(200 55% 45%)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(200 55% 45%)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                  width={70}
-                  tickFormatter={(v) => formatCompactCurrency(v)}
-                />
-                <RechartsTooltip content={<ChartTooltip />} />
-                <Legend />
-                <Area type="monotone" dataKey="receitas" name="Receitas" stroke="hsl(155 62% 32%)" fill="url(#colorReceitas)" strokeWidth={2} />
-                <Area type="monotone" dataKey="despesas" name="Despesas" stroke="hsl(8 62% 50%)" fill="url(#colorDespesas)" strokeWidth={2} />
-                <Area type="monotone" dataKey="investido" name="Investido" stroke="hsl(200 55% 45%)" fill="url(#colorInvestido)" strokeWidth={2} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-          ),
+          yearlyChart: <YearlyChartCard year={selectedYear} data={monthlyFlow} />,
           categoryChart: (
             <CategoryDonutCard
               data={categoryData}
               previous={prevCategoryData}
+              budgets={budgetMap}
               isLoading={catLoading}
               onSelect={goToCategoryTransactions}
             />
           ),
           recentTransactions: <RecentTransactionsCard />,
           accountBalances: (
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle>Saldo por Conta</CardTitle>
-          <AccountVisibilityPicker accounts={accountsData?.items ?? []} />
-        </CardHeader>
-        <CardContent>
-          {accountsLoading ? (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
-              Carregando...
-            </div>
-          ) : sortedAccountBalances.length === 0 ? (
-            <div className="h-64 flex items-center justify-center text-muted-foreground text-sm text-center px-4">
-              {accountsData && accountsData.items.length > 0
-                ? 'Todas as contas foram ocultadas deste gráfico. Use o botão de olho acima para reexibir alguma.'
-                : 'Nenhuma conta cadastrada.'}
-            </div>
-          ) : (
-            // Mesmo padrão visual do gráfico de categorias: barras horizontais
-            // ordenadas da maior pra menor, com o valor exato no final da barra.
-            // O overlay de linhas abaixo replica o espaçamento vertical que o
-            // Recharts usa internamente (margin top/bottom padrão de 5px,
-            // categorias distribuídas em altura igual) só pra posicionar o
-            // botão de remover — ele não desenha nada, é invisível até o hover.
-            // pointer-events-none nele é essencial: sem isso ele intercepta o
-            // mouse antes de chegar nas barras do gráfico por baixo, e o
-            // tooltip/hover do Recharts nunca dispara (só a barra em si e o
-            // botão, via pointer-events-auto, voltam a responder ao mouse).
-            <div className="relative" style={{ height: Math.max(64 * sortedAccountBalances.length, 240) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  layout="vertical"
-                  data={sortedAccountBalances.map((acc) => ({
-                    name: acc.name,
-                    total: Number(acc.currentBalance),
-                  }))}
-                  margin={{ left: 20, right: 60 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" horizontal={false} />
-                  <XAxis type="number" hide />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    width={150}
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <RechartsTooltip content={<SingleValueTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-                  <Bar
-                    dataKey="total"
-                    radius={[0, 4, 4, 0]}
-                    barSize={22}
-                    cursor="pointer"
-                    onClick={() => router.push('/accounts')}
-                  >
-                    {sortedAccountBalances.map((acc, index) => (
-                      <Cell
-                        key={`acc-cell-${index}`}
-                        fill={acc.color || '#64748B'}
-                        onMouseEnter={() => setHoveredAccountId(acc.id)}
-                        onMouseLeave={() => setHoveredAccountId(null)}
-                      />
-                    ))}
-                    <LabelList
-                      dataKey="total"
-                      position="right"
-                      formatter={(val: number) => formatCurrency(val)}
-                      style={{ fill: 'hsl(var(--foreground))', fontSize: 11, fontWeight: 600 }}
-                    />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-
-              {(() => {
-                const chartHeight = Math.max(64 * sortedAccountBalances.length, 240);
-                const rowHeight = (chartHeight - 10) / sortedAccountBalances.length;
-                return sortedAccountBalances.map((acc, index) => (
-                  <div
-                    key={acc.id}
-                    className="pointer-events-none absolute left-0 right-0 flex items-start justify-end pr-2 pt-1"
-                    style={{ top: 5 + rowHeight * index, height: rowHeight }}
-                  >
-                    <button
-                      type="button"
-                      title={`Remover "${acc.name}" deste gráfico`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        hideAccountFromChart(acc.id);
-                      }}
-                      className={`pointer-events-auto flex h-5 w-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition-opacity hover:border-destructive hover:text-destructive ${
-                        hoveredAccountId === acc.id ? 'opacity-100' : 'opacity-0'
-                      }`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ));
-              })()}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            <AccountBalancesCard
+              allAccounts={accountsData?.items ?? []}
+              accounts={sortedAccountBalances}
+              isLoading={accountsLoading}
+              onHide={hideAccountFromChart}
+              onOpen={() => router.push('/accounts')}
+            />
           ),
         };
 

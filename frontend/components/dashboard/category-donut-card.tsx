@@ -10,6 +10,8 @@ import type { CategoryExpense } from '@/services/dashboard.service';
 interface CategoryDonutCardProps {
   data?: CategoryExpense[];
   previous?: CategoryExpense[];
+  /** Orçamento por categoria (id -> valor) do mês exibido. */
+  budgets?: Map<string, number>;
   isLoading: boolean;
   onSelect: (categoryId: string | null) => void;
 }
@@ -17,7 +19,7 @@ interface CategoryDonutCardProps {
 const MAX_ROWS = 6;
 
 /** Rosca com o total gasto no centro + lista por categoria (percentual, valor e variação vs. mês anterior). */
-export function CategoryDonutCard({ data, previous, isLoading, onSelect }: CategoryDonutCardProps) {
+export function CategoryDonutCard({ data, previous, budgets, isLoading, onSelect }: CategoryDonutCardProps) {
   const sorted = [...(data ?? [])].filter((c) => c.total > 0).sort((a, b) => b.total - a.total);
   const total = sorted.reduce((s, c) => s + c.total, 0);
   const rows = sorted.slice(0, MAX_ROWS);
@@ -92,6 +94,21 @@ export function CategoryDonutCard({ data, previous, isLoading, onSelect }: Categ
                         )}
                       </span>
                     </button>
+                    {(() => {
+                      const budget = c.categoryId ? budgets?.get(c.categoryId) : undefined;
+                      if (!budget) return null;
+                      const pct = (c.total / budget) * 100;
+                      return (
+                        <div className="-mt-1 mb-2 flex items-center gap-2 pl-5">
+                          <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                            <div className={cn('h-1 rounded-full', pct >= 100 ? 'bg-danger' : pct >= 80 ? 'bg-warning' : 'bg-primary')} style={{ width: `${Math.min(100, pct)}%` }} />
+                          </div>
+                          <span className={cn('shrink-0 text-[10px] font-semibold', pct >= 100 ? 'text-danger' : 'text-muted-foreground')}>
+                            {Math.round(pct)}% de {formatCurrency(budget)}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </li>
                 );
               })}

@@ -361,7 +361,7 @@ export default function RecurringBillsPage() {
         </button>
       </div>
 
-      <div className="bg-card rounded-xl shadow border border-border overflow-hidden">
+      <div className="bg-card rounded-xl shadow-soft border border-border/70 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-foreground">Carregando...</div>
         ) : activeTab === 'recurring' ? (
@@ -580,7 +580,7 @@ export default function RecurringBillsPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
         <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold">
+              <h2 className="font-display text-xl font-bold tracking-tight">
                 {editingId ? 'Editar recorrente' : 'Nova recorrente'}
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-foreground hover:text-foreground/80 font-bold text-lg">✕</button>
@@ -608,7 +608,7 @@ export default function RecurringBillsPage() {
                 <input
                   type="text" required placeholder={billType === 'INCOME' ? 'Ex: Salário, Aluguel recebido, Pensão...' : 'Ex: Aluguel, TIM, Internet, Energia...'}
                   value={description} onChange={(e) => handleDescriptionChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </div>
 
@@ -621,7 +621,7 @@ export default function RecurringBillsPage() {
                 </label>
                 <select
                   value={categoryId} onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-card"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-card focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 >
                   <option value="">Sem categoria</option>
                   {categories.map((cat) => (
@@ -636,7 +636,7 @@ export default function RecurringBillsPage() {
                 </label>
                 <select
                   value={accountId} onChange={(e) => setAccountId(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-card"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-card focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 >
                   <option value="">Escolher na hora de pagar</option>
                   {accounts.map((acc) => (
@@ -653,7 +653,7 @@ export default function RecurringBillsPage() {
                   <input
                     type="number" step="0.01" placeholder="Ex: 89,90"
                     value={defaultAmount} onChange={(e) => setDefaultAmount(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                    className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                   />
                   <p className="text-xs text-foreground mt-1">
                     Vazio = repete o valor do último pagamento
@@ -664,7 +664,7 @@ export default function RecurringBillsPage() {
                   <input
                     type="number" min="1" max="31" required
                     value={dueDay} onChange={(e) => setDueDay(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                    className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                   />
                 </div>
               </div>
@@ -684,7 +684,7 @@ export default function RecurringBillsPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
         <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold">
+              <h2 className="font-display text-xl font-bold tracking-tight">
                 {editingGroupId ? 'Editar Compra Parcelada' : 'Nova Compra Parcelada'}
               </h2>
               <button onClick={() => setIsInstallmentModalOpen(false)} className="text-foreground hover:text-foreground/80 font-bold text-lg">✕</button>
@@ -696,7 +696,7 @@ export default function RecurringBillsPage() {
                 <input
                   type="text" required placeholder="Ex: Financiamento do carro, Boleto do sofá..."
                   value={instDescription} onChange={(e) => setInstDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </div>
 
@@ -704,7 +704,7 @@ export default function RecurringBillsPage() {
                 <label className="block text-sm font-medium mb-1">Categoria</label>
                 <select
                   value={instCategoryId} onChange={(e) => setInstCategoryId(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-card"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-card focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 >
                   <option value="">Sem categoria</option>
                   {categories.map((cat) => (
@@ -719,7 +719,7 @@ export default function RecurringBillsPage() {
                 </label>
                 <select
                   value={instAccountId} onChange={(e) => setInstAccountId(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-card"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-card focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 >
                   <option value="">Escolher na hora de pagar</option>
                   {accounts.map((acc) => (
@@ -745,7 +745,7 @@ export default function RecurringBillsPage() {
                     <input
                       type="number" step="0.01" required placeholder="Ex: 51000,00"
                       value={instTotalAmount} onChange={(e) => setInstTotalAmount(e.target.value)}
-                      className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                      className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                     />
                   </div>
                 ) : (
@@ -754,7 +754,7 @@ export default function RecurringBillsPage() {
                     <input
                       type="number" step="0.01" required placeholder="Ex: 850,00"
                       value={instAmount} onChange={(e) => setInstAmount(e.target.value)}
-                      className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                      className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                     />
                   </div>
                 )}
@@ -763,7 +763,7 @@ export default function RecurringBillsPage() {
                   <input
                     type="number" min="1" required placeholder="Ex: 60"
                     value={instTotalCount} onChange={(e) => setInstTotalCount(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                    className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                   />
                   {instValueMode === 'total' && (
                     <p className="text-xs text-foreground mt-1">
@@ -783,7 +783,7 @@ export default function RecurringBillsPage() {
                   <input
                     type="number" min="1" required
                     value={instStartNumber} onChange={(e) => setInstStartNumber(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                    className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                   />
                   <p className="text-xs text-foreground mt-1">
                     {editingGroupId
@@ -798,7 +798,7 @@ export default function RecurringBillsPage() {
                   <input
                     type="date" required
                     value={instFirstDueDate} onChange={(e) => setInstFirstDueDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                    className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                   />
                 </div>
               </div>

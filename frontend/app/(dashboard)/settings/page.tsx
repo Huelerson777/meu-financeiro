@@ -188,7 +188,7 @@ export default function SettingsPage() {
 
       <div className="flex flex-col gap-6">
         {/* Perfil */}
-        <div className="bg-card rounded-xl shadow border border-border p-6">
+        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
           <div className="flex items-center gap-2 mb-4">
             <User className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold">Perfil</h2>
@@ -198,14 +198,14 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium mb-1">Nome</label>
               <input
                 type="text" required value={name} onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">E-mail</label>
               <input
                 type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
             <div>
@@ -215,7 +215,7 @@ export default function SettingsPage() {
               <input
                 type="tel" placeholder="Ex: 5548999999999 (DDI+DDD+número, só dígitos)"
                 value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, ''))}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
             <div className="flex justify-end">
@@ -230,7 +230,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Trocar Senha */}
-        <div className="bg-card rounded-xl shadow border border-border p-6">
+        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
           <div className="flex items-center gap-2 mb-4">
             <Lock className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold">Trocar Senha</h2>
@@ -240,14 +240,14 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium mb-1">Senha atual</label>
               <input
                 type="password" autoComplete="current-password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Nova senha</label>
               <input
                 type="password" autoComplete="new-password" required minLength={6} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
             <div className="flex justify-end">
@@ -262,7 +262,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Preferências */}
-        <div className="bg-card rounded-xl shadow border border-border p-6">
+        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
           <div className="flex items-center gap-2 mb-4">
             <Palette className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold">Preferências</h2>
@@ -272,7 +272,7 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium mb-1">Tema</label>
               <select
                 value={theme} onChange={(e) => setTheme(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-card"
+                className="w-full h-11 px-3 border border-input rounded-md bg-card focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               >
                 <option value="system">Automático (segue o sistema)</option>
                 <option value="light">Claro</option>
@@ -283,7 +283,7 @@ export default function SettingsPage() {
               <label className="block text-sm font-medium mb-1">Moeda</label>
               <select
                 value={currency} onChange={(e) => setCurrency(e.target.value)}
-                className="w-full px-3 py-2 border border-input rounded-lg bg-card"
+                className="w-full h-11 px-3 border border-input rounded-md bg-card focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               >
                 <option value="BRL">Real (R$)</option>
                 <option value="USD">Dólar (US$)</option>
@@ -302,7 +302,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Categorias */}
-        <div className="bg-card rounded-xl shadow border border-border p-6">
+        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Tag className="w-5 h-5 text-primary" />
@@ -388,7 +388,7 @@ export default function SettingsPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
         <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-sm p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold">
+              <h2 className="font-display text-xl font-bold tracking-tight">
                 {editingCategoryId ? 'Editar Categoria' : 'Nova Categoria'}
               </h2>
               <button onClick={() => setIsCategoryModalOpen(false)} className="text-foreground hover:text-foreground/80 font-bold text-lg">✕</button>
@@ -400,7 +400,7 @@ export default function SettingsPage() {
                 <input
                   type="text" required minLength={2} placeholder="Ex: Educação, Pets, Viagem..."
                   value={categoryName} onChange={(e) => setCategoryName(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </div>
               <div>

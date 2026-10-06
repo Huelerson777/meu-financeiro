@@ -140,7 +140,7 @@ export function CardsView() {
         </div>
         <button
           onClick={handleOpenCreate}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow flex items-center gap-2"
+          className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow flex items-center gap-2"
         >
           <Plus className="w-4 h-4" /> Novo Cartão
         </button>
@@ -149,7 +149,7 @@ export function CardsView() {
       {loading ? (
         <div className="text-muted-foreground py-8">Carregando...</div>
       ) : cards.length === 0 ? (
-        <div className="bg-card rounded-xl shadow-sm border border-border p-10 flex flex-col items-center text-center gap-3">
+        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-10 flex flex-col items-center text-center gap-3">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
             <CreditCard className="w-7 h-7 text-primary" />
           </div>
@@ -168,7 +168,7 @@ export function CardsView() {
               <div
                 key={c.id}
                 onClick={() => setInvoiceCard(c)}
-                className="bg-card rounded-xl shadow-sm border border-border relative overflow-hidden group p-6 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
+                className="bg-card rounded-xl shadow-soft border border-border/70 relative overflow-hidden group p-6 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
               >
                 <div className="absolute top-0 left-0 right-0 h-1.5" style={{ backgroundColor: cardColor }} />
                 <div
@@ -314,7 +314,7 @@ export function CardsView() {
                 </button>
                 <button
                   type="submit" disabled={isSubmitting}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
+                  className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
                 >
                   {isSubmitting ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Criar Cartão'}
                 </button>
