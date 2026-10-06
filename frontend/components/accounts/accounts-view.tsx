@@ -175,7 +175,7 @@ export function AccountsView() {
         </div>
         <button
           onClick={handleOpenCreate}
-          className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow"
+          className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow"
         >
           + Nova Conta
         </button>
@@ -391,7 +391,7 @@ export function AccountsView() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
+                  className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
                 >
                   {isSubmitting ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Criar Conta'}
                 </button>

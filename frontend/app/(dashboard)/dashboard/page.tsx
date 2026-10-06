@@ -17,6 +17,7 @@ import { ChartTooltip, SingleValueTooltip } from '@/components/dashboard/chart-t
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
+import { useMonthlyLimit } from '@/hooks/use-monthly-limit';
 import { NetWorthCard } from '@/components/dashboard/net-worth-card';
 import { InsightsHero } from '@/components/dashboard/insights-hero';
 import { AiQuickAddCard } from '@/components/dashboard/ai-quick-add-card';
@@ -83,6 +84,7 @@ export default function DashboardPage() {
   const { data: accountsData, isLoading: accountsLoading } = useAccounts();
   const { hiddenIds: hiddenAccountIds, setHiddenIds: setHiddenAccountIds } = useHiddenAccountIds();
   const [showAllOpen, setShowAllOpen] = useState(false);
+  const { limit: monthlyLimit, setLimit: setMonthlyLimit } = useMonthlyLimit();
   const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
   const { order, setOrder } = useDashboardWidgetOrder();
   const firstName = useAuthStore((s) => s.user?.name)?.split(' ')[0];
@@ -259,6 +261,7 @@ export default function DashboardPage() {
         expense={data?.totalExpense ?? 0}
         leftovers={data?.leftovers ?? 0}
         openExpenseTotal={paymentsStatus?.openExpenseTotal ?? 0}
+        openExpenseCount={paymentsStatus?.openItems.filter((i) => i.type === 'EXPENSE').length ?? 0}
         overdueCount={paymentsStatus?.openItems.filter((i) => i.isOverdue && i.type === 'EXPENSE').length ?? 0}
         nextDue={
           paymentsStatus?.openItems
@@ -267,6 +270,8 @@ export default function DashboardPage() {
         }
         expenseChangePct={data?.comparison?.expenseChangePct}
         topCategory={sortedCategoryData[0] ?? null}
+        limit={monthlyLimit}
+        onChangeLimit={setMonthlyLimit}
       />
 
       {/* Cada widget abaixo pode ser ocultado em "Personalizar" e reordenado

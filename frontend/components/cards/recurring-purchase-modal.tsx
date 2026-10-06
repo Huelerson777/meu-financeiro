@@ -133,7 +133,7 @@ export function RecurringPurchaseModal({ card, onClose, onSuccess, editingRecurr
             </button>
             <button
               type="submit" disabled={isSubmitting}
-              className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
+              className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
             >
               {isSubmitting ? 'Salvando...' : editingRecurring ? 'Salvar alterações' : 'Lançar recorrente'}
             </button>

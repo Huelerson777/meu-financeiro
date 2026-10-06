@@ -322,7 +322,7 @@ export default function RecurringBillsPage() {
         </div>
         <button
           onClick={activeTab === 'recurring' ? handleOpenCreate : handleOpenCreateInstallment}
-          className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-4 py-2 rounded-md font-medium shadow transition shrink-0"
+          className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-4 py-2 rounded-md font-medium shadow transition shrink-0"
         >
           {activeTab === 'recurring' ? '+ Nova Conta Fixa' : '+ Nova Compra Parcelada'}
         </button>
@@ -641,7 +641,7 @@ export default function RecurringBillsPage() {
 
               <div className="flex justify-end gap-3 pt-3">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-foreground hover:underline">Cancelar</button>
-                <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-md text-sm font-semibold text-primary-foreground shadow bg-primary hover:brightness-110 active:scale-[0.97]">
+                <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-md text-sm font-semibold text-primary-foreground shadow bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen">
                   {isSubmitting ? 'Salvando...' : 'Confirmar'}
                 </button>
               </div>
@@ -775,7 +775,7 @@ export default function RecurringBillsPage() {
 
               <div className="flex justify-end gap-3 pt-3">
                 <button type="button" onClick={() => setIsInstallmentModalOpen(false)} className="px-4 py-2 text-sm text-foreground hover:underline">Cancelar</button>
-                <button type="submit" disabled={isSubmittingInstallment} className="px-5 py-2 rounded-md text-sm font-semibold text-primary-foreground shadow bg-primary hover:brightness-110 active:scale-[0.97]">
+                <button type="submit" disabled={isSubmittingInstallment} className="px-5 py-2 rounded-md text-sm font-semibold text-primary-foreground shadow bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen">
                   {isSubmittingInstallment ? 'Salvando...' : 'Confirmar'}
                 </button>
               </div>
