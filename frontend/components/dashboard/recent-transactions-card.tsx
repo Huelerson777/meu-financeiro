@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
 import { cn } from '@/utils/cn';
+import { effectiveDate, isEffectivelyPaid } from '@/utils/transaction-status';
 
 interface RecentTransaction {
   id: string;
@@ -16,6 +17,7 @@ interface RecentTransaction {
   type: 'INCOME' | 'EXPENSE' | 'TRANSFER';
   status: 'PAID' | 'PENDING';
   date: string;
+  installments?: { paid: boolean; paidAt?: string | null }[] | null;
   category?: { name: string; color: string } | null;
   account?: { name: string } | null;
 }
@@ -35,17 +37,23 @@ export function RecentTransactionsCard() {
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', 'recent-transactions'],
     queryFn: async () => {
-      const res = await api.get('/transactions', { params: { limit: 8 } });
+      // Só o que já aconteceu: até hoje (parcelas futuras ficam de fora) e nos últimos 60 dias
+      const iso = (d: Date) => d.toISOString().split('T')[0];
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 60);
+      const res = await api.get('/transactions', { params: { limit: 30, startDate: iso(start), endDate: iso(end) } });
       const raw = res.data;
-      const list = Array.isArray(raw?.data?.items) ? raw.data.items : Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
-      return list as RecentTransaction[];
+      const list: RecentTransaction[] = Array.isArray(raw?.data?.items) ? raw.data.items : Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
+      // ordena pela data em que de fato aconteceu (pagamento da parcela, quando for o caso)
+      return list.sort((a, b) => effectiveDate(b).localeCompare(effectiveDate(a))).slice(0, 8);
     },
     refetchInterval: 60_000,
   });
 
   const groups: { label: string; items: RecentTransaction[] }[] = [];
   (data ?? []).forEach((t) => {
-    const label = dayLabel(t.date);
+    const label = dayLabel(effectiveDate(t));
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.items.push(t);
     else groups.push({ label, items: [t] });
@@ -78,7 +86,7 @@ export function RecentTransactionsCard() {
                           <p className="truncate text-sm font-medium">{t.description}</p>
                           <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                             {t.account?.name}
-                            {t.status === 'PENDING' && <span className="rounded bg-warning/10 px-1.5 py-px text-[10px] font-semibold text-warning">pendente</span>}
+                            {!isEffectivelyPaid(t) && <span className="rounded bg-warning/10 px-1.5 py-px text-[10px] font-semibold text-warning">pendente</span>}
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2.5">
