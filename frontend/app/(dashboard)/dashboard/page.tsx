@@ -17,6 +17,7 @@ import { ChartTooltip, SingleValueTooltip } from '@/components/dashboard/chart-t
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
+import { useCashFlowReport } from '@/hooks/use-reports';
 import { useMonthlyLimit } from '@/hooks/use-monthly-limit';
 import { NetWorthCard } from '@/components/dashboard/net-worth-card';
 import { InsightsHero } from '@/components/dashboard/insights-hero';
@@ -85,6 +86,9 @@ export default function DashboardPage() {
   const { hiddenIds: hiddenAccountIds, setHiddenIds: setHiddenAccountIds } = useHiddenAccountIds();
   const [showAllOpen, setShowAllOpen] = useState(false);
   const { limit: monthlyLimit, setLimit: setMonthlyLimit } = useMonthlyLimit();
+  const monthStartStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
+  const monthEndStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
+  const { data: monthCashFlow } = useCashFlowReport({ startDate: monthStartStr, endDate: monthEndStr });
   const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
   const { order, setOrder } = useDashboardWidgetOrder();
   const firstName = useAuthStore((s) => s.user?.name)?.split(' ')[0];
@@ -270,6 +274,7 @@ export default function DashboardPage() {
         }
         expenseChangePct={data?.comparison?.expenseChangePct}
         topCategory={sortedCategoryData[0] ?? null}
+        dailyExpenses={monthCashFlow?.series}
         limit={monthlyLimit}
         onChangeLimit={setMonthlyLimit}
       />

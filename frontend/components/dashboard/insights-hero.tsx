@@ -5,6 +5,7 @@ import {
   AlertTriangle, CalendarClock, ChevronLeft, ChevronRight, Gauge, PieChart, Pencil, Receipt, Sparkles,
   TrendingDown, TrendingUp,
 } from 'lucide-react';
+import { Area, ComposedChart, Line, ReferenceDot, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/utils/currency';
 import { cn } from '@/utils/cn';
@@ -24,6 +25,8 @@ interface InsightsHeroProps {
   topCategory?: { name: string; total: number } | null;
   limit: number | null;
   onChangeLimit: (value: number | null) => void;
+  /** Despesas pagas por dia do mês (série diária do fluxo de caixa). */
+  dailyExpenses?: { key: string; despesas: number }[];
 }
 
 type Tone = 'good' | 'bad' | 'neutral';
@@ -113,14 +116,8 @@ function buildInsights(p: InsightsHeroProps): Insight[] {
   return list.slice(0, 6);
 }
 
-const toneStyles: Record<Tone, string> = {
-  good: 'bg-success/10 text-success',
-  bad: 'bg-danger/10 text-danger',
-  neutral: 'bg-warning/10 text-warning',
-};
-
-/** Carrossel de dicas — troca sozinho, pausa com o mouse em cima. */
-function TipsCarousel({ insights, isLoading }: { insights: Insight[]; isLoading: boolean }) {
+/** Faixa de dicas no pé do card principal — troca sozinha, pausa com o mouse em cima. */
+function TipsStrip({ insights, isLoading }: { insights: Insight[]; isLoading: boolean }) {
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const count = insights.length;
@@ -137,35 +134,30 @@ function TipsCarousel({ insights, isLoading }: { insights: Insight[]; isLoading:
 
   return (
     <div
-      className="flex flex-col justify-between rounded-xl border border-border/70 bg-card p-4 shadow-soft"
+      className="border-t border-primary/15 bg-primary/[0.07] px-5 py-4"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      <p className="flex items-center gap-2 text-sm font-semibold">
-        <Sparkles className="h-[18px] w-[18px] text-primary" strokeWidth={1.75} />
-        Dicas do mês
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-primary">
+        <Sparkles className="h-3.5 w-3.5" strokeWidth={2} />
+        Dica do PouPay
       </p>
-
       {isLoading ? (
-        <Skeleton className="mt-3 h-14" />
+        <Skeleton className="mt-2 h-10" />
       ) : !tip ? (
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
           Lance receitas e despesas deste mês para começar a ver leituras sobre o seu dinheiro.
         </p>
       ) : (
-        <div key={current} className="mt-3 flex min-h-[3.5rem] animate-fade-in items-start gap-3">
-          <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-md', toneStyles[tip.tone])}>
-            <tip.icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
-          </span>
-          <div className="min-w-0">
-            <p className="text-sm font-semibold leading-snug">{tip.title}</p>
-            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{tip.text}</p>
-          </div>
+        <div key={current} className="mt-1.5 flex min-h-[2.75rem] animate-fade-in items-start gap-2.5">
+          <tip.icon className={cn('mt-0.5 h-4 w-4 shrink-0', toneIcon[tip.tone])} strokeWidth={1.9} />
+          <p className="text-sm leading-relaxed">
+            <span className="font-semibold">{tip.title}.</span> <span className="text-muted-foreground">{tip.text}</span>
+          </p>
         </div>
       )}
-
       {count > 1 && (
-        <div className="mt-3 flex items-center justify-between">
+        <div className="mt-2 flex items-center justify-between">
           <div className="flex gap-1.5" role="tablist" aria-label="Dicas">
             {insights.map((_, i) => (
               <button
@@ -179,15 +171,114 @@ function TipsCarousel({ insights, isLoading }: { insights: Insight[]; isLoading:
             ))}
           </div>
           <div className="flex gap-1">
-            <button onClick={() => go(-1)} aria-label="Dica anterior" className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-muted hover:text-foreground active:scale-90">
+            <button onClick={() => go(-1)} aria-label="Dica anterior" className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-primary/10 hover:text-foreground active:scale-90">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <button onClick={() => go(1)} aria-label="Próxima dica" className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-muted hover:text-foreground active:scale-90">
+            <button onClick={() => go(1)} aria-label="Próxima dica" className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-primary/10 hover:text-foreground active:scale-90">
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+const toneIcon: Record<Tone, string> = {
+  good: 'text-success',
+  bad: 'text-danger',
+  neutral: 'text-warning',
+};
+
+/** Gasto acumulado no mês (linha cheia) contra o ritmo ideal do limite (tracejada). */
+function PaceChart({ p }: { p: InsightsHeroProps }) {
+  const now = new Date();
+  const isCurrent = now.getMonth() + 1 === p.month && now.getFullYear() === p.year;
+  const isFuture = new Date(p.year, p.month - 1, 1) > now;
+  const daysInMonth = new Date(p.year, p.month, 0).getDate();
+  const lastDay = isFuture ? 0 : isCurrent ? now.getDate() : daysInMonth;
+
+  const perDay = new Map<number, number>();
+  (p.dailyExpenses ?? []).forEach((d) => {
+    const day = Number(d.key.split('-')[2]);
+    if (day) perDay.set(day, (perDay.get(day) ?? 0) + d.despesas);
+  });
+
+  let acc = 0;
+  const data = Array.from({ length: daysInMonth }, (_, i) => {
+    const day = i + 1;
+    acc += perDay.get(day) ?? 0;
+    return {
+      day,
+      real: day <= lastDay ? acc : null,
+      ideal: p.limit ? (p.limit * day) / daysInMonth : null,
+    };
+  });
+  const maxY = Math.max(p.limit ?? 0, acc, 1) * 1.08;
+  const today = data[lastDay - 1];
+
+  return (
+    <div className="h-28 px-2">
+      <ResponsiveContainer width="100%" height="100%">
+        <ComposedChart data={data} margin={{ top: 8, left: 8, right: 12, bottom: 0 }}>
+          <defs>
+            <linearGradient id="paceFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.22} />
+              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="day" hide />
+          <YAxis hide domain={[0, maxY]} />
+          <RechartsTooltip
+            cursor={{ stroke: 'hsl(var(--border))' }}
+            content={({ active, payload }: any) =>
+              active && payload?.length ? (
+                <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lift">
+                  <p className="font-semibold">Dia {payload[0].payload.day}</p>
+                  {payload[0].payload.real != null && <p className="text-muted-foreground">Gasto: {formatCurrency(payload[0].payload.real)}</p>}
+                  {payload[0].payload.ideal != null && <p className="text-muted-foreground">Ritmo do limite: {formatCurrency(payload[0].payload.ideal)}</p>}
+                </div>
+              ) : null
+            }
+          />
+          {p.limit && <Line type="linear" dataKey="ideal" stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" strokeOpacity={0.6} dot={false} strokeWidth={1.5} isAnimationActive={false} />}
+          <Area type="monotone" dataKey="real" stroke="hsl(var(--primary))" strokeWidth={2.25} fill="url(#paceFill)" connectNulls={false} dot={false} />
+          {today && today.real != null && <ReferenceDot x={today.day} y={today.real} r={4} fill="hsl(var(--primary))" stroke="hsl(var(--card))" strokeWidth={2} />}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Card principal: quanto ainda dá para gastar (discreto), ritmo do mês e a dica do momento. */
+function SpendCard({ props, insights }: { props: InsightsHeroProps; insights: Insight[] }) {
+  const remaining = props.limit != null ? props.limit - props.expense : props.leftovers - props.openExpenseTotal;
+  const negative = remaining < 0;
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-xl border border-border/70 bg-card shadow-soft">
+      <div className="px-5 pt-5">
+        <p className="text-sm text-muted-foreground">{negative && props.limit == null ? 'Faltam para fechar o mês' : 'Você ainda pode gastar'}</p>
+        {props.isLoading ? (
+          <Skeleton className="mt-2 h-9 w-44" />
+        ) : (
+          <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
+            <span className={cn('font-num text-3xl font-bold leading-none', negative && 'text-danger')}>
+              {formatCurrency(Math.abs(remaining))}
+            </span>
+            {props.limit != null && <span className="text-sm text-muted-foreground">/ {formatCurrency(props.limit)}</span>}
+          </p>
+        )}
+        {props.limit == null && !props.isLoading && (
+          <p className="mt-1.5 text-xs text-muted-foreground">
+            Saldo do mês ({formatCurrency(props.leftovers)}) menos {formatCurrency(props.openExpenseTotal)} em contas em aberto.
+          </p>
+        )}
+      </div>
+      <div className="mt-3 flex-1">
+        {props.isLoading ? <Skeleton className="mx-5 h-24" /> : <PaceChart p={props} />}
+      </div>
+      <TipsStrip insights={insights} isLoading={props.isLoading} />
     </div>
   );
 }
@@ -268,35 +359,36 @@ export function InsightsHero(props: InsightsHeroProps) {
     : null;
 
   return (
-    <section className="grid animate-rise gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)]">
-      <TipsCarousel insights={insights} isLoading={props.isLoading} />
+    <section className="grid animate-rise gap-4 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <SpendCard props={props} insights={insights} />
 
-      <div className="flex items-start gap-4 rounded-xl border border-border/70 bg-card p-4 shadow-soft">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
-          <Receipt className="h-5 w-5" strokeWidth={1.75} />
-        </span>
-        <div className="min-w-0">
-          {props.isLoading ? (
-            <Skeleton className="h-12 w-40" />
-          ) : props.openExpenseCount === 0 ? (
-            <p className="text-sm font-semibold">Nenhuma conta a pagar neste mês</p>
-          ) : (
-            <>
-              <p className="text-sm font-semibold">
-                {props.openExpenseCount} {props.openExpenseCount === 1 ? 'conta a pagar' : 'contas a pagar'}
-              </p>
-              <p className="font-num mt-1 text-2xl font-bold leading-none">{formatCurrency(props.openExpenseTotal)}</p>
-              {nextDate && props.nextDue && (
-                <p className="mt-2 truncate text-xs text-muted-foreground">
-                  Próxima: {props.nextDue.description}, {nextDate}
+      <div className="grid content-start gap-4">
+        <div className="flex items-start gap-4 rounded-xl border border-border/70 bg-card p-4 shadow-soft">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-warning/10 text-warning">
+            <Receipt className="h-5 w-5" strokeWidth={1.75} />
+          </span>
+          <div className="min-w-0">
+            {props.isLoading ? (
+              <Skeleton className="h-12 w-40" />
+            ) : props.openExpenseCount === 0 ? (
+              <p className="text-sm font-semibold">Nenhuma conta a pagar neste mês</p>
+            ) : (
+              <>
+                <p className="text-sm font-semibold">
+                  {props.openExpenseCount} {props.openExpenseCount === 1 ? 'conta a pagar' : 'contas a pagar'}
                 </p>
-              )}
-            </>
-          )}
+                <p className="font-num mt-1 text-2xl font-bold leading-none">{formatCurrency(props.openExpenseTotal)}</p>
+                {nextDate && props.nextDue && (
+                  <p className="mt-2 truncate text-xs text-muted-foreground">
+                    Próxima: {props.nextDue.description}, {nextDate}
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </div>
+        <LimitCard limit={props.limit} expense={props.expense} onChange={props.onChangeLimit} isLoading={props.isLoading} />
       </div>
-
-      <LimitCard limit={props.limit} expense={props.expense} onChange={props.onChangeLimit} isLoading={props.isLoading} />
     </section>
   );
 }
