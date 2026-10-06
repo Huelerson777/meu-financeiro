@@ -24,6 +24,7 @@ interface RecurringBill {
   account?: { name: string } | null;
   defaultAmount: number | string | null;
   dueDay: number;
+  type?: 'EXPENSE' | 'INCOME';
   isActive: boolean;
 }
 
@@ -92,6 +93,7 @@ export default function RecurringBillsPage() {
   const [accountId, setAccountId] = useState('');
   const [defaultAmount, setDefaultAmount] = useState('');
   const [dueDay, setDueDay] = useState('10');
+  const [billType, setBillType] = useState<'EXPENSE' | 'INCOME'>('EXPENSE');
   const suggestTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Modal: compra parcelada
@@ -154,7 +156,8 @@ export default function RecurringBillsPage() {
     fetchData();
   }, []);
 
-  const handleOpenCreate = () => {
+  const handleOpenCreate = (type: 'EXPENSE' | 'INCOME' = 'EXPENSE') => {
+    setBillType(type);
     setEditingId(null);
     setDescription('');
     setCategoryId('');
@@ -173,6 +176,7 @@ export default function RecurringBillsPage() {
     setAccountId(b.accountId || '');
     setDefaultAmount(b.defaultAmount != null ? String(b.defaultAmount) : '');
     setDueDay(String(b.dueDay));
+    setBillType(b.type ?? 'EXPENSE');
     setIsModalOpen(true);
   };
 
@@ -205,6 +209,8 @@ export default function RecurringBillsPage() {
         accountId: accountId || undefined,
         defaultAmount: defaultAmount ? parseFloat(defaultAmount) : undefined,
         dueDay: parseInt(dueDay, 10),
+        // só envia o tipo quando não é o padrão (ou ao editar), assim contas fixas comuns seguem iguais
+        ...(billType === 'INCOME' || editingId ? { type: billType } : {}),
       };
 
       if (editingId) {
@@ -322,14 +328,14 @@ export default function RecurringBillsPage() {
           </p>
         </div>
         <button
-          onClick={activeTab === 'recurring' ? handleOpenCreate : handleOpenCreateInstallment}
+          onClick={activeTab === 'recurring' ? () => handleOpenCreate() : handleOpenCreateInstallment}
           className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-4 py-2 rounded-md font-medium shadow transition shrink-0"
         >
-          {activeTab === 'recurring' ? '+ Nova Conta Fixa' : '+ Nova Compra Parcelada'}
+          {activeTab === 'recurring' ? '+ Nova Recorrente' : '+ Nova Compra Parcelada'}
         </button>
       </div>
 
-      <RecurringOverview bills={bills} purchases={purchases} loading={loading} />
+      <RecurringOverview bills={bills} purchases={purchases} loading={loading} onAddIncome={() => handleOpenCreate('INCOME')} />
 
       <h2 className="font-display mb-3 text-xl font-bold tracking-tight">Gerenciar</h2>
       <div className="flex gap-2 mb-4 border-b border-border">
@@ -370,7 +376,10 @@ export default function RecurringBillsPage() {
                 <li key={b.id} className="flex flex-col gap-2 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">{b.description}</p>
+                      <p className="truncate text-sm font-semibold">
+                        {b.description}
+                        {b.type === 'INCOME' && <span className="ml-2 rounded-md bg-success/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-success">receita</span>}
+                      </p>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
                         dia {b.dueDay} · {b.account?.name || 'Escolher ao pagar'}
                       </p>
@@ -418,6 +427,7 @@ export default function RecurringBillsPage() {
                   <tr key={b.id} className="border-b border-border hover:bg-muted/60 group">
                     <td className="p-4 font-medium">
                       {b.description}
+                      {b.type === 'INCOME' && <span className="ml-2 rounded-md bg-success/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-success">receita</span>}
                       {b.category && (
                         <span
                           className="ml-2 inline-flex items-center text-xs font-normal px-2 py-0.5 rounded-full"
@@ -571,16 +581,32 @@ export default function RecurringBillsPage() {
         <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
               <h2 className="font-display text-xl font-bold tracking-tight">
-                {editingId ? 'Editar Conta Fixa' : 'Nova Conta Fixa'}
+                {editingId ? 'Editar recorrente' : 'Nova recorrente'}
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-foreground hover:text-foreground/80 font-bold text-lg">✕</button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              <div role="tablist" className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+                {([['EXPENSE', 'Despesa (a pagar)'], ['INCOME', 'Receita (a receber)']] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="tab"
+                    aria-selected={billType === value}
+                    onClick={() => setBillType(value)}
+                    className={`rounded-lg px-3 py-2 text-sm font-semibold transition active:scale-[0.98] ${
+                      billType === value ? 'bg-card text-foreground shadow-soft' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Descrição</label>
                 <input
-                  type="text" required placeholder="Ex: Aluguel, TIM, Internet, Energia..."
+                  type="text" required placeholder={billType === 'INCOME' ? 'Ex: Salário, Aluguel recebido, Pensão...' : 'Ex: Aluguel, TIM, Internet, Energia...'}
                   value={description} onChange={(e) => handleDescriptionChange(e.target.value)}
                   className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />

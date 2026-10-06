@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { dashboardService } from '@/services/dashboard.service';
 import { useAccounts } from '@/hooks/use-accounts';
 import { api } from '@/services/api';
+import { usePlanningValue } from '@/hooks/use-planning-settings';
 
 export interface ProjectionSettings {
   /** Receita mensal esperada (meses futuros). Vazio = usa a média dos últimos meses. */
@@ -11,29 +12,35 @@ export interface ProjectionSettings {
   flexible: string;
 }
 
-const STORAGE_KEY = 'poupay:projection';
-
+/**
+ * Premissas da Projeção. Os textos dos campos ficam em estado local (digitação fluida) e são
+ * gravados no servidor depois de uma pausa; o valor inicial vem do servidor (ou da cópia local).
+ */
 export function useProjectionSettings() {
+  const incomeStore = usePlanningValue('projectionExpectedIncome', 'poupay:projection-income');
+  const flexibleStore = usePlanningValue('projectionFlexibleSpend', 'poupay:projection-flexible');
   const [settings, setSettings] = useState<ProjectionSettings>({ income: '', flexible: '' });
+  const hydrated = useRef(false);
+  const timers = useRef<{ income?: ReturnType<typeof setTimeout>; flexible?: ReturnType<typeof setTimeout> }>({});
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setSettings({ income: '', flexible: '', ...JSON.parse(raw) });
-    } catch {
-      /* sem storage: segue com o padrão */
-    }
-  }, []);
+    if (hydrated.current || incomeStore.isLoading) return;
+    hydrated.current = true;
+    setSettings({
+      income: incomeStore.value != null ? String(incomeStore.value) : '',
+      flexible: flexibleStore.value != null ? String(flexibleStore.value) : '',
+    });
+  }, [incomeStore.isLoading, incomeStore.value, flexibleStore.value]);
 
   const update = (next: Partial<ProjectionSettings>) => {
-    setSettings((prev) => {
-      const merged = { ...prev, ...next };
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
-      } catch {
-        /* ignora */
-      }
-      return merged;
+    setSettings((prev) => ({ ...prev, ...next }));
+    (['income', 'flexible'] as const).forEach((field) => {
+      if (next[field] === undefined) return;
+      clearTimeout(timers.current[field]);
+      timers.current[field] = setTimeout(() => {
+        const n = Number(String(next[field]).replace(',', '.'));
+        (field === 'income' ? incomeStore : flexibleStore).save(Number.isFinite(n) && n > 0 ? n : null);
+      }, 700);
     });
   };
 
@@ -97,7 +104,9 @@ export function useProjection(horizon: number, settings: ProjectionSettings) {
   });
 
   const billList: any[] = Array.isArray(bills) ? bills : Array.isArray(bills?.data) ? bills.data : [];
-  const activeBills = billList.filter((b) => b.isActive);
+  const activeBills = billList.filter((b) => b.isActive && b.type !== 'INCOME');
+  const incomeBills = billList.filter((b) => b.isActive && b.type === 'INCOME');
+  const registeredIncome = incomeBills.reduce((s, b) => s + toNumber(b.defaultAmount), 0);
   const monthlyBills = activeBills.reduce((s, b) => s + toNumber(b.defaultAmount), 0);
   const variableBills = activeBills.filter((b) => b.defaultAmount == null).length;
 
@@ -115,7 +124,9 @@ export function useProjection(horizon: number, settings: ProjectionSettings) {
     .slice(-3);
   const suggestedIncome = pastIncome.length ? pastIncome.reduce((a, b) => a + b, 0) / pastIncome.length : 0;
 
-  const expectedIncome = settings.income !== '' ? toNumber(settings.income.replace(',', '.')) : suggestedIncome;
+  // ordem: o que o usuário digitou > receitas recorrentes cadastradas > média do histórico
+  const defaultIncome = registeredIncome > 0 ? registeredIncome : suggestedIncome;
+  const expectedIncome = settings.income !== '' ? toNumber(settings.income.replace(',', '.')) : defaultIncome;
   const flexibleLimit = toNumber(settings.flexible.replace(',', '.'));
 
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -158,7 +169,7 @@ export function useProjection(horizon: number, settings: ProjectionSettings) {
   return {
     rows,
     currentBalance,
-    suggestedIncome,
+    suggestedIncome: defaultIncome,
     expectedIncome,
     variableBills,
     isLoading: accountsLoading || billsLoading,

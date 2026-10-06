@@ -27,6 +27,7 @@ export class RecurringBillsService {
         accountId: dto.accountId,
         defaultAmount: dto.defaultAmount,
         dueDay: dto.dueDay,
+        type: dto.type ?? 'EXPENSE',
         isActive: dto.isActive ?? true,
       },
     });
@@ -47,6 +48,7 @@ export class RecurringBillsService {
         accountId: dto.accountId,
         defaultAmount: dto.defaultAmount,
         dueDay: dto.dueDay,
+        type: dto.type,
         isActive: dto.isActive,
       },
     });
@@ -62,6 +64,7 @@ export class RecurringBillsService {
         description: dto.description,
         categoryId: dto.categoryId,
         accountId: dto.accountId,
+        ...(dto.type ? { type: dto.type } : {}),
         ...(dto.defaultAmount != null ? { amount: dto.defaultAmount } : {}),
       },
     });
@@ -82,7 +85,7 @@ export class RecurringBillsService {
 
   /**
    * Gera, de forma idempotente, o lançamento (PENDING) do mês corrente para
-   * cada conta fixa ativa do usuário que ainda não tem lançamento nesse mês.
+   * cada conta fixa (ou receita recorrente) ativa do usuário que ainda não tem lançamento nesse mês.
    * Chamado pelo frontend ao abrir Dashboard/Transações.
    */
   async sync(userId: string) {
@@ -118,7 +121,7 @@ export class RecurringBillsService {
           userId,
           accountId: bill.accountId,
           categoryId: bill.categoryId,
-          type: 'EXPENSE',
+          type: bill.type, // EXPENSE (conta a pagar) ou INCOME (receita recorrente a receber)
           description: bill.description,
           amount,
           status: 'PENDING',

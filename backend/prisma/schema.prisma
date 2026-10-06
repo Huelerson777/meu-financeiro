@@ -368,6 +368,8 @@ model RecurringBill {
   description   String
   defaultAmount Decimal? @map("default_amount") @db.Decimal(14, 2)
   dueDay        Int      @map("due_day")
+  /// EXPENSE = conta fixa a pagar; INCOME = receita recorrente (salário, aluguel recebido...)
+  type          TransactionType @default(EXPENSE)
   isActive      Boolean  @default(true) @map("is_active")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -561,6 +563,11 @@ model Settings {
   currency                  String @default("BRL")
   dashboardWidgets          Json?  @map("dashboard_widgets")
   dashboardHiddenAccountIds Json?  @map("dashboard_hidden_account_ids")
+
+  // Metas de planejamento (antes só no navegador): limite de gasto do mês e premissas da Projeção
+  monthlySpendingLimit      Decimal? @map("monthly_spending_limit") @db.Decimal(14, 2)
+  projectionExpectedIncome  Decimal? @map("projection_expected_income") @db.Decimal(14, 2)
+  projectionFlexibleSpend   Decimal? @map("projection_flexible_spend") @db.Decimal(14, 2)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

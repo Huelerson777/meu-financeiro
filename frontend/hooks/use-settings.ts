@@ -7,6 +7,10 @@ export interface UserSettings {
   currency: string;
   dashboardWidgets: string[] | null;
   dashboardHiddenAccountIds: string[] | null;
+  // Decimais chegam como string da API (ou ausentes em servidores mais antigos)
+  monthlySpendingLimit?: string | number | null;
+  projectionExpectedIncome?: string | number | null;
+  projectionFlexibleSpend?: string | number | null;
 }
 
 export function useSettings() {

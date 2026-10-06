@@ -17,6 +17,7 @@ export interface OverviewBill {
   account?: { name: string } | null;
   defaultAmount: number | string | null;
   dueDay: number;
+  type?: 'EXPENSE' | 'INCOME';
   isActive: boolean;
 }
 
@@ -112,14 +113,18 @@ function Stat({ icon: Icon, label, value, tone }: { icon: typeof Repeat; label: 
   );
 }
 
-export function RecurringOverview({ bills, purchases, loading }: { bills: OverviewBill[]; purchases: OverviewPurchase[]; loading: boolean }) {
+export function RecurringOverview({ bills, purchases, loading, onAddIncome }: { bills: OverviewBill[]; purchases: OverviewPurchase[]; loading: boolean; onAddIncome?: () => void }) {
   const now = new Date();
   const [kind, setKind] = useState<'expenses' | 'income'>('expenses');
   const [cursor, setCursor] = useState({ month: now.getMonth() + 1, year: now.getFullYear() });
 
   const income = useDetectedIncome(kind === 'income');
 
-  const activeBills = useMemo(() => bills.filter((b) => b.isActive), [bills]);
+  const activeBills = useMemo(() => bills.filter((b) => b.isActive && b.type !== 'INCOME'), [bills]);
+  const incomeBills = useMemo(() => bills.filter((b) => b.isActive && b.type === 'INCOME'), [bills]);
+  const registeredIncomeTotal = incomeBills.reduce((s, b) => s + num(b.defaultAmount), 0);
+  const registeredNames = new Set(incomeBills.map((b) => b.description.trim().toLowerCase()));
+  const detected = income.patterns.filter((p) => !registeredNames.has(p.description.trim().toLowerCase()));
   const fixedTotal = activeBills.reduce((s, b) => s + num(b.defaultAmount), 0);
   const variableCount = activeBills.filter((b) => b.defaultAmount == null).length;
 
@@ -159,7 +164,7 @@ export function RecurringOverview({ bills, purchases, loading }: { bills: Overvi
       return { month: d.getMonth() + 1, year: d.getFullYear() };
     });
 
-  const incomeTotal = income.patterns.reduce((s, p) => s + p.average, 0);
+  const incomeTotal = detected.reduce((s, p) => s + p.average, 0);
 
   return (
     <section className="mb-10 flex flex-col gap-4">
@@ -333,45 +338,89 @@ export function RecurringOverview({ bills, purchases, loading }: { bills: Overvi
             </div>
           </>
         )
-      ) : income.loading ? (
-        <Skeleton className="h-56 rounded-xl" />
-      ) : income.patterns.length === 0 ? (
-        <Card>
-          <CardContent className="px-6 py-12 text-center">
-            <p className="font-display text-lg font-bold">Nenhuma receita recorrente detectada</p>
-            <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-muted-foreground">
-              Receitas com a mesma descrição que se repetem em 2 ou mais meses (salário, aluguel recebido, pensão…) aparecem aqui automaticamente.
-            </p>
-          </CardContent>
-        </Card>
       ) : (
-        <Card>
-          <CardHeader className="flex-row items-end justify-between space-y-0">
-            <div>
-              <CardTitle>Receitas recorrentes detectadas</CardTitle>
-              <p className="mt-1 text-xs text-muted-foreground">Pelo histórico dos últimos 4 meses (mesma descrição em 2+ meses).</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">Estimativa por mês</p>
-              <p className="font-num text-2xl font-bold text-success">{formatCurrency(incomeTotal)}</p>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y divide-border">
-              {income.patterns.map((p) => (
-                <li key={p.description} className="flex items-center justify-between gap-3 py-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">{p.description}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      costuma cair por volta do dia {p.day} · visto em {p.months} meses
-                    </p>
+        <>
+          <Card>
+            <CardHeader className="flex-row items-end justify-between space-y-0">
+              <div>
+                <CardTitle>Receitas recorrentes cadastradas</CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">Entram todo mês como "a receber" e alimentam a Projeção.</p>
+              </div>
+              <div className="flex items-end gap-4">
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Por mês</p>
+                  <p className="font-num text-2xl font-bold text-success">{formatCurrency(registeredIncomeTotal)}</p>
+                </div>
+                {onAddIncome && (
+                  <button
+                    onClick={onAddIncome}
+                    className="h-9 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground transition-theme hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen"
+                  >
+                    + Nova receita
+                  </button>
+                )}
+              </div>
+            </CardHeader>
+            <CardContent>
+              {incomeBills.length === 0 ? (
+                <p className="py-6 text-sm leading-relaxed text-muted-foreground">
+                  Nenhuma receita recorrente cadastrada. Cadastre seu salário (ou outra entrada fixa) e ele passa a aparecer todo mês em "Em aberto" para você confirmar o recebimento.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {[...incomeBills].sort((a, b) => a.dueDay - b.dueDay).map((b) => (
+                    <li key={b.id} className="flex items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold">{b.description}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          todo dia {b.dueDay}
+                          {b.account?.name ? ` · ${b.account.name}` : ''}
+                        </p>
+                      </div>
+                      <span className="font-num shrink-0 text-base font-bold text-success">
+                        {b.defaultAmount != null ? formatCurrency(num(b.defaultAmount)) : 'variável'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          {income.loading ? (
+            <Skeleton className="h-32 rounded-xl" />
+          ) : (
+            detected.length > 0 && (
+              <Card>
+                <CardHeader className="flex-row items-end justify-between space-y-0">
+                  <div>
+                    <CardTitle>Detectadas pelo histórico</CardTitle>
+                    <p className="mt-1 text-xs text-muted-foreground">Mesma descrição em 2+ dos últimos 4 meses, ainda não cadastradas como recorrentes.</p>
                   </div>
-                  <span className="font-num shrink-0 text-base font-bold text-success">{formatCurrency(p.average)}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Estimativa por mês</p>
+                    <p className="font-num text-xl font-bold">{formatCurrency(incomeTotal)}</p>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <ul className="divide-y divide-border">
+                    {detected.map((p) => (
+                      <li key={p.description} className="flex items-center justify-between gap-3 py-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">{p.description}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            costuma cair por volta do dia {p.day} · visto em {p.months} meses
+                          </p>
+                        </div>
+                        <span className="font-num shrink-0 text-base font-bold text-success">{formatCurrency(p.average)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )
+          )}
+        </>
       )}
     </section>
   );
