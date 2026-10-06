@@ -15,7 +15,7 @@ export function Topbar() {
   const toggleHidden = useValuesVisibilityStore((s) => s.toggle);
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-4 sm:px-6 gap-3">
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/60 bg-background/80 px-4 backdrop-blur sm:px-6 gap-3 sticky top-0 z-30">
       <button
         onClick={toggleMobileNav}
         aria-label="Abrir menu"
@@ -35,7 +35,7 @@ export function Topbar() {
         >
           {hidden ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
         </button>
-        <FeedbackButton />
+        <div className="hidden sm:block"><FeedbackButton /></div>
         <NotificationBell />
         <ThemeToggle />
         <UserMenu />

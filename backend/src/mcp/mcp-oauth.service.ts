@@ -2,7 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 
-const ACCESS_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
+const ACCESS_TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 dias — clientes MCP remotos nem sempre fazem refresh silencioso
 const REFRESH_TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 dias
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000; // 5 min, uso único
 

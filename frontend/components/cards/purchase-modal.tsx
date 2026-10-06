@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert } from '@/utils/notify';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
@@ -103,52 +104,52 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
       onSuccess();
     } catch (err: any) {
       const msg = err.response?.data?.message;
-      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao salvar compra.');
+      notifyAlert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao salvar compra.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-200 dark:border-zinc-800">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
         <div className="flex justify-between items-center mb-1">
-          <h2 className="text-xl font-bold dark:text-white">{editingPurchase ? 'Editar compra' : 'Lançar compra'}</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 font-bold text-lg">
+          <h2 className="text-xl font-bold">{editingPurchase ? 'Editar compra' : 'Lançar compra'}</h2>
+          <button onClick={onClose} className="text-foreground hover:text-foreground/80 font-bold text-lg">
             ✕
           </button>
         </div>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+        <p className="text-sm text-foreground mb-5">
           No cartão <strong>{card.name}</strong> · Disponível: {formatCurrency(availableLimit)}
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium dark:text-gray-300 mb-1">Descrição</label>
+            <label className="block text-sm font-medium mb-1">Descrição</label>
             <input
               type="text" required placeholder="Ex: Notebook novo"
               value={description} onChange={(e) => handleDescriptionChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+              className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
             />
           </div>
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-sm font-medium dark:text-gray-300">
+              <label className="block text-sm font-medium">
                 {amountMode === 'total' ? 'Valor total da compra (R$)' : 'Valor de cada parcela (R$)'}
               </label>
-              <div className="flex gap-1 p-0.5 bg-gray-100 dark:bg-zinc-800 rounded-md">
+              <div className="flex gap-1 p-0.5 bg-muted rounded-md">
                 <button
                   type="button"
                   onClick={() => setAmountMode('total')}
-                  className={`px-2 py-0.5 text-xs font-medium rounded transition ${amountMode === 'total' ? 'bg-white dark:bg-zinc-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                  className={`px-2 py-0.5 text-xs font-medium rounded transition ${amountMode === 'total' ? 'bg-card shadow text-foreground' : 'text-foreground'}`}
                 >
                   Total
                 </button>
                 <button
                   type="button"
                   onClick={() => setAmountMode('installment')}
-                  className={`px-2 py-0.5 text-xs font-medium rounded transition ${amountMode === 'installment' ? 'bg-white dark:bg-zinc-700 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+                  className={`px-2 py-0.5 text-xs font-medium rounded transition ${amountMode === 'installment' ? 'bg-card shadow text-foreground' : 'text-foreground'}`}
                 >
                   Por parcela
                 </button>
@@ -157,10 +158,10 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
             <input
               type="number" step="0.01" required placeholder={amountMode === 'installment' ? 'Ex: 10,00' : undefined}
               value={amountValue} onChange={(e) => setAmountValue(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+              className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
             />
             {amountMode === 'installment' && parsedCount > 0 && parsedAmount > 0 && (
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              <p className="text-xs text-foreground mt-1">
                 Total da compra: {formatCurrency(parsedTotal)} ({parsedCount}x de {formatCurrency(parsedAmount)})
               </p>
             )}
@@ -168,33 +169,33 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">Nº de parcelas</label>
+              <label className="block text-sm font-medium mb-1">Nº de parcelas</label>
               <input
                 type="number" min="1" max="48" required
                 value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">Data da compra</label>
+              <label className="block text-sm font-medium mb-1">Data da compra</label>
               <input
                 type="date" required
                 value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium dark:text-gray-300 mb-1">
+            <label className="block text-sm font-medium mb-1">
               Categoria
               {categoryAutoSuggested && categoryId && (
-                <span className="ml-1 text-xs font-normal text-blue-500">· sugerida</span>
+                <span className="ml-1 text-xs font-normal text-primary">· sugerida</span>
               )}
             </label>
             <select
               value={categoryId} onChange={(e) => handleCategoryChange(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white"
+              className="w-full px-3 py-2 border border-input rounded-lg bg-card"
             >
               <option value="">Sem categoria</option>
               {categories.map((cat) => (
@@ -204,10 +205,10 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
           </div>
 
           {parsedTotal > 0 && parsedCount > 0 && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 text-sm text-blue-700 dark:text-blue-300">
+            <div className="bg-primary/10 rounded-lg p-3 text-sm text-primary">
               {parsedCount}x de <strong>{formatCurrency(installmentPreview)}</strong>
               {parsedTotal > availableLimit && (
-                <p className="text-red-500 dark:text-red-400 mt-1 font-medium">
+                <p className="text-danger mt-1 font-medium">
                   ⚠️ Valor acima do limite disponível!
                 </p>
               )}
@@ -215,12 +216,12 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
           )}
 
           <div className="flex justify-end gap-3 pt-3">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-500 hover:underline">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-foreground hover:underline">
               Cancelar
             </button>
             <button
               type="submit" disabled={isSubmitting}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+              className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
             >
               {isSubmitting ? 'Salvando...' : editingPurchase ? 'Salvar alterações' : 'Lançar compra'}
             </button>

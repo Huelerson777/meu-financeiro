@@ -32,19 +32,19 @@ export function SummaryCard({
 
   return (
     <Card
-      className={cn('transition-theme hover:shadow-md', onClick && 'cursor-pointer hover:border-primary/40')}
+      className={cn('transition-theme hover:-translate-y-0.5 hover:shadow-lift', onClick && 'cursor-pointer hover:border-primary/40')}
       onClick={onClick}
     >
       <CardContent className="flex items-start justify-between p-5">
         <div className="flex flex-col gap-1.5">
-          <span className="text-sm text-muted-foreground">{label}</span>
+          <span className="text-sm font-medium text-muted-foreground">{label}</span>
           {isLoading ? (
             <Skeleton className="h-7 w-28" />
           ) : (
             <>
               <span
                 className={cn(
-                  'text-2xl font-semibold tracking-tight',
+                  'font-num text-[1.75rem] font-bold leading-tight',
                   tone === 'success' && 'text-success',
                   tone === 'danger' && 'text-danger',
                 )}
@@ -68,7 +68,7 @@ export function SummaryCard({
           )}
         </div>
         <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
-          <Icon className="h-5 w-5 text-primary" />
+          <Icon className="h-5 w-5 text-primary" strokeWidth={1.75} />
         </div>
       </CardContent>
     </Card>

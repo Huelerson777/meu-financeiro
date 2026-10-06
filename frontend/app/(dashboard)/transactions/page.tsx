@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert, confirmDialog } from '@/utils/notify';
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { X, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight } from 'lucide-react';
@@ -18,7 +19,7 @@ const selectClass =
 const TYPE_OPTIONS = [
   { value: 'EXPENSE', label: 'Saída', icon: ArrowDownCircle, activeClass: 'bg-danger text-white shadow' },
   { value: 'INCOME', label: 'Entrada', icon: ArrowUpCircle, activeClass: 'bg-success text-white shadow' },
-  { value: 'TRANSFER', label: 'Transferência', icon: ArrowLeftRight, activeClass: 'bg-purple-600 text-white shadow' },
+  { value: 'TRANSFER', label: 'Transferência', icon: ArrowLeftRight, activeClass: 'bg-warning text-white shadow' },
 ] as const;
 
 const TYPE_FILTER_OPTIONS = [
@@ -258,7 +259,7 @@ function TransactionsPageContent() {
   const handleEdit = (t: Transaction) => {
     if (t.type === 'TRANSFER') {
       if (!t.transfer?.id) {
-        alert(
+        notifyAlert(
           'Esta movimentação foi criada antes da atualização do sistema e não guarda o vínculo ' +
           'necessário para edição. Você pode excluí-la e lançar novamente.'
         );
@@ -293,11 +294,11 @@ function TransactionsPageContent() {
   };
 
   const handleDelete = async (t: Transaction) => {
-    if (!window.confirm(`Tem certeza que deseja excluir a transação "${t.description}"?`)) return;
+    if (!(await confirmDialog(`Tem certeza que deseja excluir a transação "${t.description}"?`))) return;
     try {
       if (t.type === 'TRANSFER') {
         if (!t.transfer?.id) {
-          alert(
+          notifyAlert(
             'Esta movimentação foi criada antes da atualização do sistema e não guarda o vínculo ' +
             'necessário para exclusão automática do saldo. Ajuste o saldo manualmente se precisar removê-la.'
           );
@@ -309,7 +310,7 @@ function TransactionsPageContent() {
       }
       fetchData();
     } catch (err: any) {
-      alert('Erro ao excluir transação.');
+      notifyAlert('Erro ao excluir transação.');
     }
   };
 
@@ -317,7 +318,7 @@ function TransactionsPageContent() {
     e.preventDefault();
 
     if (!accountId) {
-      alert('Selecione a conta de origem.');
+      notifyAlert('Selecione a conta de origem.');
       return;
     }
 
@@ -329,12 +330,12 @@ function TransactionsPageContent() {
 
       if (uiType === 'TRANSFER' || uiType === 'INVESTMENT') {
         if (!destinationAccountId) {
-          alert('Selecione a conta de destino.');
+          notifyAlert('Selecione a conta de destino.');
           setIsSubmitting(false);
           return;
         }
         if (accountId === destinationAccountId) {
-          alert('A conta de origem e destino não podem ser a mesma.');
+          notifyAlert('A conta de origem e destino não podem ser a mesma.');
           setIsSubmitting(false);
           return;
         }
@@ -379,7 +380,7 @@ function TransactionsPageContent() {
         ? backendMessage.join('\n• ')
         : backendMessage || err.message || 'Erro desconhecido ao salvar transação';
       
-      alert(`Erro crítico:\n• ${formattedError}`);
+      notifyAlert(`Erro crítico:\n• ${formattedError}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -389,11 +390,11 @@ function TransactionsPageContent() {
   const selectedAccount = accounts.find((acc) => acc.id === accountId);
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold dark:text-white">Transações</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <h1 className="font-display text-3xl font-bold tracking-tight">Transações</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Gerencie suas entradas, saídas e movimentações
           </p>
         </div>
@@ -408,40 +409,40 @@ function TransactionsPageContent() {
       </div>
 
       {/* Filtro de período, tipo, categoria, descrição e valor */}
-      <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-4 mb-6 flex flex-wrap items-end gap-3">
+      <div className="mb-6 grid grid-cols-2 gap-3 rounded-xl border border-border/70 bg-card p-4 shadow-soft sm:flex sm:flex-wrap sm:items-end">
         <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">De</label>
+          <label className="block text-xs font-medium text-foreground mb-1">De</label>
           <input
             type="date"
             value={startDate}
             onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
+            className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm sm:w-auto"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Até</label>
+          <label className="block text-xs font-medium text-foreground mb-1">Até</label>
           <input
             type="date"
             value={endDate}
             onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
+            className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm sm:w-auto"
           />
         </div>
         <div className="relative" ref={typeFilterRef}>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Tipo</label>
+          <label className="block text-xs font-medium text-foreground mb-1">Tipo</label>
           <button
             type="button"
             onClick={() => setTypeFilterOpen((o) => !o)}
-            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white text-sm min-w-[10rem] text-left"
+            className="h-10 w-full truncate rounded-md border border-input bg-card px-3 text-left text-sm sm:min-w-[10rem]"
           >
             {typeFilters.length === 0
               ? 'Todos os tipos'
               : TYPE_FILTER_OPTIONS.filter((o) => typeFilters.includes(o.value)).map((o) => o.label).join(', ')}
           </button>
           {typeFilterOpen && (
-            <div className="absolute z-40 mt-1 w-48 rounded-lg border border-gray-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-2 shadow-lg">
+            <div className="absolute z-40 mt-1 w-48 rounded-lg border border-border bg-card p-2 shadow-lg">
               {TYPE_FILTER_OPTIONS.map((o) => (
-                <label key={o.value} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-zinc-800 cursor-pointer dark:text-white">
+                <label key={o.value} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={typeFilters.includes(o.value)}
@@ -455,7 +456,7 @@ function TransactionsPageContent() {
                 <button
                   type="button"
                   onClick={() => { setTypeFilters([]); setPage(1); }}
-                  className="mt-1 w-full text-left text-xs text-blue-600 hover:underline px-2 py-1"
+                  className="mt-1 w-full text-left text-xs text-primary hover:underline px-2 py-1"
                 >
                   Limpar tipos
                 </button>
@@ -463,31 +464,31 @@ function TransactionsPageContent() {
             </div>
           )}
         </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Descrição</label>
+        <div className="col-span-2 sm:col-span-1">
+          <label className="block text-xs font-medium text-foreground mb-1">Descrição</label>
           <input
             type="text"
             placeholder="Buscar por descrição..."
             value={descriptionInput}
             onChange={(e) => setDescriptionInput(e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm"
+            className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm sm:w-auto"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Valor</label>
+          <label className="block text-xs font-medium text-foreground mb-1">Valor</label>
           <input
             type="number"
             step="0.01"
             placeholder="Ex: 100,00"
             value={amountInput}
             onChange={(e) => setAmountInput(e.target.value)}
-            className="px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white text-sm w-32"
+            className="h-10 w-full rounded-md border border-input bg-card px-3 text-sm sm:w-32"
           />
         </div>
         {(startDate || endDate) && (
           <button
             onClick={() => { setStartDate(''); setEndDate(''); setPage(1); }}
-            className="text-sm text-blue-600 hover:underline pb-2"
+            className="text-sm text-primary hover:underline pb-2"
           >
             Limpar período
           </button>
@@ -495,19 +496,19 @@ function TransactionsPageContent() {
         {(descriptionInput || amountInput) && (
           <button
             onClick={() => { setDescriptionInput(''); setAmountInput(''); setPage(1); }}
-            className="text-sm text-blue-600 hover:underline pb-2"
+            className="text-sm text-primary hover:underline pb-2"
           >
             Limpar busca
           </button>
         )}
         {categoryFilter && (
           <div className="flex items-center gap-2 pb-2">
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary">
               Categoria: {categories.find((c) => c.id === categoryFilter)?.name ?? '...'}
             </span>
             <button
               onClick={() => { setCategoryFilter(''); setPage(1); }}
-              className="text-sm text-blue-600 hover:underline"
+              className="text-sm text-primary hover:underline"
             >
               Limpar categoria
             </button>
@@ -515,24 +516,77 @@ function TransactionsPageContent() {
         )}
       </div>
 
-      <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 overflow-hidden">
+      <div className="bg-card rounded-xl shadow border border-border overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-500">Carregando transações...</div>
+          <div className="p-8 text-center text-foreground">Carregando transações...</div>
         ) : transactions.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+          <div className="p-8 text-center text-foreground">
             Nenhuma transação registrada ainda.
           </div>
         ) : (
-          <table className="w-full text-left border-collapse">
+          <>
+          <ul className="divide-y divide-border md:hidden">
+            {transactions.map((t) => {
+              const isIncome = t.type === 'INCOME';
+              const isInvestment = t.type === 'TRANSFER' && t.transfer?.toAccount?.type === 'INVESTMENT';
+              const isTransfer = t.type === 'TRANSFER' && !isInvestment;
+              return (
+                <li key={t.id} className="flex flex-col gap-2 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">{t.description}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                        {new Date(t.date).toLocaleDateString('pt-BR')} ·{' '}
+                        {isTransfer || isInvestment
+                          ? `${t.account?.name || '—'} → ${t.transfer?.toAccount?.name || '—'}`
+                          : t.account?.name || '-'}
+                      </p>
+                    </div>
+                    <p className={`font-num shrink-0 text-base font-bold ${
+                      isIncome ? 'text-success' : isInvestment ? 'text-primary' : isTransfer ? 'text-warning' : 'text-danger'
+                    }`}>
+                      {isIncome ? '+ ' : isTransfer || isInvestment ? '' : '- '}
+                      {formatCurrency(t.amount)}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                        {isIncome ? 'Entrada' : isInvestment ? 'Investimento' : isTransfer ? 'Transferência' : 'Saída'}
+                      </span>
+                      <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                        t.status === 'PAID' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'
+                      }`}>
+                        {t.status === 'PAID' ? 'Feito' : 'Pendente'}
+                      </span>
+                      {t.category && (
+                        <span
+                          className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
+                          style={{ backgroundColor: `${t.category.color}20`, color: t.category.color }}
+                        >
+                          {t.category.name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 gap-4">
+                      <button onClick={() => handleEdit(t)} className="py-1 text-sm font-semibold text-primary">Editar</button>
+                      <button onClick={() => handleDelete(t)} className="py-1 text-sm font-semibold text-danger">Excluir</button>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden overflow-x-auto md:block"><table className="min-w-[640px] w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-gray-200 dark:border-zinc-800 bg-gray-50 dark:bg-zinc-800/50">
-                <th className="p-4 font-semibold dark:text-gray-200">Tipo</th>
-                <th className="p-4 font-semibold dark:text-gray-200">Descrição</th>
-                <th className="p-4 font-semibold dark:text-gray-200">Conta</th>
-                <th className="p-4 font-semibold dark:text-gray-200">Data</th>
-                <th className="p-4 font-semibold dark:text-gray-200">Status</th>
-                <th className="p-4 font-semibold text-right dark:text-gray-200">Valor</th>
-                <th className="p-4 font-semibold text-center dark:text-gray-200">Ações</th>
+              <tr className="border-b border-border bg-muted/60">
+                <th className="p-4 font-semibold">Tipo</th>
+                <th className="p-4 font-semibold">Descrição</th>
+                <th className="p-4 font-semibold">Conta</th>
+                <th className="p-4 font-semibold">Data</th>
+                <th className="p-4 font-semibold">Status</th>
+                <th className="p-4 font-semibold text-right">Valor</th>
+                <th className="p-4 font-semibold text-center">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -545,18 +599,18 @@ function TransactionsPageContent() {
                 const isInvestment = t.type === 'TRANSFER' && t.transfer?.toAccount?.type === 'INVESTMENT';
                 const isTransfer = t.type === 'TRANSFER' && !isInvestment;
                 return (
-                  <tr key={t.id} className="border-b border-gray-100 dark:border-zinc-800 hover:bg-gray-50/50 dark:hover:bg-zinc-800/50 group">
+                  <tr key={t.id} className="border-b border-border hover:bg-muted/60 group">
                     <td className="p-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        isIncome ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                        : isInvestment ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                        : isTransfer ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
-                        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                        isIncome ? 'bg-success/10 text-success'
+                        : isInvestment ? 'bg-primary/10 text-primary'
+                        : isTransfer ? 'bg-warning/10 text-warning'
+                        : 'bg-danger/10 text-danger'
                       }`}>
                         {isIncome ? '↑ Entrada' : isInvestment ? '📈 Investir' : isTransfer ? '⇄ Transf.' : '↓ Saída'}
                       </span>
                     </td>
-                    <td className="p-4 dark:text-gray-200 font-medium">
+                    <td className="p-4 font-medium">
                       {t.description}
                       {t.category && (
                         <span
@@ -567,35 +621,35 @@ function TransactionsPageContent() {
                         </span>
                       )}
                     </td>
-                    <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">
+                    <td className="p-4 text-foreground text-sm">
                       {isTransfer || isInvestment
                         ? `${t.account?.name || '—'} → ${t.transfer?.toAccount?.name || '—'}`
                         : t.account?.name || '-'}
                     </td>
-                    <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                    <td className="p-4 text-foreground text-sm">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
                     <td className="p-4">
                       <span className={`text-xs font-bold px-2 py-1 rounded ${
                         t.status === 'PAID' 
-                          ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400' 
+                          ? 'bg-primary/10 text-primary' 
                           : 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
                       }`}>
                         {t.status === 'PAID' ? 'Feito' : 'Pendente'}
                       </span>
                     </td>
                     <td className={`p-4 text-right font-semibold text-lg ${
-                      isIncome ? 'text-green-600 dark:text-green-400' :
-                      isInvestment ? 'text-blue-600 dark:text-blue-400' :
-                      isTransfer ? 'text-purple-600 dark:text-purple-400' : 'text-red-600 dark:text-red-400'
+                      isIncome ? 'text-success' :
+                      isInvestment ? 'text-primary' :
+                      isTransfer ? 'text-warning' : 'text-danger'
                     }`}>
                       {isIncome ? '+ ' : isTransfer || isInvestment ? '' : '- '}
                       {formatCurrency(t.amount)}
                     </td>
                     <td className="p-4 text-center">
-                      <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(t)} className="text-blue-500 hover:text-blue-700 text-sm font-medium">
+                      <div className="flex justify-center gap-3 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => handleEdit(t)} className="text-primary hover:text-primary text-sm font-medium">
                           Editar
                         </button>
-                        <button onClick={() => handleDelete(t)} className="text-red-500 hover:text-red-700 text-sm font-medium">
+                        <button onClick={() => handleDelete(t)} className="text-danger hover:text-danger text-sm font-medium">
                           Excluir
                         </button>
                       </div>
@@ -604,27 +658,28 @@ function TransactionsPageContent() {
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
+          </>
         )}
       </div>
 
       {!loading && transactions.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-foreground">
             {total} {total === 1 ? 'transação' : 'transações'} · página {page} de {totalPages}
           </p>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-zinc-800 dark:text-white"
+              className="px-3 py-1.5 text-sm rounded-lg border border-input disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/60"
             >
               Anterior
             </button>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="px-3 py-1.5 text-sm rounded-lg border border-gray-300 dark:border-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-zinc-800 dark:text-white"
+              className="px-3 py-1.5 text-sm rounded-lg border border-input disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/60"
             >
               Próxima
             </button>
@@ -633,8 +688,8 @@ function TransactionsPageContent() {
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-card text-card-foreground rounded-xl shadow-xl w-full max-w-lg border border-border max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card text-card-foreground rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-lg border border-border max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-rise">
             <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-border">
               <div>
                 <h2 className="text-lg font-semibold">

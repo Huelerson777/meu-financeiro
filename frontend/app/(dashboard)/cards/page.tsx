@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert, confirmDialog } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { CreditCard, Plus, Pencil, Trash2 } from 'lucide-react';
 import { api } from '@/services/api';
@@ -84,12 +85,12 @@ export default function CardsPage() {
   };
 
   const handleArchive = async (c: Card) => {
-    if (!window.confirm(`Excluir o cartão "${c.name}"?`)) return;
+    if (!(await confirmDialog(`Excluir o cartão "${c.name}"?`))) return;
     try {
       await api.delete(`/cards/${c.id}`);
       fetchCards();
     } catch {
-      alert('Erro ao excluir cartão.');
+      notifyAlert('Erro ao excluir cartão.');
     }
   };
 
@@ -115,24 +116,24 @@ export default function CardsPage() {
       fetchCards();
     } catch (err: any) {
       const msg = err.response?.data?.message;
-      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao salvar cartão.');
+      notifyAlert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao salvar cartão.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Cartões</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight">Cartões</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Controle de limites, fechamento/vencimento e compras parceladas.
           </p>
         </div>
         <button
           onClick={handleOpenCreate}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg font-medium transition shadow flex items-center gap-2"
+          className="bg-primary hover:bg-primary/90 text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow flex items-center gap-2"
         >
           <Plus className="w-4 h-4" /> Novo Cartão
         </button>
@@ -234,8 +235,8 @@ export default function CardsPage() {
 
       {/* Modal Criar/Editar Cartão */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-card text-card-foreground rounded-xl shadow-xl w-full max-w-md p-6 border border-border">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card text-card-foreground rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
               <h2 className="text-xl font-bold text-foreground">
                 {editingId ? 'Editar Cartão' : 'Novo Cartão'}
@@ -306,7 +307,7 @@ export default function CardsPage() {
                 </button>
                 <button
                   type="submit" disabled={isSubmitting}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
                 >
                   {isSubmitting ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Criar Cartão'}
                 </button>

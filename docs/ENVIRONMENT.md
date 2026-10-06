@@ -19,7 +19,7 @@
 | `WHATSAPP_APP_SECRET` | App Secret (App Settings → Basic) — valida a assinatura HMAC dos webhooks | — |
 | `WHATSAPP_VERIFY_TOKEN` | String qualquer escolhida por você, repetida na configuração do webhook no dashboard da Meta | string aleatória |
 | `ANTHROPIC_API_KEY` | Chave da API da Anthropic, usada pra interpretar as mensagens/fotos do WhatsApp | console.anthropic.com |
-| `ANTHROPIC_MODEL` | Modelo usado na interpretação (opcional, tem default) | `claude-haiku-4-5-20251001` |
+| `ANTHROPIC_MODEL` | Modelo usado na interpretação (opcional, tem default) | `claude-sonnet-5-5` |
 
 Veja `backend/.env.example` para o arquivo pronto para copiar.
 

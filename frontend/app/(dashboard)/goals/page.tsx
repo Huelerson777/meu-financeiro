@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert, confirmDialog } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { Target, Plus, Trash2, Pencil } from 'lucide-react';
 import { api } from '@/services/api';
@@ -71,12 +72,12 @@ export default function GoalsPage() {
   };
 
   const handleDelete = async (g: Goal) => {
-    if (!window.confirm(`Excluir a meta "${g.name}"?`)) return;
+    if (!(await confirmDialog(`Excluir a meta "${g.name}"?`))) return;
     try {
       await api.delete(`/goals/${g.id}`);
       fetchGoals();
     } catch {
-      alert('Erro ao excluir meta.');
+      notifyAlert('Erro ao excluir meta.');
     }
   };
 
@@ -101,7 +102,7 @@ export default function GoalsPage() {
       fetchGoals();
     } catch (err: any) {
       const msg = err.response?.data?.message;
-      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao salvar meta.');
+      notifyAlert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao salvar meta.');
     } finally {
       setIsSubmitting(false);
     }
@@ -119,7 +120,7 @@ export default function GoalsPage() {
       setContributeAmount('');
       fetchGoals();
     } catch {
-      alert('Erro ao adicionar valor.');
+      notifyAlert('Erro ao adicionar valor.');
     } finally {
       setContributing(false);
     }
@@ -132,31 +133,31 @@ export default function GoalsPage() {
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold dark:text-white">Metas</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <h1 className="font-display text-3xl font-bold tracking-tight">Metas</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Defina objetivos financeiros e acompanhe o progresso.
           </p>
         </div>
         <button
           onClick={handleOpenCreate}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition shadow flex items-center gap-2"
+          className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow flex items-center gap-2"
         >
           <Plus className="w-4 h-4" /> Nova Meta
         </button>
       </div>
 
       {loading ? (
-        <div className="text-gray-500 py-8">Carregando...</div>
+        <div className="text-foreground py-8">Carregando...</div>
       ) : goals.length === 0 ? (
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-10 flex flex-col items-center text-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
-            <Target className="w-7 h-7 text-blue-600 dark:text-blue-400" />
+        <div className="bg-card rounded-xl shadow border border-border p-10 flex flex-col items-center text-center gap-3">
+          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+            <Target className="w-7 h-7 text-primary" />
           </div>
-          <h2 className="text-lg font-semibold dark:text-white">Nenhuma meta cadastrada</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md">
+          <h2 className="text-lg font-semibold">Nenhuma meta cadastrada</h2>
+          <p className="text-sm text-foreground max-w-md">
             Crie sua primeira meta, tipo &quot;Viagem&quot; ou &quot;Reserva de emergência&quot;, e acompanhe o progresso.
           </p>
         </div>
@@ -172,29 +173,29 @@ export default function GoalsPage() {
             return (
               <div
                 key={g.id}
-                className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 relative overflow-hidden group p-6"
+                className="bg-card rounded-xl shadow border border-border relative overflow-hidden group p-6"
               >
                 <div
                   className="absolute top-0 left-0 right-0 h-1"
                   style={{ backgroundColor: isComplete ? '#16a34a' : '#3b82f6' }}
                 />
 
-                <div className="absolute top-4 right-4 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleEdit(g)} className="text-gray-400 hover:text-blue-500">
+                <div className="absolute top-4 right-4 flex gap-3 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => handleEdit(g)} className="text-foreground hover:text-primary">
                     <Pencil className="w-4 h-4" />
                   </button>
-                  <button onClick={() => handleDelete(g)} className="text-gray-400 hover:text-red-500">
+                  <button onClick={() => handleDelete(g)} className="text-foreground hover:text-danger">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
 
-                <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
-                  <Target className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <Target className="w-5 h-5 text-primary" />
                   {g.name}
                 </h3>
 
                 {g.deadline && (
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  <p className="text-xs text-foreground mt-1">
                     {days !== null && days >= 0
                       ? `Faltam ${days} dia${days === 1 ? '' : 's'}`
                       : days !== null && days < 0
@@ -207,12 +208,12 @@ export default function GoalsPage() {
 
                 <div className="mt-4">
                   <div className="flex justify-between text-sm mb-1">
-                    <span className="text-gray-500 dark:text-gray-400">
+                    <span className="text-foreground">
                       {formatCurrency(current)} de {formatCurrency(target)}
                     </span>
-                    <span className="font-semibold dark:text-white">{pct.toFixed(0)}%</span>
+                    <span className="font-semibold">{pct.toFixed(0)}%</span>
                   </div>
-                  <div className="w-full h-2 bg-gray-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all"
                       style={{ width: `${pct}%`, backgroundColor: isComplete ? '#16a34a' : '#3b82f6' }}
@@ -221,13 +222,13 @@ export default function GoalsPage() {
                 </div>
 
                 {isComplete ? (
-                  <p className="mt-4 text-center text-sm font-semibold text-green-600 dark:text-green-400">
+                  <p className="mt-4 text-center text-sm font-semibold text-success">
                     🎉 Meta concluída!
                   </p>
                 ) : (
                   <button
                     onClick={() => setContributeGoal(g)}
-                    className="mt-4 w-full bg-gray-50 dark:bg-zinc-800 hover:bg-gray-100 dark:hover:bg-zinc-700 text-sm font-medium py-2 rounded-lg transition"
+                    className="mt-4 w-full bg-muted/60 hover:bg-muted text-sm font-medium py-2 rounded-lg transition"
                   >
                     + Adicionar valor
                   </button>
@@ -240,62 +241,62 @@ export default function GoalsPage() {
 
       {/* Modal Criar/Editar Meta */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-200 dark:border-zinc-800">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold dark:text-white">
+              <h2 className="text-xl font-bold">
                 {editingId ? 'Editar Meta' : 'Nova Meta'}
               </h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-gray-700 font-bold text-lg">
+              <button onClick={() => setIsModalOpen(false)} className="text-foreground hover:text-foreground/80 font-bold text-lg">
                 ✕
               </button>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Nome da meta</label>
+                <label className="block text-sm font-medium mb-1">Nome da meta</label>
                 <input
                   type="text" required placeholder="Ex: Viagem para a praia"
                   value={name} onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Valor alvo (R$)</label>
+                <label className="block text-sm font-medium mb-1">Valor alvo (R$)</label>
                 <input
                   type="number" step="0.01" required
                   value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Valor já guardado (R$)</label>
+                <label className="block text-sm font-medium mb-1">Valor já guardado (R$)</label>
                 <input
                   type="number" step="0.01"
                   value={currentAmount} onChange={(e) => setCurrentAmount(e.target.value)}
                   placeholder="0,00"
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Prazo (opcional)</label>
+                <label className="block text-sm font-medium mb-1">Prazo (opcional)</label>
                 <input
                   type="date"
                   value={deadline} onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
                 />
               </div>
 
               <div className="flex justify-end gap-3 pt-3">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-gray-500 hover:underline">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm text-foreground hover:underline">
                   Cancelar
                 </button>
                 <button
                   type="submit" disabled={isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                  className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
                 >
                   {isSubmitting ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Criar Meta'}
                 </button>
@@ -307,34 +308,34 @@ export default function GoalsPage() {
 
       {/* Modal Adicionar Valor */}
       {contributeGoal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-200 dark:border-zinc-800">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-sm p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-1">
-              <h2 className="text-xl font-bold dark:text-white">Adicionar valor</h2>
-              <button onClick={() => setContributeGoal(null)} className="text-gray-500 hover:text-gray-700 font-bold text-lg">
+              <h2 className="text-xl font-bold">Adicionar valor</h2>
+              <button onClick={() => setContributeGoal(null)} className="text-foreground hover:text-foreground/80 font-bold text-lg">
                 ✕
               </button>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+            <p className="text-sm text-foreground mb-5">
               Na meta <strong>{contributeGoal.name}</strong>
             </p>
 
             <form onSubmit={handleContribute} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Valor (R$)</label>
+                <label className="block text-sm font-medium mb-1">Valor (R$)</label>
                 <input
                   type="number" step="0.01" required autoFocus
                   value={contributeAmount} onChange={(e) => setContributeAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
-                <button type="button" onClick={() => setContributeGoal(null)} className="px-4 py-2 text-sm text-gray-500 hover:underline">
+                <button type="button" onClick={() => setContributeGoal(null)} className="px-4 py-2 text-sm text-foreground hover:underline">
                   Cancelar
                 </button>
                 <button
                   type="submit" disabled={contributing}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                  className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
                 >
                   {contributing ? 'Salvando...' : 'Adicionar'}
                 </button>

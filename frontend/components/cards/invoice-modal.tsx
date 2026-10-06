@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert, confirmDialog } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { X, Pencil, Trash2, MinusCircle, Repeat, Check } from 'lucide-react';
 import { api } from '@/services/api';
@@ -134,34 +135,34 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
 
   const handleDelete = async (item: InvoiceItem) => {
     if (item.isCredit) {
-      if (!window.confirm(`Excluir o crédito "${item.description}"?`)) return;
+      if (!(await confirmDialog(`Excluir o crédito "${item.description}"?`))) return;
       try {
         await api.delete(`/cards/credits/${item.id}`);
         fetchInvoices();
       } catch (err: any) {
-        alert('Erro ao excluir crédito.');
+        notifyAlert('Erro ao excluir crédito.');
       }
       return;
     }
 
     if (item.cardRecurringPurchaseId) {
-      if (!window.confirm(`Cancelar a assinatura "${item.description}"? As cobranças já geradas continuam, só não gera mais nos próximos meses.`)) return;
+      if (!(await confirmDialog(`Cancelar a assinatura "${item.description}"? As cobranças já geradas continuam, só não gera mais nos próximos meses.`))) return;
       try {
         await api.delete(`/cards/recurring-purchases/${item.cardRecurringPurchaseId}`);
         fetchInvoices();
       } catch (err: any) {
-        alert('Erro ao cancelar assinatura.');
+        notifyAlert('Erro ao cancelar assinatura.');
       }
       return;
     }
 
     const { name } = parseInstallmentLabel(item.description);
-    if (!window.confirm(`Excluir TODAS as parcelas de "${name}"? Essa ação não pode ser desfeita.`)) return;
+    if (!(await confirmDialog(`Excluir TODAS as parcelas de "${name}"? Essa ação não pode ser desfeita.`))) return;
     try {
       await api.delete(`/cards/purchases/${item.installmentGroupId}`);
       fetchInvoices();
     } catch (err: any) {
-      alert('Erro ao excluir compra.');
+      notifyAlert('Erro ao excluir compra.');
     }
   };
 
@@ -195,13 +196,13 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
     }
 
     // Desfazer pagamento: devolve o valor pra conta de onde saiu
-    if (!window.confirm('Desfazer o pagamento desta parcela? O valor volta para a conta de origem.')) return;
+    if (!(await confirmDialog('Desfazer o pagamento desta parcela? O valor volta para a conta de origem.'))) return;
     try {
       await api.patch(`/cards/installments/${item.installmentId}/unpay`);
       fetchInvoices();
     } catch (err: any) {
       const msg = err.response?.data?.message;
-      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao desfazer pagamento.');
+      notifyAlert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao desfazer pagamento.');
     }
   };
 
@@ -225,7 +226,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
           categoryId: recurring.categoryId ?? null,
         });
       } catch {
-        alert('Erro ao carregar dados da assinatura para edição.');
+        notifyAlert('Erro ao carregar dados da assinatura para edição.');
       }
       return;
     }
@@ -255,7 +256,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
         categoryId: item.categoryId ?? null,
       });
     } catch {
-      alert('Erro ao carregar dados da compra para edição.');
+      notifyAlert('Erro ao carregar dados da compra para edição.');
     }
   };
 
@@ -270,28 +271,28 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col border border-gray-200 dark:border-zinc-800">
-        <div className="flex-shrink-0 flex justify-between items-center p-6 pb-4 border-b border-gray-100 dark:border-zinc-800">
-          <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-lg max-h-[92dvh] sm:max-h-[90vh] flex flex-col border border-border animate-rise">
+        <div className="flex-shrink-0 flex justify-between items-center p-6 pb-4 border-b border-border">
+          <h2 className="text-xl font-bold flex items-center gap-2">
             <span className="w-3 h-3 rounded-full" style={{ backgroundColor: card.color || '#8B5CF6' }} />
             {card.name}
           </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+          <button onClick={onClose} className="text-foreground hover:text-foreground/80">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {loading ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-10">Carregando...</p>
+          <p className="text-sm text-foreground text-center py-10">Carregando...</p>
         ) : invoices.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-10">
+          <p className="text-sm text-foreground text-center py-10">
             Nenhuma compra lançada neste cartão ainda.
           </p>
         ) : (
           <>
             {/* Abas de mês */}
-            <div className="flex-shrink-0 flex gap-2 px-6 py-3 overflow-x-auto border-b border-gray-100 dark:border-zinc-800">
+            <div className="flex-shrink-0 flex gap-2 px-6 py-3 overflow-x-auto border-b border-border">
               {invoices.map((inv) => {
                 const isPaid = inv.openTotal <= 0;
                 return (
@@ -302,11 +303,11 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                     className={`whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition flex items-center gap-1.5 ${
                       selectedMonth === inv.month
                         ? isPaid
-                          ? 'bg-green-600 text-white'
-                          : 'bg-blue-600 text-white'
+                          ? 'bg-success text-white'
+                          : 'bg-primary text-primary-foreground'
                         : isPaid
-                          ? 'bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-950/60'
-                          : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700'
+                          ? 'bg-success/10 text-success hover:bg-success/10'
+                          : 'bg-muted text-foreground hover:bg-muted'
                     }`}
                   >
                     {isPaid && <Check className="w-3.5 h-3.5 flex-shrink-0" />}
@@ -323,14 +324,14 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                   <button
                     type="button"
                     onClick={toggleSelectAllOpen}
-                    className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                    className="text-xs font-medium text-primary hover:underline"
                   >
                     {allOpenSelected ? 'Limpar seleção' : 'Selecionar todas em aberto'}
                   </button>
                 </div>
               )}
               {currentInvoice?.items.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                <p className="text-sm text-foreground text-center py-8">
                   Nenhum lançamento neste mês.
                 </p>
               ) : (
@@ -338,18 +339,18 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                   {groupItemsByDay(currentInvoice?.items ?? []).map((group) => (
                     <div key={group.day} className="flex flex-col gap-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        <span className="text-xs font-semibold text-foreground whitespace-nowrap">
                           {group.day}
                         </span>
-                        <div className="flex-1 h-px bg-gray-200 dark:bg-zinc-700" />
+                        <div className="flex-1 h-px bg-muted" />
                       </div>
                       {group.items.map((item) => {
                     const { installmentLabel, name } = parseInstallmentLabel(item.description);
                     return (
-                      <div key={item.id} className="flex items-center justify-between gap-3 pb-3 border-b border-gray-50 dark:border-zinc-800 last:border-0 group">
+                      <div key={item.id} className="flex items-center justify-between gap-3 pb-3 border-b border-border last:border-0 group">
                         <div className="flex items-center gap-3 min-w-0">
                           {item.isCredit ? (
-                            <MinusCircle className="flex-shrink-0 w-5 h-5 text-green-500" />
+                            <MinusCircle className="flex-shrink-0 w-5 h-5 text-success" />
                           ) : item.installmentId && (
                             <button
                               type="button"
@@ -363,10 +364,10 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                               }
                               className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition ${
                                 item.paid
-                                  ? 'bg-green-500 border-green-500 text-white'
+                                  ? 'bg-success border-success/30 text-white'
                                   : selectedIds.has(item.installmentId)
-                                    ? 'bg-blue-600 border-blue-600 text-white'
-                                    : 'border-gray-300 dark:border-zinc-600 text-transparent hover:border-blue-400'
+                                    ? 'bg-primary border-primary text-primary-foreground'
+                                    : 'border-input text-transparent hover:border-primary'
                               }`}
                             >
                               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="w-3 h-3">
@@ -375,9 +376,9 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                             </button>
                           )}
                           <div className="flex flex-col min-w-0">
-                            <span className={`text-sm font-medium truncate ${item.isCredit ? 'text-green-600 dark:text-green-400' : item.paid ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
+                            <span className={`text-sm font-medium truncate ${item.isCredit ? 'text-success' : item.paid ? 'text-foreground line-through' : 'text-foreground'}`}>
                               {installmentLabel && (
-                                <span className="text-blue-600 dark:text-blue-400 font-semibold mr-1.5">
+                                <span className="text-primary font-semibold mr-1.5">
                                   {installmentLabel}
                                 </span>
                               )}
@@ -398,7 +399,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                               </span>
                             )}
                             {item.paid && item.paidFromAccountName && (
-                              <span className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                              <span className="mt-1 text-xs text-foreground">
                                 Pago com {item.paidFromAccountName}
                                 {item.paidAt && ` em ${new Date(item.paidAt).toLocaleDateString('pt-BR')}`}
                               </span>
@@ -406,15 +407,15 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                           </div>
                         </div>
                         <div className="flex items-center gap-3 flex-shrink-0">
-                          <span className={`text-sm font-semibold whitespace-nowrap ${item.isCredit ? 'text-green-600 dark:text-green-400' : item.paid ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-800 dark:text-gray-100'}`}>
+                          <span className={`text-sm font-semibold whitespace-nowrap ${item.isCredit ? 'text-success' : item.paid ? 'text-foreground line-through' : 'text-foreground'}`}>
                             {formatCurrency(item.amount)}
                           </span>
-                          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex gap-2 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
                             {!item.isCredit && (
                               <button
                                 onClick={() => handleEditClick(item)}
                                 title={item.cardRecurringPurchaseId ? 'Editar assinatura' : 'Editar todas as parcelas desta compra'}
-                                className="text-gray-400 hover:text-blue-500"
+                                className="text-foreground hover:text-primary"
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
@@ -428,7 +429,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
                                     ? 'Cancelar assinatura'
                                     : 'Excluir todas as parcelas desta compra'
                               }
-                              className="text-gray-400 hover:text-red-500"
+                              className="text-foreground hover:text-danger"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -445,13 +446,13 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
 
             {/* Barra de ação para pagamento em lote */}
             {selectedIds.size > 0 && (
-              <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-3 border-t border-gray-100 dark:border-zinc-800 bg-blue-50 dark:bg-blue-950/30">
-                <span className="text-sm text-gray-700 dark:text-gray-200">
+              <div className="flex-shrink-0 flex items-center justify-between gap-3 px-6 py-3 border-t border-border bg-primary/10">
+                <span className="text-sm text-foreground/80">
                   {selectedItems.length} selecionada{selectedItems.length > 1 ? 's' : ''} · {formatCurrency(selectedTotal)}
                 </span>
                 <button
                   onClick={() => setPayingSelection(true)}
-                  className="bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+                  className="bg-success hover:brightness-110 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
                 >
                   {selectedItems.length > 1 ? 'Pagar selecionadas' : 'Pagar selecionada'}
                 </button>
@@ -459,27 +460,27 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
             )}
 
             {/* Total da fatura do mês */}
-            <div className="flex-shrink-0 flex flex-col gap-3 p-6 pt-4 border-t border-gray-100 dark:border-zinc-800">
+            <div className="flex-shrink-0 flex flex-col gap-3 p-6 pt-4 border-t border-border">
               <button
                 type="button"
                 onClick={() => setShowCreditModal(true)}
                 disabled={!selectedMonth}
-                className="self-start text-xs font-medium text-green-600 dark:text-green-400 hover:underline disabled:opacity-50"
+                className="self-start text-xs font-medium text-success hover:underline disabled:opacity-50"
               >
                 + Lançar crédito / estorno nesta fatura
               </button>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-500 dark:text-gray-400">
+                <span className="text-sm text-foreground">
                   Total da fatura {currentInvoice ? formatMonth(currentInvoice.month) : ''}
                 </span>
-                <span className="text-lg font-bold text-gray-800 dark:text-gray-100">
+                <span className="text-lg font-bold text-foreground">
                   {formatCurrency(currentInvoice?.total ?? 0)}
                 </span>
               </div>
               {currentInvoice && currentInvoice.openTotal > 0 && (
                 <button
                   onClick={() => setPayingInvoice(currentInvoice)}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white text-sm font-medium py-2.5 rounded-lg transition"
+                  className="w-full bg-success hover:brightness-110 text-white text-sm font-medium py-2.5 rounded-lg transition"
                 >
                   Pagar fatura total em aberto ({formatCurrency(currentInvoice.openTotal)})
                 </button>

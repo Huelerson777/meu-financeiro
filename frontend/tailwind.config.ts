@@ -7,10 +7,12 @@ const config: Config = {
     container: { center: true, padding: '1.5rem', screens: { '2xl': '1400px' } },
     extend: {
       fontFamily: {
-        sans: ['var(--font-inter)', 'sans-serif'],
+        sans: ['var(--font-body)', 'sans-serif'],
+        display: ['var(--font-display)', 'var(--font-body)', 'sans-serif'],
       },
       colors: {
         border: 'hsl(var(--border))',
+        input: 'hsl(var(--input))',
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
         muted: {
@@ -30,15 +32,18 @@ const config: Config = {
         warning: { DEFAULT: 'hsl(var(--warning))' },
       },
       borderRadius: {
-        lg: '0.75rem',
-        md: '0.5rem',
+        xl: '1.25rem',
+        lg: '0.875rem',
+        md: '0.625rem',
         sm: '0.375rem',
       },
       keyframes: {
+        'rise': { from: { opacity: '0', transform: 'translateY(10px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
         'fade-in': { from: { opacity: '0', transform: 'translateY(4px)' }, to: { opacity: '1', transform: 'translateY(0)' } },
       },
       animation: {
         'fade-in': 'fade-in 0.2s ease-out',
+        'rise': 'rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
       },
     },
   },

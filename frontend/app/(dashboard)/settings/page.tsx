@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert, confirmDialog } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, Lock, Palette, AlertTriangle, Tag } from 'lucide-react';
@@ -107,19 +108,19 @@ export default function SettingsPage() {
       fetchCategories();
     } catch (err: any) {
       const msg = err.response?.data?.message;
-      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao salvar categoria.');
+      notifyAlert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao salvar categoria.');
     } finally {
       setCategorySaving(false);
     }
   };
 
   const handleDeleteCategory = async (cat: CategoryItem) => {
-    if (!window.confirm(`Excluir a categoria "${cat.name}"? Lançamentos que já usam ela mantêm o valor, só ficam sem categoria.`)) return;
+    if (!(await confirmDialog(`Excluir a categoria "${cat.name}"? Lançamentos que já usam ela mantêm o valor, só ficam sem categoria.`))) return;
     try {
       await api.delete(`/categories/${cat.id}`);
       fetchCategories();
     } catch {
-      alert('Erro ao excluir a categoria.');
+      notifyAlert('Erro ao excluir a categoria.');
     }
   };
 
@@ -128,10 +129,10 @@ export default function SettingsPage() {
     setProfileSaving(true);
     try {
       await api.patch('/users/me', { name, email, whatsappNumber: whatsappNumber || undefined });
-      alert('Perfil atualizado com sucesso!');
+      notifyAlert('Perfil atualizado com sucesso!');
     } catch (err: any) {
       const msg = err.response?.data?.message;
-      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao atualizar perfil.');
+      notifyAlert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao atualizar perfil.');
     } finally {
       setProfileSaving(false);
     }
@@ -142,12 +143,12 @@ export default function SettingsPage() {
     setPasswordSaving(true);
     try {
       await api.patch('/users/me/password', { currentPassword, newPassword });
-      alert('Senha alterada com sucesso!');
+      notifyAlert('Senha alterada com sucesso!');
       setCurrentPassword('');
       setNewPassword('');
     } catch (err: any) {
       const msg = err.response?.data?.message;
-      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao trocar senha.');
+      notifyAlert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao trocar senha.');
     } finally {
       setPasswordSaving(false);
     }
@@ -158,9 +159,9 @@ export default function SettingsPage() {
     setPrefsSaving(true);
     try {
       await api.patch('/settings', { theme, currency });
-      alert('Preferências salvas!');
+      notifyAlert('Preferências salvas!');
     } catch (err: any) {
-      alert('Erro ao salvar preferências.');
+      notifyAlert('Erro ao salvar preferências.');
     } finally {
       setPrefsSaving(false);
     }
@@ -173,54 +174,54 @@ export default function SettingsPage() {
       logout();
       router.replace('/login');
     } catch (err: any) {
-      alert('Erro ao excluir conta.');
+      notifyAlert('Erro ao excluir conta.');
       setDeleting(false);
     }
   };
 
   return (
-    <div className="p-8 max-w-3xl">
-      <h1 className="text-3xl font-bold dark:text-white">Configurações</h1>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 mb-8">
+    <div className="max-w-3xl">
+      <h1 className="font-display text-3xl font-bold tracking-tight">Configurações</h1>
+      <p className="text-sm text-muted-foreground mt-1 mb-8">
         Gerencie seu perfil e preferências do sistema.
       </p>
 
       <div className="flex flex-col gap-6">
         {/* Perfil */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-6">
+        <div className="bg-card rounded-xl shadow border border-border p-6">
           <div className="flex items-center gap-2 mb-4">
-            <User className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold dark:text-white">Perfil</h2>
+            <User className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold">Perfil</h2>
           </div>
           <form onSubmit={handleSaveProfile} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">Nome</label>
+              <label className="block text-sm font-medium mb-1">Nome</label>
               <input
                 type="text" required value={name} onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">E-mail</label>
+              <label className="block text-sm font-medium mb-1">E-mail</label>
               <input
                 type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">
-                WhatsApp <span className="text-xs font-normal text-gray-400">(pra lançar transações por mensagem)</span>
+              <label className="block text-sm font-medium mb-1">
+                WhatsApp <span className="text-xs font-normal text-foreground">(pra lançar transações por mensagem)</span>
               </label>
               <input
                 type="tel" placeholder="Ex: 5548999999999 (DDI+DDD+número, só dígitos)"
                 value={whatsappNumber} onChange={(e) => setWhatsappNumber(e.target.value.replace(/\D/g, ''))}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
               />
             </div>
             <div className="flex justify-end">
               <button
                 type="submit" disabled={profileSaving}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
               >
                 {profileSaving ? 'Salvando...' : 'Salvar Perfil'}
               </button>
@@ -229,30 +230,30 @@ export default function SettingsPage() {
         </div>
 
         {/* Trocar Senha */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-6">
+        <div className="bg-card rounded-xl shadow border border-border p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Lock className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold dark:text-white">Trocar Senha</h2>
+            <Lock className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold">Trocar Senha</h2>
           </div>
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">Senha atual</label>
+              <label className="block text-sm font-medium mb-1">Senha atual</label>
               <input
                 type="password" autoComplete="current-password" required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">Nova senha</label>
+              <label className="block text-sm font-medium mb-1">Nova senha</label>
               <input
                 type="password" autoComplete="new-password" required minLength={6} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
               />
             </div>
             <div className="flex justify-end">
               <button
                 type="submit" disabled={passwordSaving}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
               >
                 {passwordSaving ? 'Salvando...' : 'Trocar Senha'}
               </button>
@@ -261,17 +262,17 @@ export default function SettingsPage() {
         </div>
 
         {/* Preferências */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-6">
+        <div className="bg-card rounded-xl shadow border border-border p-6">
           <div className="flex items-center gap-2 mb-4">
-            <Palette className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h2 className="text-lg font-semibold dark:text-white">Preferências</h2>
+            <Palette className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold">Preferências</h2>
           </div>
           <form onSubmit={handleSavePreferences} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">Tema</label>
+              <label className="block text-sm font-medium mb-1">Tema</label>
               <select
                 value={theme} onChange={(e) => setTheme(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-card"
               >
                 <option value="system">Automático (segue o sistema)</option>
                 <option value="light">Claro</option>
@@ -279,10 +280,10 @@ export default function SettingsPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">Moeda</label>
+              <label className="block text-sm font-medium mb-1">Moeda</label>
               <select
                 value={currency} onChange={(e) => setCurrency(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white"
+                className="w-full px-3 py-2 border border-input rounded-lg bg-card"
               >
                 <option value="BRL">Real (R$)</option>
                 <option value="USD">Dólar (US$)</option>
@@ -292,7 +293,7 @@ export default function SettingsPage() {
             <div className="flex justify-end">
               <button
                 type="submit" disabled={prefsSaving}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
               >
                 {prefsSaving ? 'Salvando...' : 'Salvar Preferências'}
               </button>
@@ -301,37 +302,37 @@ export default function SettingsPage() {
         </div>
 
         {/* Categorias */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl shadow border border-gray-100 dark:border-zinc-800 p-6">
+        <div className="bg-card rounded-xl shadow border border-border p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Tag className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              <h2 className="text-lg font-semibold dark:text-white">Categorias</h2>
+              <Tag className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-semibold">Categorias</h2>
             </div>
             <button
               onClick={handleOpenCreateCategory}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+              className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-4 py-2 rounded-md text-sm font-medium transition"
             >
               + Nova Categoria
             </button>
           </div>
 
           {categoriesLoading ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+            <p className="text-sm text-foreground">Carregando...</p>
           ) : categories.length === 0 ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma categoria cadastrada ainda.</p>
+            <p className="text-sm text-foreground">Nenhuma categoria cadastrada ainda.</p>
           ) : (
             <ul className="divide-y divide-gray-100 dark:divide-zinc-800">
               {categories.map((cat) => (
                 <li key={cat.id} className="flex items-center justify-between py-2.5 group">
                   <div className="flex items-center gap-3">
                     <span className="h-3.5 w-3.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
-                    <span className="text-sm font-medium dark:text-gray-200">{cat.name}</span>
+                    <span className="text-sm font-medium">{cat.name}</span>
                   </div>
-                  <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => handleOpenEditCategory(cat)} className="text-sm font-medium text-blue-500 hover:text-blue-700">
+                  <div className="flex gap-3 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => handleOpenEditCategory(cat)} className="text-sm font-medium text-primary hover:text-primary">
                       Editar
                     </button>
-                    <button onClick={() => handleDeleteCategory(cat)} className="text-sm font-medium text-red-500 hover:text-red-700">
+                    <button onClick={() => handleDeleteCategory(cat)} className="text-sm font-medium text-danger hover:text-danger">
                       Excluir
                     </button>
                   </div>
@@ -342,38 +343,38 @@ export default function SettingsPage() {
         </div>
 
         {/* Zona de Perigo */}
-        <div className="bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-200 dark:border-red-900/30 p-6">
+        <div className="bg-danger/10 rounded-xl border border-danger/30 p-6">
           <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
-            <h2 className="text-lg font-semibold text-red-700 dark:text-red-400">Zona de Perigo</h2>
+            <AlertTriangle className="w-5 h-5 text-danger" />
+            <h2 className="text-lg font-semibold text-danger">Zona de Perigo</h2>
           </div>
-          <p className="text-sm text-red-600/80 dark:text-red-400/70 mb-4">
+          <p className="text-sm text-danger/80 mb-4">
             Excluir sua conta é uma ação irreversível. Todos os seus dados (contas, transações, cartões, categorias) serão apagados.
           </p>
 
           {!showDeleteConfirm ? (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="bg-white dark:bg-transparent border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/20 px-5 py-2 rounded-lg text-sm font-medium transition"
+              className="bg-card dark:bg-transparent border border-danger/30 text-danger hover:bg-danger/10 px-5 py-2 rounded-lg text-sm font-medium transition"
             >
               Excluir minha conta
             </button>
           ) : (
             <div className="flex flex-col gap-3">
-              <p className="text-sm font-semibold text-red-700 dark:text-red-400">
+              <p className="text-sm font-semibold text-danger">
                 Tem certeza? Essa ação não pode ser desfeita.
               </p>
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
-                  className="px-4 py-2 text-sm text-gray-500 hover:underline"
+                  className="px-4 py-2 text-sm text-foreground hover:underline"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleDeleteAccount}
                   disabled={deleting}
-                  className="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                  className="bg-danger hover:brightness-110 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
                 >
                   {deleting ? 'Excluindo...' : 'Sim, excluir permanentemente'}
                 </button>
@@ -384,36 +385,36 @@ export default function SettingsPage() {
       </div>
 
       {isCategoryModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-sm p-6 border border-gray-200 dark:border-zinc-800">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-sm p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold dark:text-white">
+              <h2 className="text-xl font-bold">
                 {editingCategoryId ? 'Editar Categoria' : 'Nova Categoria'}
               </h2>
-              <button onClick={() => setIsCategoryModalOpen(false)} className="text-gray-500 hover:text-gray-700 font-bold text-lg">✕</button>
+              <button onClick={() => setIsCategoryModalOpen(false)} className="text-foreground hover:text-foreground/80 font-bold text-lg">✕</button>
             </div>
 
             <form onSubmit={handleSubmitCategory} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Nome</label>
+                <label className="block text-sm font-medium mb-1">Nome</label>
                 <input
                   type="text" required minLength={2} placeholder="Ex: Educação, Pets, Viagem..."
                   value={categoryName} onChange={(e) => setCategoryName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Cor</label>
+                <label className="block text-sm font-medium mb-1">Cor</label>
                 <input
                   type="color"
                   value={categoryColor} onChange={(e) => setCategoryColor(e.target.value)}
-                  className="w-full h-10 p-1 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent cursor-pointer"
+                  className="w-full h-10 p-1 border border-input rounded-lg bg-transparent cursor-pointer"
                 />
               </div>
 
               <div className="flex justify-end gap-3 pt-3">
-                <button type="button" onClick={() => setIsCategoryModalOpen(false)} className="px-4 py-2 text-sm text-gray-500 hover:underline">Cancelar</button>
-                <button type="submit" disabled={categorySaving} className="px-5 py-2 rounded-lg text-sm font-semibold text-white shadow bg-blue-600 hover:bg-blue-700">
+                <button type="button" onClick={() => setIsCategoryModalOpen(false)} className="px-4 py-2 text-sm text-foreground hover:underline">Cancelar</button>
+                <button type="submit" disabled={categorySaving} className="px-5 py-2 rounded-md text-sm font-semibold text-primary-foreground shadow bg-primary hover:brightness-110 active:scale-[0.97]">
                   {categorySaving ? 'Salvando...' : 'Confirmar'}
                 </button>
               </div>

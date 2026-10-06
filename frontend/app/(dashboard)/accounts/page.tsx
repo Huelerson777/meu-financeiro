@@ -1,5 +1,9 @@
 'use client';
 
+import { Landmark } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { notifyAlert, confirmDialog } from '@/utils/notify';
 import React, { useEffect, useState } from 'react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
@@ -96,17 +100,17 @@ export default function AccountsPage() {
       setAccounts((prev) =>
         prev.map((a) => (a.id === acc.id ? { ...a, includeInDashboard: !newValue } : a))
       );
-      alert('Erro ao atualizar preferência da conta.');
+      notifyAlert('Erro ao atualizar preferência da conta.');
     }
   };
 
   const handleArchive = async (id: string, accountName: string) => {
-    if (!window.confirm(`Tem certeza que deseja remover a conta "${accountName}"?`)) return;
+    if (!(await confirmDialog(`Tem certeza que deseja remover a conta "${accountName}"?`))) return;
     try {
       await api.delete(`/accounts/${id}`);
       fetchAccounts();
     } catch {
-      alert('Erro ao arquivar a conta.');
+      notifyAlert('Erro ao arquivar a conta.');
     }
   };
 
@@ -147,49 +151,65 @@ export default function AccountsPage() {
       const formattedError = Array.isArray(backendMessage)
         ? backendMessage.join('\n• ')
         : backendMessage || 'Erro ao salvar conta';
-      alert(`Erro no servidor:\n• ${formattedError}`);
+      notifyAlert(`Erro no servidor:\n• ${formattedError}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="p-8">
-      <div className="flex justify-between items-center mb-6">
+    <div>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold dark:text-white">Minhas Contas</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <h1 className="font-display text-3xl font-bold tracking-tight">Minhas Contas</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             Gerencie seus saldos, carteiras e instituições
           </p>
         </div>
         <button
           onClick={handleOpenCreate}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition shadow"
+          className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow"
         >
           + Nova Conta
         </button>
       </div>
 
       {/* Legenda */}
-      <div className="mb-4 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-        <span className="inline-block w-3 h-3 rounded-full bg-blue-500"></span>
-        Contas marcadas com{' '}
-        <strong className="text-gray-700 dark:text-gray-200">Controle de Saldo</strong>{' '}
-        entram no <strong className="text-gray-700 dark:text-gray-200">Saldo Geral</strong> do Dashboard
+      <div className="mb-4 flex items-start gap-2 text-xs text-muted-foreground">
+        <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-full bg-primary"></span>
+        <span>
+          Contas marcadas com <strong className="text-foreground">Controle de Saldo</strong> entram no{' '}
+          <strong className="text-foreground">Saldo Geral</strong> do Dashboard
+        </span>
       </div>
 
       {loading ? (
-        <div className="text-gray-500 py-8">Carregando contas...</div>
-      ) : accounts.length === 0 ? (
-        <div className="bg-white dark:bg-zinc-900 p-8 rounded-lg shadow text-center text-gray-500 dark:text-gray-400">
-          Nenhuma conta cadastrada ainda.
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-40 rounded-xl" />
+          ))}
         </div>
+      ) : accounts.length === 0 ? (
+        <EmptyState
+          className="rounded-xl border border-dashed border-border"
+          icon={Landmark}
+          title="Nenhuma conta ainda"
+          description="Cadastre sua primeira conta, carteira ou instituição para começar a acompanhar saldos."
+          action={
+            <button
+              onClick={handleOpenCreate}
+              className="h-10 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition-theme hover:brightness-110 active:scale-[0.97]"
+            >
+              + Nova Conta
+            </button>
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {accounts.map((acc) => (
             <div
               key={acc.id}
-              className="bg-white dark:bg-zinc-900 p-6 rounded-xl shadow border border-gray-100 dark:border-zinc-800 relative overflow-hidden group"
+              className="bg-card p-6 rounded-xl shadow border border-border relative overflow-hidden group"
             >
               {/* Barra de cor no topo */}
               <div
@@ -198,30 +218,30 @@ export default function AccountsPage() {
               />
 
               {/* Botões Editar / Excluir (hover) */}
-              <div className="absolute top-4 right-4 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute top-4 right-4 flex gap-3 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => handleEdit(acc)}
-                  className="text-gray-400 hover:text-blue-500 text-sm font-medium"
+                  className="text-foreground hover:text-primary text-sm font-medium"
                 >
                   Editar
                 </button>
                 <button
                   onClick={() => handleArchive(acc.id, acc.name)}
-                  className="text-gray-400 hover:text-red-500 text-sm font-medium"
+                  className="text-foreground hover:text-danger text-sm font-medium"
                 >
                   Excluir
                 </button>
               </div>
 
-              <span className="text-xs uppercase font-bold tracking-wider text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded">
+              <span className="text-xs uppercase font-bold tracking-wider text-primary bg-primary/10 px-2 py-1 rounded">
                 {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
               </span>
-              <h3 className="text-xl font-bold mt-3 dark:text-white">{acc.name}</h3>
+              <h3 className="text-xl font-bold mt-3">{acc.name}</h3>
               <p
                 className={`text-2xl font-semibold mt-2 ${
                   Number(acc.currentBalance ?? acc.initialBalance ?? 0) < 0
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-green-600 dark:text-green-400'
+                    ? 'text-danger'
+                    : 'text-success'
                 }`}
               >
                 {formatCurrency(acc.currentBalance ?? acc.initialBalance)}
@@ -237,13 +257,13 @@ export default function AccountsPage() {
                 }
                 className={`mt-4 flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
                   acc.includeInDashboard
-                    ? 'bg-blue-50 border-blue-300 text-blue-700 dark:bg-blue-900/30 dark:border-blue-600 dark:text-blue-300'
-                    : 'bg-gray-100 border-gray-300 text-gray-400 dark:bg-zinc-800 dark:border-zinc-600 dark:text-zinc-500'
+                    ? 'bg-primary/10 border-primary/30 text-primary'
+                    : 'bg-muted border-input text-foreground'
                 }`}
               >
                 <span
                   className={`w-2 h-2 rounded-full ${
-                    acc.includeInDashboard ? 'bg-blue-500' : 'bg-gray-400'
+                    acc.includeInDashboard ? 'bg-primary' : 'bg-muted'
                   }`}
                 />
                 {acc.includeInDashboard ? 'No controle de saldo' : 'Fora do saldo geral'}
@@ -255,15 +275,15 @@ export default function AccountsPage() {
 
       {/* Modal Criar / Editar */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-gray-200 dark:border-zinc-800">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold dark:text-white">
+              <h2 className="text-xl font-bold">
                 {editingId ? 'Editar Conta' : 'Nova Conta Bancária'}
               </h2>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 font-bold text-lg"
+                className="text-foreground hover:text-foreground/80 font-bold text-lg"
               >
                 ✕
               </button>
@@ -271,23 +291,23 @@ export default function AccountsPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Nome da Conta</label>
+                <label className="block text-sm font-medium mb-1">Nome da Conta</label>
                 <input
                   type="text"
                   required
                   placeholder="Ex: Itaú, Nubank, Carteira..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Tipo de Conta</label>
+                <label className="block text-sm font-medium mb-1">Tipo de Conta</label>
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="CHECKING">Conta Corrente</option>
                   <option value="SAVINGS">Poupança</option>
@@ -298,7 +318,7 @@ export default function AccountsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">
+                <label className="block text-sm font-medium mb-1">
                   {editingId ? 'Saldo Atual (R$)' : 'Saldo Inicial (R$)'}
                 </label>
                 <input
@@ -307,22 +327,22 @@ export default function AccountsPage() {
                   placeholder="0,00"
                   value={initialBalance}
                   onChange={(e) => setInitialBalance(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 {editingId && (
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-foreground mt-1">
                     Corrige o saldo desta conta diretamente — use se o valor mostrado estiver divergente do real.
                   </p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium dark:text-gray-300 mb-1">Cor</label>
+                <label className="block text-sm font-medium mb-1">Cor</label>
                 <input
                   type="color"
                   value={color}
                   onChange={(e) => setColor(e.target.value)}
-                  className="w-full h-10 p-1 border border-gray-300 dark:border-zinc-700 rounded-lg bg-transparent cursor-pointer"
+                  className="w-full h-10 p-1 border border-input rounded-lg bg-transparent cursor-pointer"
                 />
               </div>
 
@@ -331,21 +351,21 @@ export default function AccountsPage() {
                 <button
                   type="button"
                   onClick={() => setIncludeInDashboard(!includeInDashboard)}
-                  className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    includeInDashboard ? 'bg-blue-600' : 'bg-gray-300 dark:bg-zinc-600'
+                  className={`relative flex-shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary ${
+                    includeInDashboard ? 'bg-primary' : 'bg-muted'
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-card rounded-full shadow transition-transform ${
                       includeInDashboard ? 'translate-x-5' : 'translate-x-0'
                     }`}
                   />
                 </button>
                 <div>
-                  <p className="text-sm font-medium dark:text-gray-200">
+                  <p className="text-sm font-medium">
                     Utilizar para controle de saldo
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  <p className="text-xs text-foreground mt-0.5">
                     {includeInDashboard
                       ? 'Esta conta entra no Saldo Geral do Dashboard.'
                       : 'Esta conta NÃO aparece no Saldo Geral (ex: conta de investimentos separada).'}
@@ -357,14 +377,14 @@ export default function AccountsPage() {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm text-gray-500 hover:underline"
+                  className="px-4 py-2 text-sm text-foreground hover:underline"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
+                  className="bg-primary hover:brightness-110 active:scale-[0.97] text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
                 >
                   {isSubmitting ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Criar Conta'}
                 </button>
