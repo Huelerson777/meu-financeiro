@@ -2,14 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ArrowLeftRight, CreditCard, Target, Menu } from 'lucide-react';
+import { LayoutDashboard, ArrowLeftRight, Landmark, Target, Menu } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { useMobileNavStore } from '@/stores/mobile-nav-store';
 
 const tabs = [
   { href: '/dashboard', label: 'Início', icon: LayoutDashboard },
   { href: '/transactions', label: 'Transações', icon: ArrowLeftRight },
-  { href: '/cards', label: 'Cartões', icon: CreditCard },
+  { href: '/accounts', label: 'Contas', icon: Landmark },
   { href: '/goals', label: 'Metas', icon: Target },
 ];
 

@@ -6,7 +6,6 @@ import {
   LayoutDashboard,
   Landmark,
   ArrowLeftRight,
-  CreditCard,
   TrendingUp,
   Target,
   Settings,
@@ -25,10 +24,9 @@ import { useAuthStore } from '@/stores/auth-store';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/accounts', label: 'Contas', icon: Landmark },
+  { href: '/accounts', label: 'Contas e Cartões', icon: Landmark },
   { href: '/transactions', label: 'Transações', icon: ArrowLeftRight },
   { href: '/recurring-bills', label: 'Contas Fixas', icon: Repeat },
-  { href: '/cards', label: 'Cartões', icon: CreditCard },
   { href: '/investments', label: 'Investimentos', icon: TrendingUp },
   { href: '/goals', label: 'Metas', icon: Target },
   { href: '/reports', label: 'Relatórios', icon: FileBarChart },

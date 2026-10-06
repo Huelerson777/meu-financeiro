@@ -169,7 +169,7 @@ export function SearchBox() {
                   {cards.map((c) => (
                     <button
                       key={c.id}
-                      onClick={() => goTo('/cards')}
+                      onClick={() => goTo('/accounts?tab=cards')}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted transition"
                     >
                       <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />
