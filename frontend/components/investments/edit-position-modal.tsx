@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { investmentsService, InvestmentPosition } from '@/services/investments.service';
@@ -55,7 +56,7 @@ export function EditPositionModal({ position, onClose, onSaved }: EditPositionMo
     e.preventDefault();
 
     if (!name.trim()) {
-      alert('Dê um nome pro ativo.');
+      notifyAlert('Dê um nome pro ativo.');
       return;
     }
 
@@ -78,15 +79,15 @@ export function EditPositionModal({ position, onClose, onSaved }: EditPositionMo
       const formattedError = Array.isArray(backendMessage)
         ? backendMessage.join('\n• ')
         : backendMessage || err.message || 'Erro desconhecido ao editar a posição';
-      alert(`Erro:\n• ${formattedError}`);
+      notifyAlert(`Erro:\n• ${formattedError}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-card text-card-foreground rounded-xl shadow-xl w-full max-w-lg border border-border max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card text-card-foreground rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-lg border border-border max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto animate-rise">
         <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-border">
           <div>
             <h2 className="text-lg font-semibold">Editar posição</h2>

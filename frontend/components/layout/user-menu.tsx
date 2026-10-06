@@ -22,7 +22,7 @@ export function UserMenu() {
       <button
         onClick={() => setOpen((v) => !v)}
         aria-label="Menu do usuário"
-        className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/20 text-xs font-semibold text-primary hover:bg-primary/30 transition-theme"
+        className="flex h-9 w-9 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground hover:brightness-110 active:scale-[0.97] transition-theme"
       >
         {user?.name ? user.name.charAt(0).toUpperCase() : <UserIcon className="h-4 w-4" />}
       </button>

@@ -37,8 +37,8 @@ export function TransactionDetailModal({
   const toneClass = tone === 'success' ? 'text-success' : 'text-danger';
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-card rounded-xl shadow-xl w-full max-w-lg max-h-[80vh] flex flex-col border border-border">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
+        <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-lg max-h-[92dvh] sm:max-h-[90vh] flex flex-col border border-border animate-rise">
         <div className="flex justify-between items-center p-6 pb-4 border-b border-border">
           <div>
             <h2 className="text-lg font-bold text-foreground">{title}</h2>

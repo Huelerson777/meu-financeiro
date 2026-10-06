@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert } from '@/utils/notify';
 import { useEffect, useRef, useState } from 'react';
 import { SlidersHorizontal, Check } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -18,6 +19,7 @@ export const DASHBOARD_WIDGETS: { key: string; label: string }[] = [
   { key: 'categoryChart', label: 'Despesas por Categoria' },
   { key: 'accountBalances', label: 'Saldo por Conta' },
   { key: 'goalsSummary', label: 'Resumo de Metas' },
+  { key: 'netWorth', label: 'Patrimônio ao longo do tempo' },
 ];
 
 const ALL_KEYS = DASHBOARD_WIDGETS.map((w) => w.key);
@@ -40,6 +42,7 @@ export const WIDGET_SPANS: Record<string, string> = {
   categoryChart: 'sm:col-span-2 lg:col-span-4',
   accountBalances: 'sm:col-span-2 lg:col-span-4',
   goalsSummary: 'sm:col-span-2 lg:col-span-4',
+  netWorth: 'sm:col-span-2 lg:col-span-4',
 };
 
 export function useEnabledWidgets(): { isEnabled: (key: string) => boolean; loaded: boolean } {
@@ -98,7 +101,7 @@ export function WidgetPicker() {
       await api.patch('/settings', { dashboardWidgets: next });
     } catch {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
-      alert('Erro ao salvar preferência do dashboard.');
+      notifyAlert('Erro ao salvar preferência do dashboard.');
     } finally {
       setSaving(false);
     }

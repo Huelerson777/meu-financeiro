@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { api } from '@/services/api';
 
@@ -67,16 +68,16 @@ export default function FeedbackPage() {
         setItems((prev) => prev.filter((i) => i.id !== item.id));
       }
     } catch {
-      alert('Erro ao atualizar o status.');
+      notifyAlert('Erro ao atualizar o status.');
       fetchData();
     }
   };
 
   if (forbidden) {
     return (
-      <div className="p-8">
-        <h1 className="text-3xl font-bold dark:text-white">Feedbacks</h1>
-        <p className="mt-4 text-gray-500 dark:text-gray-400">
+      <div>
+        <h1 className="font-display text-3xl font-bold tracking-tight">Feedbacks</h1>
+        <p className="mt-4 text-foreground">
           Você não tem permissão para ver esta página.
         </p>
       </div>
@@ -84,18 +85,18 @@ export default function FeedbackPage() {
   }
 
   return (
-    <div className="p-8">
+    <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold dark:text-white">Feedbacks</h1>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+          <h1 className="font-display text-3xl font-bold tracking-tight">Feedbacks</h1>
+          <p className="mt-1 text-sm text-foreground">
             Feedbacks, dúvidas e sugestões enviados pelos usuários.
           </p>
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as any)}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+          className="rounded-lg border border-input bg-card px-3 py-2 text-sm"
         >
           <option value="OPEN">Abertos</option>
           <option value="RESOLVED">Resolvidos</option>
@@ -103,46 +104,71 @@ export default function FeedbackPage() {
         </select>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow">
         {loading ? (
-          <div className="p-8 text-center text-gray-500">Carregando...</div>
+          <div className="p-8 text-center text-foreground">Carregando...</div>
         ) : items.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400">Nenhum feedback por aqui.</div>
+          <div className="p-8 text-center text-foreground">Nenhum feedback por aqui.</div>
         ) : (
-          <table className="w-full text-left border-collapse">
+          <>
+          <ul className="divide-y divide-border md:hidden">
+            {items.map((item) => (
+              <li key={item.id} className="flex flex-col gap-2 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold">{item.user?.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">{formatDateTime(item.createdAt)} · {item.screen}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold ${item.status === 'OPEN' ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'}`}>
+                    {item.status === 'OPEN' ? 'Aberto' : 'Resolvido'}
+                  </span>
+                </div>
+                <p className="text-sm leading-relaxed text-foreground/80">{item.message}</p>
+                {item.image && (
+                  <button type="button" onClick={() => setViewingImage(item.image!)} className="block w-fit">
+                    <img src={item.image} alt="Print anexado" className="h-16 w-16 rounded-md border border-border object-cover" />
+                  </button>
+                )}
+                <button onClick={() => handleToggleStatus(item)} className="w-fit py-1 text-sm font-semibold text-primary">
+                  {item.status === 'OPEN' ? 'Marcar resolvido' : 'Reabrir'}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto md:block"><table className="min-w-[640px] w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 dark:border-zinc-800 dark:bg-zinc-800/50">
-                <th className="p-4 font-semibold dark:text-gray-200">Quando</th>
-                <th className="p-4 font-semibold dark:text-gray-200">Usuário</th>
-                <th className="p-4 font-semibold dark:text-gray-200">Tela</th>
-                <th className="p-4 font-semibold dark:text-gray-200">Mensagem</th>
-                <th className="p-4 text-center font-semibold dark:text-gray-200">Status</th>
-                <th className="p-4 text-center font-semibold dark:text-gray-200">Ações</th>
+              <tr className="border-b border-border bg-muted/60">
+                <th className="p-4 font-semibold">Quando</th>
+                <th className="p-4 font-semibold">Usuário</th>
+                <th className="p-4 font-semibold">Tela</th>
+                <th className="p-4 font-semibold">Mensagem</th>
+                <th className="p-4 text-center font-semibold">Status</th>
+                <th className="p-4 text-center font-semibold">Ações</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item) => (
-                <tr key={item.id} className="border-b border-gray-100 align-top dark:border-zinc-800">
-                  <td className="whitespace-nowrap p-4 text-sm text-gray-500 dark:text-gray-400">
+                <tr key={item.id} className="border-b border-border align-top">
+                  <td className="whitespace-nowrap p-4 text-sm text-foreground">
                     {formatDateTime(item.createdAt)}
                   </td>
                   <td className="p-4 text-sm">
-                    <p className="font-medium dark:text-gray-200">{item.user?.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.user?.email}</p>
+                    <p className="font-medium">{item.user?.name}</p>
+                    <p className="text-xs text-foreground">{item.user?.email}</p>
                   </td>
                   <td className="p-4 text-sm">
-                    <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">
+                    <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                       {item.screen}
                     </span>
                   </td>
-                  <td className="p-4 max-w-md text-sm text-gray-700 dark:text-gray-300">
+                  <td className="p-4 max-w-md text-sm text-foreground/80">
                     <p>{item.message}</p>
                     {item.image && (
                       <button type="button" onClick={() => setViewingImage(item.image!)} className="mt-2 block">
                         <img
                           src={item.image}
                           alt="Print anexado"
-                          className="h-16 w-16 rounded-md border border-gray-200 object-cover hover:opacity-80 dark:border-zinc-700"
+                          className="h-16 w-16 rounded-md border border-border object-cover hover:opacity-80"
                         />
                       </button>
                     )}
@@ -151,8 +177,8 @@ export default function FeedbackPage() {
                     <span
                       className={`rounded px-2 py-1 text-xs font-bold ${
                         item.status === 'OPEN'
-                          ? 'bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-400'
-                          : 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
+                          ? 'bg-warning/10 text-warning'
+                          : 'bg-success/10 text-success'
                       }`}
                     >
                       {item.status === 'OPEN' ? 'Aberto' : 'Resolvido'}
@@ -161,7 +187,7 @@ export default function FeedbackPage() {
                   <td className="p-4 text-center">
                     <button
                       onClick={() => handleToggleStatus(item)}
-                      className="text-sm font-medium text-blue-500 hover:text-blue-700"
+                      className="text-sm font-medium text-primary hover:text-primary"
                     >
                       {item.status === 'OPEN' ? 'Marcar resolvido' : 'Reabrir'}
                     </button>
@@ -169,7 +195,8 @@ export default function FeedbackPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
+          </>
         )}
       </div>
 

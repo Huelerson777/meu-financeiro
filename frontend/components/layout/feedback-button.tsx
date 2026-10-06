@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert } from '@/utils/notify';
 import { useRef, useState } from 'react';
 import { HelpCircle, Paperclip, X } from 'lucide-react';
 import { api } from '@/services/api';
@@ -49,11 +50,11 @@ export function FeedbackButton() {
     e.target.value = ''; // permite escolher o mesmo arquivo de novo depois de remover
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      alert('Escolha um arquivo de imagem (print de tela).');
+      notifyAlert('Escolha um arquivo de imagem (print de tela).');
       return;
     }
     if (file.size > MAX_IMAGE_BYTES) {
-      alert('Imagem muito grande — o limite é 5MB.');
+      notifyAlert('Imagem muito grande — o limite é 5MB.');
       return;
     }
     setImage(await fileToDataUrl(file));
@@ -67,7 +68,7 @@ export function FeedbackButton() {
       setSent(true);
     } catch (err: any) {
       const msg = err.response?.data?.message;
-      alert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao enviar. Tenta de novo em alguns instantes.');
+      notifyAlert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao enviar. Tenta de novo em alguns instantes.');
     } finally {
       setIsSubmitting(false);
     }
@@ -95,7 +96,7 @@ export function FeedbackButton() {
                 </p>
                 <button
                   onClick={() => setIsOpen(false)}
-                  className="mt-5 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow hover:opacity-90"
+                  className="mt-5 rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow hover:opacity-90"
                 >
                   Fechar
                 </button>
@@ -189,7 +190,7 @@ export function FeedbackButton() {
                     <button
                       type="submit"
                       disabled={isSubmitting}
-                      className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow hover:opacity-90"
+                      className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground shadow hover:opacity-90"
                     >
                       {isSubmitting ? 'Enviando...' : 'Enviar'}
                     </button>

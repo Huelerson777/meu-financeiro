@@ -10,7 +10,6 @@ import {
   TrendingUp,
   Target,
   Settings,
-  Wallet,
   FileBarChart,
   Repeat,
   X,
@@ -19,6 +18,7 @@ import {
   MessageSquareWarning,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { BrandMark } from './brand-mark';
 import { useMobileNavStore } from '@/stores/mobile-nav-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useAuthStore } from '@/stores/auth-store';
@@ -52,12 +52,12 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
             onClick={onNavigate}
             title={collapsed ? label : undefined}
             className={cn(
-              'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-theme hover:bg-muted hover:text-foreground',
+              'relative flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-muted-foreground transition-theme hover:bg-muted hover:text-foreground',
               collapsed && 'justify-center px-0',
-              isActive && 'bg-primary/10 text-primary hover:bg-primary/10 hover:text-primary',
+              isActive && 'bg-primary text-primary-foreground shadow-[0_6px_14px_-6px_hsl(var(--primary)/0.6)] hover:bg-primary hover:text-primary-foreground',
             )}
           >
-            <Icon className="h-4 w-4 shrink-0" />
+            <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={1.75} />
             {!collapsed && label}
           </Link>
         );
@@ -69,10 +69,8 @@ function NavLinks({ onNavigate, collapsed }: { onNavigate?: () => void; collapse
 function Logo({ collapsed }: { collapsed?: boolean }) {
   return (
     <div className={cn('flex h-16 items-center gap-2 px-6', collapsed && 'justify-center px-0')}>
-      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary shrink-0">
-        <Wallet className="h-4 w-4 text-primary-foreground" />
-      </div>
-      {!collapsed && <span className="text-base font-semibold tracking-tight">PouPay</span>}
+      <BrandMark />
+      {!collapsed && <span className="font-display text-xl font-bold tracking-tight">PouPay</span>}
     </div>
   );
 }
@@ -118,10 +116,10 @@ export function Sidebar() {
       {isOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           {/* Fundo escurecido — clicar fecha o menu */}
-          <div className="absolute inset-0 bg-black/60" onClick={close} />
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" onClick={close} />
 
           {/* Painel deslizante */}
-          <aside className="absolute left-0 top-0 h-full w-64 flex flex-col bg-card border-r border-border shadow-xl">
+          <aside className="absolute left-0 top-0 h-full w-72 max-w-[85vw] animate-fade-in flex flex-col bg-card border-r border-border shadow-xl">
             <div className="flex items-center justify-between px-4">
               <Logo />
               <button

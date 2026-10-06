@@ -1,5 +1,6 @@
 'use client';
 
+import { notifyAlert } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { Download, TrendingUp, TrendingDown, Scale } from 'lucide-react';
 import {
@@ -85,7 +86,7 @@ export default function ReportsPage() {
       const { csv, filename } = await reportsService.exportTransactionsCsv(range);
       downloadCsv(csv, filename);
     } catch {
-      alert('Erro ao exportar transações.');
+      notifyAlert('Erro ao exportar transações.');
     } finally {
       setIsExporting(false);
     }
@@ -95,7 +96,7 @@ export default function ReportsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Relatórios</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight">Relatórios</h1>
           <p className="text-sm text-muted-foreground">Fluxo de caixa, categorias e extrato por período.</p>
         </div>
 

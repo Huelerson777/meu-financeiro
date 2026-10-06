@@ -17,6 +17,8 @@ import { ChartTooltip, SingleValueTooltip } from '@/components/dashboard/chart-t
 import { SummaryCard } from '@/components/dashboard/summary-card';
 import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
+import { NetWorthCard } from '@/components/dashboard/net-worth-card';
+import { InsightsHero } from '@/components/dashboard/insights-hero';
 import { AiQuickAddCard } from '@/components/dashboard/ai-quick-add-card';
 import { WidgetPicker, useDashboardWidgetOrder, WIDGET_SPANS } from '@/components/dashboard/widget-picker';
 import { AccountVisibilityPicker, useHiddenAccountIds } from '@/components/dashboard/account-visibility-picker';
@@ -26,6 +28,7 @@ import {
   useDashboardExpensesByCategory,
   useDashboardPaymentsStatus,
   useGoalsSummary,
+  useNetWorthTrend,
 } from '@/hooks/use-dashboard';
 import { useAccounts } from '@/hooks/use-accounts';
 import { PaymentsStatusItem } from '@/services/dashboard.service';
@@ -76,8 +79,10 @@ export default function DashboardPage() {
     refetch: refetchPaymentsStatus,
   } = useDashboardPaymentsStatus({ month: selectedMonth, year: selectedYear });
   const { data: goalsSummary, isLoading: goalsLoading } = useGoalsSummary();
+  const { data: netWorthData, isLoading: netWorthLoading } = useNetWorthTrend(12);
   const { data: accountsData, isLoading: accountsLoading } = useAccounts();
   const { hiddenIds: hiddenAccountIds, setHiddenIds: setHiddenAccountIds } = useHiddenAccountIds();
+  const [showAllOpen, setShowAllOpen] = useState(false);
   const [hoveredAccountId, setHoveredAccountId] = useState<string | null>(null);
   const { order, setOrder } = useDashboardWidgetOrder();
   const firstName = useAuthStore((s) => s.user?.name)?.split(' ')[0];
@@ -213,7 +218,7 @@ export default function DashboardPage() {
       {/* Cabeçalho + seletor de mês/ano */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="font-display text-3xl font-bold tracking-tight">
             {getGreeting()}{firstName ? `, ${firstName}` : ''}
           </h1>
           <p className="text-sm text-muted-foreground">Acompanhe suas finanças em tempo real.</p>
@@ -223,7 +228,7 @@ export default function DashboardPage() {
           <select
             value={selectedMonth}
             onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="flex h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="flex h-10 items-center justify-between rounded-md border border-input bg-card px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             {['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
               'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -235,7 +240,7 @@ export default function DashboardPage() {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="flex h-10 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="flex h-10 items-center justify-between rounded-md border border-input bg-card px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             {yearOptions.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -245,6 +250,24 @@ export default function DashboardPage() {
           <WidgetPicker />
         </div>
       </div>
+
+      <InsightsHero
+        isLoading={isLoading || paymentsLoading}
+        month={selectedMonth}
+        year={selectedYear}
+        income={data?.totalIncome ?? 0}
+        expense={data?.totalExpense ?? 0}
+        leftovers={data?.leftovers ?? 0}
+        openExpenseTotal={paymentsStatus?.openExpenseTotal ?? 0}
+        overdueCount={paymentsStatus?.openItems.filter((i) => i.isOverdue && i.type === 'EXPENSE').length ?? 0}
+        nextDue={
+          paymentsStatus?.openItems
+            .filter((i) => i.type === 'EXPENSE' && !i.isOverdue)
+            .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0] ?? null
+        }
+        expenseChangePct={data?.comparison?.expenseChangePct}
+        topCategory={sortedCategoryData[0] ?? null}
+      />
 
       {/* Cada widget abaixo pode ser ocultado em "Personalizar" e reordenado
           arrastando pelo ícone que aparece no canto ao passar o mouse. */}
@@ -297,14 +320,14 @@ export default function DashboardPage() {
                 <CircleCheck className="h-8 w-8 text-success shrink-0" />
                 <div>
                   <p className="text-xs text-muted-foreground">Pago no mês</p>
-                  <p className="text-xl font-semibold">{formatCurrency(paymentsStatus?.paidExpenseTotal ?? 0)}</p>
+                  <p className="font-num text-xl font-bold">{formatCurrency(paymentsStatus?.paidExpenseTotal ?? 0)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 rounded-lg border border-border p-4">
                 <CircleDashed className="h-8 w-8 text-amber-500 shrink-0" />
                 <div>
                   <p className="text-xs text-muted-foreground">Em aberto no mês</p>
-                  <p className="text-xl font-semibold">{formatCurrency(paymentsStatus?.openExpenseTotal ?? 0)}</p>
+                  <p className="font-num text-xl font-bold">{formatCurrency(paymentsStatus?.openExpenseTotal ?? 0)}</p>
                 </div>
               </div>
             </div>
@@ -317,7 +340,7 @@ export default function DashboardPage() {
               </p>
             ) : (
               <div className="flex flex-col divide-y divide-border">
-                {paymentsStatus.openItems.map((item) => (
+                {(showAllOpen ? paymentsStatus.openItems : paymentsStatus.openItems.slice(0, 6)).map((item) => (
                   <div key={item.id} className="flex items-center justify-between gap-3 py-3">
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">
@@ -353,11 +376,20 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
+                {paymentsStatus.openItems.length > 6 && (
+                  <button
+                    onClick={() => setShowAllOpen((v) => !v)}
+                    className="pt-3 text-center text-sm font-semibold text-primary hover:underline"
+                  >
+                    {showAllOpen ? 'Mostrar menos' : `Ver todas (${paymentsStatus.openItems.length})`}
+                  </button>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
           ),
+          netWorth: <NetWorthCard points={netWorthData} isLoading={netWorthLoading} />,
           goalsSummary: (
         <Card>
           <CardHeader>
@@ -445,7 +477,7 @@ export default function DashboardPage() {
                 <YAxis hide />
                 <RechartsTooltip content={<ChartTooltip />} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
                 <Legend />
-                <Bar dataKey="Receitas" fill="hsl(var(--success, #16a34a))" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="Receitas" fill="hsl(var(--success))" radius={[4, 4, 0, 0]}>
                   <LabelList
                     dataKey="Receitas"
                     position="top"
@@ -453,7 +485,7 @@ export default function DashboardPage() {
                     style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                   />
                 </Bar>
-                <Bar dataKey="Despesas" fill="hsl(var(--danger, #dc2626))" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="Despesas" fill="hsl(var(--danger))" radius={[4, 4, 0, 0]}>
                   <LabelList
                     dataKey="Despesas"
                     position="top"
@@ -461,7 +493,7 @@ export default function DashboardPage() {
                     style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                   />
                 </Bar>
-                <Bar dataKey="Investimentos" fill="#3b82f6" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="Investimentos" fill="hsl(200 55% 45%)" radius={[4, 4, 0, 0]}>
                   <LabelList
                     dataKey="Investimentos"
                     position="top"
@@ -469,7 +501,7 @@ export default function DashboardPage() {
                     style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                   />
                 </Bar>
-                <Bar dataKey="Sobras" fill="#a855f7" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="Sobras" fill="hsl(34 90% 50%)" radius={[4, 4, 0, 0]}>
                   <LabelList
                     dataKey="Sobras"
                     position="top"
@@ -492,16 +524,16 @@ export default function DashboardPage() {
               <AreaChart data={monthlyFlow} margin={{ left: 8, right: 8, top: 20 }}>
                 <defs>
                   <linearGradient id="colorReceitas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#16a34a" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
+                    <stop offset="5%" stopColor="hsl(155 62% 32%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(155 62% 32%)" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="colorDespesas" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#dc2626" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
+                    <stop offset="5%" stopColor="hsl(8 62% 50%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(8 62% 50%)" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="colorInvestido" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                    <stop offset="5%" stopColor="hsl(200 55% 45%)" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="hsl(200 55% 45%)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
@@ -516,9 +548,9 @@ export default function DashboardPage() {
                 />
                 <RechartsTooltip content={<ChartTooltip />} />
                 <Legend />
-                <Area type="monotone" dataKey="receitas" name="Receitas" stroke="#16a34a" fill="url(#colorReceitas)" strokeWidth={2} />
-                <Area type="monotone" dataKey="despesas" name="Despesas" stroke="#dc2626" fill="url(#colorDespesas)" strokeWidth={2} />
-                <Area type="monotone" dataKey="investido" name="Investido" stroke="#3b82f6" fill="url(#colorInvestido)" strokeWidth={2} />
+                <Area type="monotone" dataKey="receitas" name="Receitas" stroke="hsl(155 62% 32%)" fill="url(#colorReceitas)" strokeWidth={2} />
+                <Area type="monotone" dataKey="despesas" name="Despesas" stroke="hsl(8 62% 50%)" fill="url(#colorDespesas)" strokeWidth={2} />
+                <Area type="monotone" dataKey="investido" name="Investido" stroke="hsl(200 55% 45%)" fill="url(#colorInvestido)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
