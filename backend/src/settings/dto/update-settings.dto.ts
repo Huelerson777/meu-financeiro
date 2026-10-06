@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class UpdateSettingsDto {
   @ApiPropertyOptional({ enum: ['light', 'dark', 'system'] })
@@ -36,4 +36,22 @@ export class UpdateSettingsDto {
   @IsArray()
   @IsString({ each: true })
   dashboardHiddenAccountIds?: string[];
+
+  @ApiPropertyOptional({ description: 'Limite de gasto do mês (null remove)', example: 5000, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  monthlySpendingLimit?: number | null;
+
+  @ApiPropertyOptional({ description: 'Receita mensal esperada usada na Projeção (null = usar a média)', example: 6500, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  projectionExpectedIncome?: number | null;
+
+  @ApiPropertyOptional({ description: 'Gastos do dia a dia por mês usados na Projeção', example: 1800, nullable: true })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  projectionFlexibleSpend?: number | null;
 }

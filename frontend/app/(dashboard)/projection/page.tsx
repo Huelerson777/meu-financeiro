@@ -134,7 +134,7 @@ export default function ProjectionPage() {
                 inputMode="decimal"
                 value={settings.income}
                 onChange={(e) => update({ income: e.target.value })}
-                placeholder={suggestedIncome > 0 ? `Média recente: ${formatCurrency(suggestedIncome)}` : 'Ex: 6500'}
+                placeholder={suggestedIncome > 0 ? `Sugestão: ${formatCurrency(suggestedIncome)}` : 'Ex: 6500'}
                 className="h-11 rounded-md border border-input bg-card px-3 text-sm font-normal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               />
             </label>
@@ -151,7 +151,7 @@ export default function ProjectionPage() {
             <p className="text-xs leading-relaxed text-muted-foreground">
               Entram na conta: o saldo das contas marcadas com Controle de Saldo, as contas fixas ativas e as parcelas em
               aberto. {variableBills > 0 && `${variableBills} conta(s) fixa(s) com valor variável não entram no cálculo. `}
-              Essas premissas ficam salvas só neste navegador.
+              As premissas ficam salvas na sua conta. Receitas recorrentes cadastradas em Recorrentes viram a sugestão de receita.
             </p>
           </CardContent>
         </Card>

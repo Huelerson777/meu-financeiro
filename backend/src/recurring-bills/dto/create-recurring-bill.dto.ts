@@ -1,5 +1,5 @@
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsNumber, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString, Max, Min, MinLength } from 'class-validator';
 
 export class CreateRecurringBillDto {
   @ApiProperty({ example: 'Aluguel' })
@@ -27,6 +27,11 @@ export class CreateRecurringBillDto {
   @Min(1)
   @Max(31)
   dueDay: number;
+
+  @ApiPropertyOptional({ enum: ['EXPENSE', 'INCOME'], description: 'EXPENSE (padrão) = conta a pagar; INCOME = receita recorrente' })
+  @IsOptional()
+  @IsIn(['EXPENSE', 'INCOME'])
+  type?: 'EXPENSE' | 'INCOME';
 
   @ApiPropertyOptional()
   @IsOptional()
