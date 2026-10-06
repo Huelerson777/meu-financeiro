@@ -5,6 +5,7 @@ import { TransactionParserService } from './transaction-parser.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { ParseTransactionDto } from './dto/parse-transaction.dto';
+import { ImportPreviewDto, ImportTransactionsDto } from './dto/import-transactions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -40,6 +41,16 @@ export class TransactionsController {
       page: page ? Number(page) : undefined,
       limit: limit ? Number(limit) : undefined,
     });
+  }
+
+  @Post('import/preview')
+  previewImport(@CurrentUser() user: { id: string }, @Body() dto: ImportPreviewDto) {
+    return this.transactionsService.previewImport(user.id, dto);
+  }
+
+  @Post('import')
+  importTransactions(@CurrentUser() user: { id: string }, @Body() dto: ImportTransactionsDto) {
+    return this.transactionsService.importTransactions(user.id, dto);
   }
 
   @Get('suggest-category')
