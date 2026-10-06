@@ -1,6 +1,7 @@
 'use client';
 
 import { notifyAlert, confirmDialog } from '@/utils/notify';
+import { RecurringOverview } from '@/components/recurring/recurring-overview';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
@@ -313,7 +314,7 @@ export default function RecurringBillsPage() {
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Contas Fixas</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight">Recorrentes</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {activeTab === 'recurring'
               ? 'Cadastre suas contas mensais (aluguel, internet, energia...) e elas aparecem sozinhas em "Em Aberto" todo mês, prontas pra você informar o valor e pagar.'
@@ -328,6 +329,9 @@ export default function RecurringBillsPage() {
         </button>
       </div>
 
+      <RecurringOverview bills={bills} purchases={purchases} loading={loading} />
+
+      <h2 className="font-display mb-3 text-xl font-bold tracking-tight">Gerenciar</h2>
       <div className="flex gap-2 mb-4 border-b border-border">
         <button
           onClick={() => setActiveTab('recurring')}

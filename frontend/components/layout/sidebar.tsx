@@ -27,7 +27,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/accounts', label: 'Contas e Cartões', icon: Landmark },
   { href: '/transactions', label: 'Transações', icon: ArrowLeftRight },
-  { href: '/recurring-bills', label: 'Contas Fixas', icon: Repeat },
+  { href: '/recurring-bills', label: 'Recorrentes', icon: Repeat },
   { href: '/investments', label: 'Investimentos', icon: TrendingUp },
   { href: '/goals', label: 'Metas', icon: Target },
   { href: '/reports', label: 'Fluxo de Caixa', icon: FileBarChart },
