@@ -18,6 +18,7 @@ import { SummaryCard } from '@/components/dashboard/summary-card';
 import { SortableWidget } from '@/components/dashboard/sortable-widget';
 import { TransactionDetailModal } from '@/components/dashboard/transaction-detail-modal';
 import { useCashFlowReport } from '@/hooks/use-reports';
+import { useBudgets } from '@/hooks/use-budgets';
 import { useMonthlyLimit } from '@/hooks/use-monthly-limit';
 import { PaymentsStatusCard } from '@/components/dashboard/payments-status-card';
 import { GoalsSummaryCard } from '@/components/dashboard/goals-summary-card';
@@ -96,6 +97,8 @@ export default function DashboardPage() {
   const { data: accountsData, isLoading: accountsLoading } = useAccounts();
   const { hiddenIds: hiddenAccountIds, setHiddenIds: setHiddenAccountIds } = useHiddenAccountIds();
   const { limit: monthlyLimit, setLimit: setMonthlyLimit } = useMonthlyLimit();
+  const { data: budgetList } = useBudgets(selectedMonth, selectedYear);
+  const budgetMap = new Map((budgetList ?? []).map((b) => [b.categoryId, b.amount]));
   const monthStartStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`;
   const monthEndStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(new Date(selectedYear, selectedMonth, 0).getDate()).padStart(2, '0')}`;
   const { data: monthCashFlow } = useCashFlowReport({ startDate: monthStartStr, endDate: monthEndStr });
@@ -223,6 +226,18 @@ export default function DashboardPage() {
         .sort((a, b) => Number(b.currentBalance) - Number(a.currentBalance))
     : [];
 
+  // categoria que mais estourou o orçamento do mês (se houver)
+  const budgetAlert = (() => {
+    let worst: { name: string; over: number; pct: number } | null = null;
+    sortedCategoryData.forEach((c) => {
+      const budget = c.categoryId ? budgetMap.get(c.categoryId) : undefined;
+      if (budget && c.total > budget && (!worst || c.total - budget > worst.over)) {
+        worst = { name: c.name, over: c.total - budget, pct: Math.round((c.total / budget) * 100) };
+      }
+    });
+    return worst;
+  })();
+
   const hideAccountFromChart = (accountId: string) => {
     setHiddenAccountIds([...hiddenAccountIds, accountId]);
   };
@@ -283,6 +298,7 @@ export default function DashboardPage() {
         expenseChangePct={data?.comparison?.expenseChangePct}
         topCategory={sortedCategoryData[0] ?? null}
         dailyExpenses={monthCashFlow?.series}
+        budgetAlert={budgetAlert}
         limit={monthlyLimit}
         onChangeLimit={setMonthlyLimit}
       />
@@ -345,6 +361,7 @@ export default function DashboardPage() {
             <CategoryDonutCard
               data={categoryData}
               previous={prevCategoryData}
+              budgets={budgetMap}
               isLoading={catLoading}
               onSelect={goToCategoryTransactions}
             />
