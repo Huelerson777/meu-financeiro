@@ -8,7 +8,7 @@ import { CREATE_TRANSACTION_TOOL } from './create-transaction-tool';
 
 const GRAPH_API_VERSION = 'v20.0';
 const GRAPH_API_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 
 type AnthropicMessage = { role: 'user' | 'assistant'; content: Anthropic.ContentBlockParam[] };
 

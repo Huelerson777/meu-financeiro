@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PARSE_TRANSACTION_TOOL } from './parse-transaction-tool';
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
+const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 
 export interface ParsedTransactionDraft {
   type: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVESTMENT';
