@@ -136,14 +136,14 @@ export default function DashboardPage() {
     router.push(`/transactions?categoryId=${categoryId}&startDate=${startDate}&endDate=${endDate}`);
   };
 
-  // ITEM 5 — dados do gráfico Balanço do Mês com Investimentos e Sobras
+  // ITEM 5 — dados do gráfico Balanço do Mês com Investimentos e Saldo
   const comparisonData = [
     {
       name: 'Resumo do Mês',
       Receitas: data?.totalIncome ?? 0,
       Despesas: data?.totalExpense ?? 0,
       Investimentos: data?.totalInvested ?? 0,
-      Sobras: Math.max(data?.leftovers ?? 0, 0), // não plota barra negativa
+      Saldo: Math.max(data?.leftovers ?? 0, 0), // não plota barra negativa
     },
   ];
 
@@ -301,7 +301,7 @@ export default function DashboardPage() {
           ),
           leftovers: (
             <SummaryCard
-              label="Sobras"
+              label="Saldo"
               value={data?.leftovers}
               icon={Target}
               tone={(data?.leftovers ?? 0) >= 0 ? 'success' : 'danger'}
@@ -501,9 +501,9 @@ export default function DashboardPage() {
                     style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                   />
                 </Bar>
-                <Bar dataKey="Sobras" fill="hsl(34 90% 50%)" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="Saldo" fill="hsl(34 90% 50%)" radius={[4, 4, 0, 0]}>
                   <LabelList
-                    dataKey="Sobras"
+                    dataKey="Saldo"
                     position="top"
                     formatter={(val: number) => formatCurrency(val)}
                     style={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}

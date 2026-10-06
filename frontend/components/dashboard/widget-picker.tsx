@@ -12,7 +12,7 @@ export const DASHBOARD_WIDGETS: { key: string; label: string }[] = [
   { key: 'income', label: 'Receitas' },
   { key: 'expense', label: 'Despesas' },
   { key: 'invested', label: 'Investido' },
-  { key: 'leftovers', label: 'Sobras' },
+  { key: 'leftovers', label: 'Saldo' },
   { key: 'paymentsStatus', label: 'Pago x Em Aberto' },
   { key: 'balanceChart', label: 'Balanço do Mês' },
   { key: 'yearlyChart', label: 'Evolução Anual' },
