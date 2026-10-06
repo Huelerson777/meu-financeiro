@@ -1,6 +1,6 @@
 'use client';
 
-import { isEffectivelyPaid } from '@/utils/transaction-status';
+import { effectiveDate, isEffectivelyPaid } from '@/utils/transaction-status';
 import { notifyAlert, confirmDialog } from '@/utils/notify';
 import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
@@ -538,7 +538,7 @@ function TransactionsPageContent() {
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{t.description}</p>
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {new Date(t.date).toLocaleDateString('pt-BR')} ·{' '}
+                        {new Date(effectiveDate(t)).toLocaleDateString('pt-BR')} ·{' '}
                         {isTransfer || isInvestment
                           ? `${t.account?.name || '—'} → ${t.transfer?.toAccount?.name || '—'}`
                           : t.account?.name || '-'}
@@ -628,7 +628,7 @@ function TransactionsPageContent() {
                         ? `${t.account?.name || '—'} → ${t.transfer?.toAccount?.name || '—'}`
                         : t.account?.name || '-'}
                     </td>
-                    <td className="p-4 text-foreground text-sm">{new Date(t.date).toLocaleDateString('pt-BR')}</td>
+                    <td className="p-4 text-foreground text-sm">{new Date(effectiveDate(t)).toLocaleDateString('pt-BR')}</td>
                     <td className="p-4">
                       <span className={`text-xs font-bold px-2 py-1 rounded ${
                         isEffectivelyPaid(t) 
