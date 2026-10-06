@@ -245,7 +245,7 @@ export function AccountsView() {
           {accounts.map((acc) => (
             <div
               key={acc.id}
-              className="bg-card p-6 rounded-xl shadow border border-border relative overflow-hidden group"
+              className="bg-card p-6 rounded-xl shadow-soft border border-border/70 relative overflow-hidden group"
             >
               {/* Barra de cor no topo */}
               <div
@@ -319,7 +319,7 @@ export function AccountsView() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
         <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold">
+              <h2 className="font-display text-xl font-bold tracking-tight">
                 {editingId ? 'Editar Conta' : 'Nova Conta Bancária'}
               </h2>
               <button
@@ -339,7 +339,7 @@ export function AccountsView() {
                   placeholder="Ex: Itaú, Nubank, Carteira..."
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:ring-2 focus:ring-primary"
                 />
               </div>
 
@@ -348,7 +348,7 @@ export function AccountsView() {
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-card focus:outline-none focus:ring-2 focus:ring-primary"
                 >
                   <option value="CHECKING">Conta Corrente</option>
                   <option value="SAVINGS">Poupança</option>
@@ -368,7 +368,7 @@ export function AccountsView() {
                   placeholder="0,00"
                   value={initialBalance}
                   onChange={(e) => setInitialBalance(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:ring-2 focus:ring-primary"
                 />
                 {editingId && (
                   <p className="text-xs text-foreground mt-1">

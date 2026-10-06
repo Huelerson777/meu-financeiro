@@ -152,7 +152,7 @@ export default function GoalsPage() {
       {loading ? (
         <div className="text-foreground py-8">Carregando...</div>
       ) : goals.length === 0 ? (
-        <div className="bg-card rounded-xl shadow border border-border p-10 flex flex-col items-center text-center gap-3">
+        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-10 flex flex-col items-center text-center gap-3">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
             <Target className="w-7 h-7 text-primary" />
           </div>
@@ -173,11 +173,11 @@ export default function GoalsPage() {
             return (
               <div
                 key={g.id}
-                className="bg-card rounded-xl shadow border border-border relative overflow-hidden group p-6"
+                className="bg-card rounded-xl shadow-soft border border-border/70 relative overflow-hidden group p-6"
               >
                 <div
                   className="absolute top-0 left-0 right-0 h-1"
-                  style={{ backgroundColor: isComplete ? '#16a34a' : '#3b82f6' }}
+                  style={{ backgroundColor: isComplete ? 'hsl(var(--success))' : 'hsl(var(--primary))' }}
                 />
 
                 <div className="absolute top-4 right-4 flex gap-3 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
@@ -189,7 +189,7 @@ export default function GoalsPage() {
                   </button>
                 </div>
 
-                <h3 className="text-lg font-bold flex items-center gap-2">
+                <h3 className="font-display text-lg font-bold tracking-tight flex items-center gap-2">
                   <Target className="w-5 h-5 text-primary" />
                   {g.name}
                 </h3>
@@ -216,19 +216,19 @@ export default function GoalsPage() {
                   <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all"
-                      style={{ width: `${pct}%`, backgroundColor: isComplete ? '#16a34a' : '#3b82f6' }}
+                      style={{ width: `${pct}%`, backgroundColor: isComplete ? 'hsl(var(--success))' : 'hsl(var(--primary))' }}
                     />
                   </div>
                 </div>
 
                 {isComplete ? (
                   <p className="mt-4 text-center text-sm font-semibold text-success">
-                    🎉 Meta concluída!
+                    Meta concluída
                   </p>
                 ) : (
                   <button
                     onClick={() => setContributeGoal(g)}
-                    className="mt-4 w-full bg-muted/60 hover:bg-muted text-sm font-medium py-2 rounded-lg transition"
+                    className="mt-4 w-full rounded-md bg-primary/10 py-2.5 text-sm font-semibold text-primary transition-theme hover:bg-primary hover:text-primary-foreground active:scale-[0.98]"
                   >
                     + Adicionar valor
                   </button>
@@ -244,7 +244,7 @@ export default function GoalsPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
         <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-md p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-5">
-              <h2 className="text-xl font-bold">
+              <h2 className="font-display text-xl font-bold tracking-tight">
                 {editingId ? 'Editar Meta' : 'Nova Meta'}
               </h2>
               <button onClick={() => setIsModalOpen(false)} className="text-foreground hover:text-foreground/80 font-bold text-lg">
@@ -258,7 +258,7 @@ export default function GoalsPage() {
                 <input
                   type="text" required placeholder="Ex: Viagem para a praia"
                   value={name} onChange={(e) => setName(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </div>
 
@@ -267,7 +267,7 @@ export default function GoalsPage() {
                 <input
                   type="number" step="0.01" required
                   value={targetAmount} onChange={(e) => setTargetAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </div>
 
@@ -277,7 +277,7 @@ export default function GoalsPage() {
                   type="number" step="0.01"
                   value={currentAmount} onChange={(e) => setCurrentAmount(e.target.value)}
                   placeholder="0,00"
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </div>
 
@@ -286,7 +286,7 @@ export default function GoalsPage() {
                 <input
                   type="date"
                   value={deadline} onChange={(e) => setDeadline(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </div>
 
@@ -311,7 +311,7 @@ export default function GoalsPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-end justify-center z-50 sm:items-center sm:p-4">
         <div className="bg-card rounded-t-2xl sm:rounded-xl shadow-xl w-full max-w-sm p-6 border border-border animate-rise max-h-[92dvh] overflow-y-auto sm:max-h-[90vh]">
             <div className="flex justify-between items-center mb-1">
-              <h2 className="text-xl font-bold">Adicionar valor</h2>
+              <h2 className="font-display text-xl font-bold tracking-tight">Adicionar valor</h2>
               <button onClick={() => setContributeGoal(null)} className="text-foreground hover:text-foreground/80 font-bold text-lg">
                 ✕
               </button>
@@ -326,7 +326,7 @@ export default function GoalsPage() {
                 <input
                   type="number" step="0.01" required autoFocus
                   value={contributeAmount} onChange={(e) => setContributeAmount(e.target.value)}
-                  className="w-full px-3 py-2 border border-input rounded-lg bg-transparent"
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
                 />
               </div>
               <div className="flex justify-end gap-3 pt-2">
