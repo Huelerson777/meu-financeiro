@@ -384,6 +384,54 @@ export class TransactionsService {
     );
   }
 
+  /**
+   * Importação vinda do Open Finance: ignora o que já foi importado (pelo `externalId`), categoriza
+   * como no import de extrato, grava como pago e ajusta o saldo da conta. `amount` vem com sinal.
+   */
+  async importFromBank(
+    userId: string,
+    accountId: string,
+    rows: { externalId: string; date: Date; description: string; amount: number }[],
+  ) {
+    await this.ensureAccountOwnership(accountId, userId);
+    if (rows.length === 0) return { created: 0 };
+
+    const known = await this.prisma.transaction.findMany({
+      where: { userId, externalId: { in: rows.map((r) => r.externalId) } },
+      select: { externalId: true },
+    });
+    const knownIds = new Set(known.map((k) => k.externalId));
+    const fresh = rows.filter((r) => r.amount !== 0 && !knownIds.has(r.externalId));
+    if (fresh.length === 0) return { created: 0 };
+
+    const suggest = await this.buildCategorySuggester(userId);
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        for (const row of fresh) {
+          const type: TransactionType = row.amount > 0 ? 'INCOME' : 'EXPENSE';
+          const amount = Math.abs(row.amount);
+          await tx.transaction.create({
+            data: {
+              userId,
+              accountId,
+              categoryId: suggest(row.description)?.id,
+              type,
+              description: row.description.trim().slice(0, 200) || 'Sem descrição',
+              amount,
+              status: 'PAID',
+              date: row.date,
+              externalId: row.externalId,
+            },
+          });
+          await this.applyBalanceEffect(tx, accountId, type, amount, 1);
+        }
+        return { created: fresh.length };
+      },
+      { timeout: 60_000 },
+    );
+  }
+
   /** Mesmo critério de suggestCategory (histórico do usuário, depois palavras-chave), com tudo carregado uma vez. */
   private async buildCategorySuggester(userId: string) {
     const [history, categories] = await Promise.all([

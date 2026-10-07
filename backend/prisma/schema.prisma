@@ -116,6 +116,7 @@ model User {
   whatsappSessions       WhatsappSession[]
   mcpAuthorizationCodes  McpAuthorizationCode[]
   mcpTokens              McpToken[]
+  bankConnections        BankConnection[]
 
   @@index([email])
   @@map("users")
@@ -251,9 +252,42 @@ model Account {
   paidInstallments Installment[]
   recurringBills   RecurringBill[]
   investments      Investment[]
+  bankLinks        BankAccountLink[]
 
   @@index([userId])
   @@map("accounts")
+}
+
+// ============================================================================
+// OPEN FINANCE (Pluggy / Meu Pluggy)
+// ============================================================================
+
+model BankConnection {
+  id         String    @id @default(uuid())
+  userId     String    @map("user_id")
+  itemId     String    @map("item_id")
+  label      String
+  lastSyncAt DateTime? @map("last_sync_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links BankAccountLink[]
+
+  @@unique([userId, itemId])
+  @@map("bank_connections")
+}
+
+model BankAccountLink {
+  id              String @id @default(uuid())
+  connectionId    String @map("connection_id")
+  pluggyAccountId String @map("pluggy_account_id")
+  accountId       String @map("account_id")
+
+  connection BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  account    Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, pluggyAccountId])
+  @@map("bank_account_links")
 }
 
 model Transfer {
@@ -333,6 +367,9 @@ model Transaction {
 
   cardRecurringPurchaseId String? @map("card_recurring_purchase_id")
 
+  // Id da transação no Open Finance (Pluggy). Usado só para não importar duas vezes.
+  externalId String? @map("external_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -353,6 +390,7 @@ model Transaction {
   @@index([status])
   @@index([recurringBillId])
   @@index([cardRecurringPurchaseId])
+  @@unique([userId, externalId])
   @@map("transactions")
 }
 

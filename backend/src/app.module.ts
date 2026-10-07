@@ -24,6 +24,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { LogsModule } from './logs/logs.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { McpModule } from './mcp/mcp.module';
+import { OpenFinanceModule } from './open-finance/open-finance.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { McpModule } from './mcp/mcp.module';
     LogsModule,
     FeedbackModule,
     McpModule,
+    OpenFinanceModule,
   ],
   providers: [
     {
