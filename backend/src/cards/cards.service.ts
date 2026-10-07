@@ -221,6 +221,95 @@ export class CardsService {
   }
 
   /**
+   * Importa do banco (Open Finance) compras e estornos de um cartão, pela mesma regra de fatura
+   * das lançadas à mão (ciclo de fechamento). Não valida limite: o banco é a fonte da verdade.
+   * Compra parcelada vira o grupo inteiro de parcelas a partir da 1/N, porque o banco só informa
+   * o valor de cada parcela (e a 2/N em diante é descartada antes de chegar aqui). Deduplica por
+   * externalId (guardado na primeira transação do grupo).
+   */
+  async importFromBank(
+    userId: string,
+    cardId: string,
+    rows: {
+      externalId: string;
+      date: string; // YYYY-MM-DD
+      description: string;
+      amount: number; // > 0 compra (valor da parcela); < 0 estorno/crédito
+      installments: number; // total de parcelas da compra (1 = à vista)
+    }[],
+  ) {
+    const card = await this.prisma.card.findUnique({ where: { id: cardId } });
+    if (!card) throw new NotFoundException('Cartão não encontrado');
+    if (card.userId !== userId) throw new ForbiddenException('Este cartão não pertence a você');
+    if (rows.length === 0) return { created: 0 };
+
+    const known = await this.prisma.transaction.findMany({
+      where: { userId, externalId: { in: rows.map((r) => r.externalId) } },
+      select: { externalId: true },
+    });
+    const knownIds = new Set(known.map((k) => k.externalId));
+    const fresh = rows.filter((r) => r.amount !== 0 && !knownIds.has(r.externalId));
+    if (fresh.length === 0) return { created: 0 };
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        for (const row of fresh) {
+          const purchaseDate = this.parseDateOnly(row.date);
+          const description = row.description.trim().slice(0, 200) || 'Sem descrição';
+
+          if (row.amount < 0) {
+            const credit = Math.abs(row.amount);
+            await tx.transaction.create({
+              data: {
+                userId,
+                cardId,
+                type: 'EXPENSE',
+                status: 'PAID',
+                description,
+                amount: -credit,
+                date: this.calculateInstallmentDueDate(purchaseDate, card.closingDay, card.dueDay, 0),
+                purchaseDate,
+                isInstallment: false,
+                externalId: row.externalId,
+              },
+            });
+            await tx.card.update({ where: { id: cardId }, data: { usedLimit: { decrement: credit } } });
+            continue;
+          }
+
+          const count = Math.max(1, row.installments);
+          const amounts = Array(count).fill(row.amount) as number[];
+          const installmentGroupId = count > 1 ? randomUUID() : null;
+          for (let i = 0; i < count; i++) {
+            const dueDate = this.calculateInstallmentDueDate(purchaseDate, card.closingDay, card.dueDay, i);
+            const transaction = await tx.transaction.create({
+              data: {
+                userId,
+                cardId,
+                type: 'EXPENSE',
+                status: 'PENDING', // vira PAID quando a parcela é paga (payInstallment/payInvoice)
+                description: count > 1 ? `${description} (${i + 1}/${count})` : description,
+                amount: amounts[i],
+                date: dueDate,
+                purchaseDate,
+                isInstallment: true,
+                installmentGroupId,
+                externalId: i === 0 ? row.externalId : null,
+              },
+            });
+            await tx.installment.create({
+              data: { transactionId: transaction.id, number: i + 1, totalCount: count, amount: amounts[i], dueDate, paid: false },
+            });
+          }
+          await tx.card.update({ where: { id: cardId }, data: { usedLimit: { increment: row.amount * count } } });
+        }
+        return { created: fresh.length };
+      },
+      { timeout: 60_000 },
+    );
+  }
+
+  /**
    * Remove um crédito/estorno lançado na fatura, devolvendo o valor ao
    * limite usado do cartão (a compra original continua valendo).
    */

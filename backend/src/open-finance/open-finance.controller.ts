@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, UseGuards } from '@nestjs/common';
 import { OpenFinanceService } from './open-finance.service';
-import { CreateConnectionDto, LinkAccountDto } from './dto/open-finance.dto';
+import { CreateConnectionDto, LinkAccountDto, LinkCardDto } from './dto/open-finance.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 
@@ -39,6 +39,17 @@ export class OpenFinanceController {
   @HttpCode(204)
   unlink(@CurrentUser() user: { id: string }, @Param('id') id: string, @Param('pluggyAccountId') pluggyAccountId: string) {
     return this.service.unlink(user.id, id, pluggyAccountId);
+  }
+
+  @Put(':id/card-links')
+  linkCard(@CurrentUser() user: { id: string }, @Param('id') id: string, @Body() dto: LinkCardDto) {
+    return this.service.linkCard(user.id, id, dto.pluggyAccountId, dto.cardId);
+  }
+
+  @Delete(':id/card-links/:pluggyAccountId')
+  @HttpCode(204)
+  unlinkCard(@CurrentUser() user: { id: string }, @Param('id') id: string, @Param('pluggyAccountId') pluggyAccountId: string) {
+    return this.service.unlinkCard(user.id, id, pluggyAccountId);
   }
 
   @Post(':id/sync')

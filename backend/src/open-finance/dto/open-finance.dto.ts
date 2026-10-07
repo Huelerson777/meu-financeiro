@@ -20,3 +20,11 @@ export class LinkAccountDto {
   @IsString()
   accountId: string;
 }
+
+export class LinkCardDto {
+  @IsString()
+  pluggyAccountId: string;
+
+  @IsString()
+  cardId: string;
+}

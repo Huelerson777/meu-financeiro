@@ -1,9 +1,21 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
+import { CardsService } from '../cards/cards.service';
+import { toCardRows } from './card-import';
 import { PluggyClient } from './pluggy.client';
 
-const FIRST_SYNC_DAYS = 90;
+const BRAZIL_UTC_OFFSET_MS = 3 * 3600 * 1000;
+
+/**
+ * A primeira sincronização começa hoje: o histórico anterior já foi lançado à mão e,
+ * como a importação só deduplica por externalId, trazê-lo duplicaria os lançamentos e o saldo.
+ */
+function startOfTodayBrazil(): Date {
+  const brazilNow = new Date(Date.now() - BRAZIL_UTC_OFFSET_MS);
+  return new Date(Date.UTC(brazilNow.getUTCFullYear(), brazilNow.getUTCMonth(), brazilNow.getUTCDate()));
+}
+
 // Reprocessa uma janela antes da última sincronização: lançamentos pendentes no banco só aparecem depois.
 const OVERLAP_DAYS = 7;
 const DAY_MS = 24 * 3600 * 1000;
@@ -14,12 +26,13 @@ export class OpenFinanceService {
     private readonly prisma: PrismaService,
     private readonly pluggy: PluggyClient,
     private readonly transactions: TransactionsService,
+    private readonly cards: CardsService,
   ) {}
 
   list(userId: string) {
     return this.prisma.bankConnection.findMany({
       where: { userId },
-      include: { links: true },
+      include: { links: true, cardLinks: true },
       orderBy: { createdAt: 'asc' },
     });
   }
@@ -48,8 +61,9 @@ export class OpenFinanceService {
       subtype: a.subtype ?? null,
       number: a.number ?? null,
       balance: a.balance,
-      supported: a.type === 'BANK',
+      supported: a.type === 'BANK' || a.type === 'CREDIT',
       linkedAccountId: connection.links.find((l) => l.pluggyAccountId === a.id)?.accountId ?? null,
+      linkedCardId: connection.cardLinks.find((l) => l.pluggyAccountId === a.id)?.cardId ?? null,
     }));
   }
 
@@ -70,12 +84,30 @@ export class OpenFinanceService {
     await this.prisma.bankAccountLink.deleteMany({ where: { connectionId: id, pluggyAccountId } });
   }
 
+  async linkCard(userId: string, id: string, pluggyAccountId: string, cardId: string) {
+    await this.getOwned(userId, id);
+    const card = await this.prisma.card.findFirst({ where: { id: cardId, userId } });
+    if (!card) throw new ForbiddenException('Cartão não encontrado ou não pertence ao usuário');
+
+    // Trocar o cartão de destino mantém o corte original; ligar de novo começa de hoje.
+    return this.prisma.bankCardLink.upsert({
+      where: { connectionId_pluggyAccountId: { connectionId: id, pluggyAccountId } },
+      update: { cardId },
+      create: { connectionId: id, pluggyAccountId, cardId, startsAt: startOfTodayBrazil() },
+    });
+  }
+
+  async unlinkCard(userId: string, id: string, pluggyAccountId: string) {
+    await this.getOwned(userId, id);
+    await this.prisma.bankCardLink.deleteMany({ where: { connectionId: id, pluggyAccountId } });
+  }
+
   /** Traz as transações novas de cada conta ligada. Não mexe em contas sem ligação. */
   async sync(userId: string, id: string) {
     const connection = await this.getOwned(userId, id);
-    const from = new Date(
-      connection.lastSyncAt ? connection.lastSyncAt.getTime() - OVERLAP_DAYS * DAY_MS : Date.now() - FIRST_SYNC_DAYS * DAY_MS,
-    );
+    const from = connection.lastSyncAt
+      ? new Date(connection.lastSyncAt.getTime() - OVERLAP_DAYS * DAY_MS)
+      : startOfTodayBrazil();
     const startedAt = new Date();
 
     let created = 0;
@@ -93,12 +125,30 @@ export class OpenFinanceService {
       created += (await this.transactions.importFromBank(userId, link.accountId, rows)).created;
     }
 
+    if (connection.cardLinks.length > 0) {
+      const recurring = (
+        await this.prisma.cardRecurringPurchase.findMany({
+          where: { userId, isActive: true, cardId: { in: connection.cardLinks.map((l) => l.cardId) } },
+          select: { cardId: true, description: true, amount: true },
+        })
+      ).map((r) => ({ cardId: r.cardId, description: r.description, amount: Number(r.amount) }));
+
+      for (const link of connection.cardLinks) {
+        const cardFrom = link.lastSyncAt ? new Date(link.lastSyncAt.getTime() - OVERLAP_DAYS * DAY_MS) : link.startsAt;
+        const remote = await this.pluggy.listTransactions(link.pluggyAccountId, cardFrom);
+        // Em cartão, compras da fatura aberta vêm como PENDING com id estável: precisam entrar.
+        const rows = toCardRows(remote, recurring.filter((r) => r.cardId === link.cardId));
+        created += (await this.cards.importFromBank(userId, link.cardId, rows)).created;
+        await this.prisma.bankCardLink.update({ where: { id: link.id }, data: { lastSyncAt: new Date() } });
+      }
+    }
+
     await this.prisma.bankConnection.update({ where: { id }, data: { lastSyncAt: startedAt } });
-    return { created, linkedAccounts: connection.links.length };
+    return { created, linkedAccounts: connection.links.length + connection.cardLinks.length };
   }
 
   private async getOwned(userId: string, id: string) {
-    const connection = await this.prisma.bankConnection.findFirst({ where: { id, userId }, include: { links: true } });
+    const connection = await this.prisma.bankConnection.findFirst({ where: { id, userId }, include: { links: true, cardLinks: true } });
     if (!connection) throw new NotFoundException('Conexão não encontrada');
     return connection;
   }

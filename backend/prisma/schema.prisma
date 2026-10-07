@@ -270,8 +270,9 @@ model BankConnection {
   lastSyncAt DateTime? @map("last_sync_at")
   createdAt  DateTime  @default(now()) @map("created_at")
 
-  user  User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  links BankAccountLink[]
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links     BankAccountLink[]
+  cardLinks BankCardLink[]
 
   @@unique([userId, itemId])
   @@map("bank_connections")
@@ -288,6 +289,24 @@ model BankAccountLink {
 
   @@unique([connectionId, pluggyAccountId])
   @@map("bank_account_links")
+}
+
+/// Cartão de crédito da Pluggy ligado a um cartão do PouPay. `startsAt` é o corte da
+/// importação (o histórico anterior já foi lançado à mão); `lastSyncAt` é por cartão,
+/// para que ligar um cartão depois não traga o passado só porque a conexão já foi sincronizada.
+model BankCardLink {
+  id              String    @id @default(uuid())
+  connectionId    String    @map("connection_id")
+  pluggyAccountId String    @map("pluggy_account_id")
+  cardId          String    @map("card_id")
+  startsAt        DateTime  @map("starts_at")
+  lastSyncAt      DateTime? @map("last_sync_at")
+
+  connection BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  card       Card           @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, pluggyAccountId])
+  @@map("bank_card_links")
 }
 
 model Transfer {
@@ -463,6 +482,7 @@ model Card {
   user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions       Transaction[]
   recurringPurchases CardRecurringPurchase[]
+  bankLinks          BankCardLink[]
 
   @@index([userId])
   @@map("cards")

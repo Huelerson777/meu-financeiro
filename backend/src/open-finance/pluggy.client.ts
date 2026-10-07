@@ -20,6 +20,9 @@ export interface PluggyTransaction {
   date: string;
   type: 'CREDIT' | 'DEBIT';
   status?: 'PENDING' | 'POSTED';
+  /** Cartão: PAGAMENTO, PAGAMENTO_FATURA, ESTORNO, CASHBACK, TARIFA... */
+  operationType?: string | null;
+  creditCardMetadata?: { installmentNumber?: number | null; totalInstallments?: number | null } | null;
 }
 
 /**
