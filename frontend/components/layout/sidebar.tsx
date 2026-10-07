@@ -18,6 +18,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   MessageSquareWarning,
+  Link2,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { BrandMark } from './brand-mark';
@@ -36,6 +37,7 @@ const navItems = [
   { href: '/projection', label: 'Projeção', icon: LineChart },
   { href: '/budgets', label: 'Orçamento', icon: PiggyBank },
   { href: '/summary', label: 'Resumo do mês', icon: ScrollText },
+  { href: '/open-finance', label: 'Open Finance', icon: Link2 },
   { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
