@@ -29,6 +29,7 @@ interface RemoteAccount {
   balance: number;
   supported: boolean;
   linkedAccountId: string | null;
+  linkedCardId: string | null;
 }
 
 const selectClass =
@@ -43,6 +44,15 @@ function ConnectionCard({ connection }: { connection: Connection }) {
   const queryClient = useQueryClient();
   const { data: accountsData } = useAccounts();
   const myAccounts = (accountsData?.items ?? []) as { id: string; name: string }[];
+
+  const { data: myCards } = useQuery({
+    queryKey: ['cards', 'list'],
+    queryFn: () =>
+      api.get('/cards').then((r) => {
+        const raw = r.data?.data ?? r.data;
+        return (Array.isArray(raw) ? raw : []) as { id: string; name: string }[];
+      }),
+  });
 
   const { data: remote, isLoading, isError } = useQuery({
     queryKey: ['open-finance', connection.id, 'accounts'],
@@ -60,12 +70,22 @@ function ConnectionCard({ connection }: { connection: Connection }) {
     onError: (err) => notifyAlert(errorMessage(err, 'Não foi possível salvar o vínculo.')),
   });
 
+  const linkCard = useMutation({
+    mutationFn: ({ pluggyAccountId, cardId }: { pluggyAccountId: string; cardId: string }) =>
+      cardId
+        ? api.put(`/open-finance/connections/${connection.id}/card-links`, { pluggyAccountId, cardId })
+        : api.delete(`/open-finance/connections/${connection.id}/card-links/${pluggyAccountId}`),
+    onSuccess: refreshAll,
+    onError: (err) => notifyAlert(errorMessage(err, 'Não foi possível salvar o vínculo.')),
+  });
+
   const sync = useMutation({
     mutationFn: () => api.post(`/open-finance/connections/${connection.id}/sync`).then((r) => r.data.data as { created: number; linkedAccounts: number }),
     onSuccess: (res) => {
       refreshAll();
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['cards'] });
       toast.success(res.linkedAccounts === 0 ? 'Vincule uma conta antes de sincronizar.' : `${res.created} transação(ões) nova(s) importada(s).`);
     },
     onError: (err) => notifyAlert(errorMessage(err, 'Falha ao sincronizar.')),
@@ -116,7 +136,21 @@ function ConnectionCard({ connection }: { connection: Connection }) {
                 {acc.number ? ` · ${acc.number}` : ''} · {formatCurrency(acc.balance)}
               </p>
             </div>
-            {acc.supported ? (
+            {acc.supported && acc.type === 'CREDIT' ? (
+              <select
+                className={selectClass}
+                value={acc.linkedCardId ?? ''}
+                disabled={linkCard.isPending}
+                onChange={(e) => linkCard.mutate({ pluggyAccountId: acc.id, cardId: e.target.value })}
+              >
+                <option value="">Não importar</option>
+                {(myCards ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    Importar para: {c.name}
+                  </option>
+                ))}
+              </select>
+            ) : acc.supported ? (
               <select
                 className={selectClass}
                 value={acc.linkedAccountId ?? ''}
@@ -131,7 +165,7 @@ function ConnectionCard({ connection }: { connection: Connection }) {
                 ))}
               </select>
             ) : (
-              <p className="text-xs text-muted-foreground">Cartões de crédito ainda não são importados.</p>
+              <p className="text-xs text-muted-foreground">Este tipo de conta ainda não é importado.</p>
             )}
           </div>
         ))}
