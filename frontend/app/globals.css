@@ -130,4 +130,8 @@
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+  /* Spinner é feedback de estado, não decoração: mantém giro suave (só mais lento) */
+  .animate-spin {
+    animation-duration: 1.2s !important;
+  }
 }

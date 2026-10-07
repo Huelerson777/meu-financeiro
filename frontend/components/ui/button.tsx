@@ -39,7 +39,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       disabled={disabled || isLoading}
       {...props}
     >
-      {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+      {isLoading && <Loader2 className="h-4 w-4 shrink-0 animate-spin [transition:none]" aria-hidden />}
       {children}
     </button>
   ),

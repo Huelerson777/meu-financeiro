@@ -2,6 +2,7 @@
 
 import { notifyAlert } from '@/utils/notify';
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { HelpCircle, Paperclip, X } from 'lucide-react';
 import { api } from '@/services/api';
 
@@ -85,9 +86,9 @@ export function FeedbackButton() {
         <HelpCircle className="h-5 w-5" />
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
+      {isOpen && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4">
+          <div className="my-auto max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-card p-6 shadow-xl">
             {sent ? (
               <div className="text-center py-4">
                 <p className="text-base font-semibold text-foreground">Feedback enviado, obrigado!</p>
@@ -199,7 +200,8 @@ export function FeedbackButton() {
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
