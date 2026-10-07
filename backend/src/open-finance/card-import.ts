@@ -33,8 +33,9 @@ function matchesRecurring(t: PluggyTransaction, recurring: RecurringPurchase[]) 
 }
 
 /**
- * Converte as transações de um cartão da Pluggy no que o PouPay deve lançar. Em cartão o sinal é o
- * oposto da conta: amount > 0 é compra, amount < 0 é pagamento ou crédito (estorno, cashback).
+ * Converte as transações de um cartão da Pluggy no que o PouPay deve lançar. A Pluggy normaliza o
+ * `type` em cartão: DEBIT é compra e CREDIT é pagamento ou crédito (estorno, cashback); o valor
+ * é usado em módulo, para não depender do sinal que o banco mandou.
  * Parcelas 2/N em diante ficam de fora: a 1/N já cria o grupo inteiro, e as demais de compras
  * anteriores ao corte já foram lançadas à mão.
  */
@@ -49,14 +50,15 @@ export function toCardRows(remote: PluggyTransaction[], recurring: RecurringPurc
     const number = meta?.installmentNumber ?? 1;
     if (number > 1) continue;
 
-    if (t.amount > 0 && matchesRecurring(t, recurring)) continue;
+    const isPurchase = t.type === 'DEBIT';
+    if (isPurchase && matchesRecurring(t, recurring)) continue;
 
     rows.push({
       externalId: `pluggy:${t.id}`,
       date: t.date.slice(0, 10),
       description: t.description,
-      amount: t.amount,
-      installments: t.amount > 0 ? Math.max(1, total) : 1,
+      amount: (isPurchase ? 1 : -1) * Math.abs(t.amount),
+      installments: isPurchase ? Math.max(1, total) : 1,
     });
   }
   return rows;

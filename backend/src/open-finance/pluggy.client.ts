@@ -2,7 +2,6 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 
 const API = 'https://api.pluggy.ai';
 const KEY_TTL_MS = 100 * 60 * 1000; // a apiKey da Pluggy vale 2h
-const PAGE_SIZE = 500;
 
 export interface PluggyAccount {
   id: string;
@@ -73,16 +72,18 @@ export class PluggyClient {
   }
 
   async listTransactions(accountId: string, from: Date): Promise<PluggyTransaction[]> {
+    // GET /transactions (paginado por página) foi desligado pela Pluggy (410); o /v2 pagina por cursor.
     const all: PluggyTransaction[] = [];
-    for (let page = 1; ; page++) {
-      const body = await this.get<{ results: PluggyTransaction[]; totalPages: number }>('/transactions', {
-        accountId,
-        from: from.toISOString().slice(0, 10),
-        pageSize: PAGE_SIZE,
-        page,
-      });
+    const dateFrom = from.toISOString().slice(0, 10);
+    let after: string | null = null;
+    do {
+      const params: Record<string, string> = { accountId, dateFrom };
+      if (after) params.after = after;
+      const body: { results: PluggyTransaction[]; next: string | null } = await this.get('/v2/transactions', params);
       all.push(...body.results);
-      if (page >= body.totalPages) return all;
-    }
+      // `next` é a query string pronta da próxima página; só o cursor `after` interessa.
+      after = body.next ? new URLSearchParams(body.next.replace(/^\?/, '')).get('after') : null;
+    } while (after);
+    return all;
   }
 }
