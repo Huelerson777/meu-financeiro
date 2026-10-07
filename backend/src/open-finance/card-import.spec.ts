@@ -20,14 +20,17 @@ describe('toCardRows', () => {
 
   it('ignora pagamento de fatura', () => {
     const rows = toCardRows(
-      [tx({ id: 'p1', amount: -300, operationType: 'PAGAMENTO_FATURA' }), tx({ id: 'p2', amount: -10, operationType: 'PAGAMENTO' })],
+      [
+        tx({ id: 'p1', amount: -300, type: 'CREDIT', operationType: 'PAGAMENTO_FATURA' }),
+        tx({ id: 'p2', amount: 10, type: 'CREDIT', operationType: 'PAGAMENTO' }),
+      ],
       [],
     );
     expect(rows).toEqual([]);
   });
 
-  it('importa estorno (valor negativo) como crédito', () => {
-    const rows = toCardRows([tx({ id: 'e1', amount: -25.9, operationType: 'ESTORNO', type: 'CREDIT' })], []);
+  it('importa estorno (type CREDIT) como crédito, qualquer que seja o sinal do valor', () => {
+    const rows = toCardRows([tx({ id: 'e1', amount: 25.9, operationType: 'ESTORNO', type: 'CREDIT' })], []);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ externalId: 'pluggy:e1', amount: -25.9, installments: 1 });
   });
