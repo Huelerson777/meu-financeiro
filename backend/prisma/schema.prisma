@@ -94,6 +94,11 @@ model User {
   role           Role     @default(USER)
   plan           PlanType @default(FREE)
   isActive       Boolean  @default(true) @map("is_active")
+  // Verificação de e-mail: contas novas só entram depois de confirmar o
+  // código (emailVerificationRequired = true). Contas anteriores à feature
+  // ficam com required = false (migration) e só recebem um aviso no app.
+  emailVerifiedAt           DateTime? @map("email_verified_at")
+  emailVerificationRequired Boolean   @default(true) @map("email_verification_required")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -109,7 +114,8 @@ model User {
   sessions               Session[]
   refreshTokens          RefreshToken[]
   passwordResetTokens    PasswordResetToken[]
-  logs                   Log[]
+  emailVerificationCodes EmailVerificationCode[]
+  logs                  Log[]
   feedbacks              Feedback[]
   recurringBills         RecurringBill[]
   cardRecurringPurchases CardRecurringPurchase[]
@@ -148,6 +154,20 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
+}
+
+model EmailVerificationCode {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  codeHash  String   @map("code_hash")
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_codes")
 }
 
 model PasswordResetToken {

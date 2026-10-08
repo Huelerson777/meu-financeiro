@@ -28,7 +28,14 @@ export class UsersService {
         throw new BadRequestException('Este número de WhatsApp já está vinculado a outra conta');
       }
     }
-    const updated = await this.usersRepository.update(userId, dto);
+    // Trocar o e-mail invalida a confirmação anterior — o novo endereço
+    // precisa ser verificado de novo (o app mostra o aviso e o código).
+    const current = dto.email ? await this.usersRepository.findById(userId) : null;
+    const emailChanged = !!current && dto.email !== current.email;
+    const updated = await this.usersRepository.update(
+      userId,
+      emailChanged ? { ...dto, emailVerifiedAt: null } : dto,
+    );
     const { passwordHash, ...safeUser } = updated;
     return safeUser;
   }

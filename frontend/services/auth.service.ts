@@ -7,6 +7,12 @@ export const authService = {
   register: (name: string, email: string, password: string) =>
     api.post('/auth/register', { name, email, password }).then((r) => r.data.data),
 
+  verifyEmail: (email: string, code: string) =>
+    api.post('/auth/verify-email', { email, code }).then((r) => r.data.data),
+
+  resendVerification: (email: string) =>
+    api.post('/auth/resend-verification', { email }).then((r) => r.data.data),
+
   logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
 
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }).then((r) => r.data.data),

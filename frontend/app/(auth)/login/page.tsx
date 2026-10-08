@@ -47,6 +47,13 @@ export default function LoginPage() {
       toast.success('Login realizado com sucesso');
       router.push('/dashboard');
     } catch (error: any) {
+      if (error?.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        // Conta nova que ainda não confirmou o e-mail: o backend acabou de
+        // reenviar o código, então segue direto pra tela de verificação.
+        toast.info('Confirme seu e-mail para entrar');
+        router.push(`/verify-email?email=${encodeURIComponent(values.email)}`);
+        return;
+      }
       toast.error(error?.response?.data?.message ?? 'Não foi possível entrar. Verifique suas credenciais.');
     } finally {
       setIsSubmitting(false);
