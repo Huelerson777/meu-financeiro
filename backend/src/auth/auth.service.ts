@@ -197,6 +197,11 @@ export class AuthService {
       );
     } catch (error) {
       this.logger.error(`Falha ao enviar o código de verificação para ${user.email}: ${(error as Error).message}`);
+      // Sem o e-mail o código é inútil — apaga pra o intervalo mínimo de
+      // reenvio não travar a próxima tentativa.
+      await this.prisma.emailVerificationCode
+        .deleteMany({ where: { userId: user.id } })
+        .catch(() => undefined);
       throw new ServiceUnavailableException('Não foi possível enviar o e-mail agora. Tente novamente em instantes.');
     }
   }
