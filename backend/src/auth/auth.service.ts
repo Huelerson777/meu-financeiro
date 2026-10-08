@@ -3,6 +3,8 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
@@ -27,6 +29,8 @@ export const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
@@ -88,7 +92,9 @@ export class AuthService {
     if (user.emailVerificationRequired && !user.emailVerifiedAt) {
       // Reenvia o código (respeitando o intervalo mínimo) pra quem fechou a
       // tela de verificação sem terminar — o front leva direto pra ela.
-      await this.sendVerificationCode(user);
+      // Falha de envio não pode mascarar o 403 — o usuário ainda pode pedir
+      // o reenvio na tela de verificação.
+      await this.sendVerificationCode(user).catch(() => undefined);
       throw new ForbiddenException({
         message: 'Confirme seu e-mail para entrar. Enviamos um código para a sua caixa de entrada.',
         code: EMAIL_NOT_VERIFIED,
@@ -183,11 +189,16 @@ export class AuthService {
       }),
     ]);
 
-    await this.mailService.send(
-      user.email,
-      `${code} é o seu código de verificação — PouPay`,
-      verificationEmailHtml(user.name, code, VERIFY_CODE_EXPIRES_MINUTES),
-    );
+    try {
+      await this.mailService.send(
+        user.email,
+        `${code} é o seu código de verificação — PouPay`,
+        verificationEmailHtml(user.name, code, VERIFY_CODE_EXPIRES_MINUTES),
+      );
+    } catch (error) {
+      this.logger.error(`Falha ao enviar o código de verificação para ${user.email}: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('Não foi possível enviar o e-mail agora. Tente novamente em instantes.');
+    }
   }
 
   async refresh(refreshToken: string) {
