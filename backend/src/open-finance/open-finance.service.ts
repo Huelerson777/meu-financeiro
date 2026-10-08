@@ -22,6 +22,8 @@ const DAY_MS = 24 * 3600 * 1000;
 
 @Injectable()
 export class OpenFinanceService {
+  private readonly syncing = new Set<string>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly pluggy: PluggyClient,
@@ -100,6 +102,21 @@ export class OpenFinanceService {
   async unlinkCard(userId: string, id: string, pluggyAccountId: string) {
     await this.getOwned(userId, id);
     await this.prisma.bankCardLink.deleteMany({ where: { connectionId: id, pluggyAccountId } });
+  }
+
+  /** Chamado pelo webhook da Pluggy: sincroniza toda conexão (de qualquer usuário) desse item. */
+  async syncByItem(itemId: string) {
+    const connections = await this.prisma.bankConnection.findMany({ where: { itemId }, select: { id: true, userId: true } });
+    for (const connection of connections) {
+      // Webhook repetido ou clique manual ao mesmo tempo: uma sincronização por conexão de cada vez.
+      if (this.syncing.has(connection.id)) continue;
+      this.syncing.add(connection.id);
+      try {
+        await this.sync(connection.userId, connection.id);
+      } finally {
+        this.syncing.delete(connection.id);
+      }
+    }
   }
 
   /** Traz as transações novas de cada conta ligada. Não mexe em contas sem ligação. */
