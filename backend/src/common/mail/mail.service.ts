@@ -22,6 +22,11 @@ export class MailService {
         auth: process.env.SMTP_USER
           ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
           : undefined,
+        // Sem isso o nodemailer espera ~2 min numa porta bloqueada e a
+        // requisição (cadastro/reenvio de código) fica pendurada.
+        connectionTimeout: 10_000,
+        greetingTimeout: 10_000,
+        socketTimeout: 15_000,
       });
     }
   }
