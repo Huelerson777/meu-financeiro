@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { authService } from '@/services/auth.service';
-import { useAuthStore } from '@/stores/auth-store';
 
 const registerSchema = z.object({
   name: z.string().min(2, 'Informe seu nome completo'),
@@ -24,7 +23,6 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const setTokens = useAuthStore((s) => s.setTokens);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
@@ -36,14 +34,9 @@ export default function RegisterPage() {
   async function onSubmit(values: RegisterForm) {
     setIsSubmitting(true);
     try {
-      const { accessToken, refreshToken } = await authService.register(
-        values.name,
-        values.email,
-        values.password,
-      );
-      setTokens(accessToken, refreshToken);
-      toast.success('Conta criada com sucesso');
-      router.push('/dashboard');
+      const { email } = await authService.register(values.name, values.email, values.password);
+      toast.success('Enviamos um código de verificação para o seu e-mail');
+      router.push(`/verify-email?email=${encodeURIComponent(email)}`);
     } catch (error: any) {
       toast.error(error?.response?.data?.message ?? 'Não foi possível criar sua conta.');
     } finally {

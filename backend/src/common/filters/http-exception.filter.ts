@@ -46,6 +46,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
         ? exceptionResponse
         : (exceptionResponse as any)?.message ?? 'Erro interno do servidor';
 
+    // Código opcional pro front distinguir erros com tratamento próprio
+    // (ex: EMAIL_NOT_VERIFIED no login) sem depender do texto da mensagem.
+    const errorCode = (exceptionResponse as any)?.code;
+
     if (status >= 500) {
       const stack = (exception as Error)?.stack;
       this.logger.error(`${request.method} ${request.url}`, stack);
@@ -71,6 +75,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       path: request.url,
       timestamp: new Date().toISOString(),
       message,
+      ...(errorCode ? { code: errorCode } : {}),
     });
   }
 }

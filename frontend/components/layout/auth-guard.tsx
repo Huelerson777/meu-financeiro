@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { api } from '@/services/api';
 import { useIdleLogout } from '@/hooks/use-idle-logout';
 import { clearSessionCookie } from '@/utils/session-cookie';
+import { EmailVerificationPrompt } from '@/components/auth/email-verification-prompt';
 
 /**
  * Protege as rotas do grupo (dashboard). Aguarda o Zustand terminar de
@@ -17,7 +18,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
-  const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
   useEffect(() => {
@@ -38,12 +38,15 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // fica disponível depois dessa busca, seja logo após o login ou ao
   // recarregar uma sessão já existente.
   useEffect(() => {
-    if (!hasHydrated || !accessToken || user) return;
+    if (!hasHydrated || !accessToken) return;
+    // Rebusca a cada carregamento (não só quando não há user): o user
+    // persistido de uma sessão antiga não tem emailVerifiedAt, e o aviso de
+    // e-mail pendente depende desse campo estar atualizado.
     api.get('/users/me').then((res) => {
       const data = res.data?.data ?? res.data;
       if (data?.name) setUser(data);
     }).catch(() => {});
-  }, [hasHydrated, accessToken, user, setUser]);
+  }, [hasHydrated, accessToken, setUser]);
 
   if (!hasHydrated || !accessToken) {
     return (
@@ -53,5 +56,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {children}
+      <EmailVerificationPrompt />
+    </>
+  );
 }

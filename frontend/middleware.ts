@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // token ou o refresh forem inválidos).
 const SESSION_COOKIE_NAME = 'ff_session';
 
-const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password'];
+const PUBLIC_PATHS = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];
 
 // Tela de consentimento do MCP (ver backend/src/mcp/) — precisa ficar
 // acessível tanto logado quanto deslogado (a própria página decide o que

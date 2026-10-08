@@ -15,6 +15,8 @@ async function main() {
       name: 'Usuário Demo',
       email: 'demo@usepoupay.com.br',
       passwordHash,
+      // Conta de demonstração já nasce verificada (sem caixa de e-mail real).
+      emailVerifiedAt: new Date(),
       settings: {
         create: {
           theme: 'system',

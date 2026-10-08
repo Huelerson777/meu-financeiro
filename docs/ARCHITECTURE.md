@@ -77,6 +77,20 @@ Junto com os tokens, `useAuthStore.setTokens()` seta um cookie leve (`ff_session
 
 Isso é só uma camada de UX/roteamento — **não substitui** a autenticação real. O `AuthGuard` client-side e o JWT validado pelo backend continuam sendo a autoridade final; se o token/refresh for inválido, a chamada de API falha, `logout()` roda (limpando o cookie também) e o usuário é enviado ao login mesmo que o cookie ainda existisse.
 
+### Verificação de e-mail
+
+Contas só passam a existir "de verdade" depois de confirmar o e-mail:
+
+1. `POST /api/auth/register` cria o usuário (`emailVerifiedAt = null`, `emailVerificationRequired = true`), envia um código de 6 dígitos por e-mail e **não** devolve tokens — responde `{ requiresVerification, email }` e o front vai para `/verify-email`.
+2. `POST /api/auth/verify-email { email, code }` confere o código (válido por 15 min, máx. 5 tentativas, guardado como HMAC com o `JWT_SECRET` em `email_verification_codes`), marca `emailVerifiedAt` e devolve `{ accessToken, refreshToken }`.
+3. `POST /api/auth/resend-verification { email }` gera um código novo (intervalo mínimo de 60 s; resposta sempre igual, exista a conta ou não).
+4. `POST /api/auth/login` de conta nova não verificada responde **403** com `code: "EMAIL_NOT_VERIFIED"` (e reenvia o código); o front leva para `/verify-email`.
+5. Se alguém tenta se cadastrar com um e-mail que nunca foi confirmado, o cadastro é refeito em cima dele (evita "queimar" o e-mail de outra pessoa).
+
+**Contas anteriores à feature** (`emailVerificationRequired = false`, definido pela migration) não são bloqueadas: entram normalmente e, enquanto `emailVerifiedAt` for `null`, o app mostra um popup de "verificação pendente" (`components/auth/email-verification-prompt.tsx`, montado no `AuthGuard`) com o mesmo fluxo de código. Trocar o e-mail em `PATCH /users/me` zera `emailVerifiedAt` e o popup volta.
+
+O envio usa o `MailService` (SMTP — ver `docs/ENVIRONMENT.md`).
+
 ## MCP — lançamentos via Claude (`backend/src/mcp/`)
 
 Servidor MCP remoto que permite lançar dados no PouPay direto de uma conversa com o Claude (colando/anexando planilha, extrato bancário ou nota da B3) — a interpretação do arquivo acontece na própria conversa; o backend só expõe operações estruturadas de leitura/escrita que reaproveitam os Services de domínio já existentes **em processo** (sem HTTP interno), na mesma linha das integrações `whatsapp/` e `transactions/transaction-parser.service.ts` (que fazem o caminho inverso: o backend chama a Anthropic API).

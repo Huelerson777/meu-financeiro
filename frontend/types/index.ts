@@ -18,6 +18,8 @@ export interface User {
   avatarUrl?: string;
   plan: 'FREE' | 'PREMIUM';
   role?: 'USER' | 'ADMIN';
+  /** null/ausente = e-mail ainda não confirmado */
+  emailVerifiedAt?: string | null;
 }
 
 export interface DashboardSummary {

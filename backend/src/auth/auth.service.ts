@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -12,10 +14,16 @@ import { CategoriesService } from '../categories/categories.service';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { MailService } from '../common/mail/mail.service';
+import { verificationEmailHtml } from './email-verification.mail';
 
 const ACCESS_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '15m';
 const REFRESH_EXPIRES_DAYS = 7;
 const RESET_TOKEN_EXPIRES_MINUTES = 60;
+const VERIFY_CODE_EXPIRES_MINUTES = 15;
+const VERIFY_CODE_MAX_ATTEMPTS = 5;
+const VERIFY_CODE_RESEND_COOLDOWN_SECONDS = 60;
+
+export const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED';
 
 @Injectable()
 export class AuthService {
@@ -26,26 +34,40 @@ export class AuthService {
     private mailService: MailService,
   ) {}
 
+  /**
+   * Cria a conta como "pendente": nenhum token é emitido até o e-mail ser
+   * confirmado com o código enviado (ver verifyEmail). Se o e-mail já existe
+   * mas nunca foi confirmado, o cadastro é refeito em cima dele — senão
+   * qualquer um poderia "queimar" o e-mail de outra pessoa cadastrando antes.
+   */
   async register(dto: RegisterDto) {
     const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (existing) {
+    if (existing && (existing.emailVerifiedAt || !existing.emailVerificationRequired)) {
       throw new ConflictException('Já existe uma conta com este e-mail');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    const user = await this.prisma.user.create({
-      data: {
-        name: dto.name,
-        email: dto.email,
-        passwordHash,
-        settings: { create: {} },
-      },
-    });
+    let user;
+    if (existing) {
+      user = await this.prisma.user.update({
+        where: { id: existing.id },
+        data: { name: dto.name, passwordHash },
+      });
+    } else {
+      user = await this.prisma.user.create({
+        data: {
+          name: dto.name,
+          email: dto.email,
+          passwordHash,
+          settings: { create: {} },
+        },
+      });
+    }
 
-    await this.categoriesService.ensureDefaults(user.id);
+    await this.sendVerificationCode(user, { force: true });
 
-    return this.issueTokens(user.id, user.email, user.role);
+    return { requiresVerification: true, email: user.email };
   }
 
   async login(dto: LoginDto) {
@@ -63,9 +85,109 @@ export class AuthService {
       throw new UnauthorizedException('Conta desativada');
     }
 
+    if (user.emailVerificationRequired && !user.emailVerifiedAt) {
+      // Reenvia o código (respeitando o intervalo mínimo) pra quem fechou a
+      // tela de verificação sem terminar — o front leva direto pra ela.
+      await this.sendVerificationCode(user);
+      throw new ForbiddenException({
+        message: 'Confirme seu e-mail para entrar. Enviamos um código para a sua caixa de entrada.',
+        code: EMAIL_NOT_VERIFIED,
+      });
+    }
+
     await this.categoriesService.ensureDefaults(user.id);
 
     return this.issueTokens(user.id, user.email, user.role, dto.rememberMe);
+  }
+
+  /**
+   * Confere o código de 6 dígitos. Em caso de sucesso marca o e-mail como
+   * verificado e devolve os tokens (contas novas ainda não têm sessão).
+   * Contas já verificadas recebem erro genérico — este endpoint é público
+   * e nunca pode virar um "login só com o e-mail".
+   */
+  async verifyEmail(email: string, code: string) {
+    const invalid = new BadRequestException('Código inválido ou expirado');
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || user.emailVerifiedAt || !user.isActive) throw invalid;
+
+    const stored = await this.prisma.emailVerificationCode.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!stored || stored.expiresAt < new Date()) throw invalid;
+
+    if (stored.attempts >= VERIFY_CODE_MAX_ATTEMPTS) {
+      throw new BadRequestException('Muitas tentativas. Peça um novo código.');
+    }
+
+    const expected = Buffer.from(stored.codeHash, 'hex');
+    const received = Buffer.from(this.hashCode(user.id, code), 'hex');
+    if (expected.length !== received.length || !crypto.timingSafeEqual(expected, received)) {
+      await this.prisma.emailVerificationCode.update({
+        where: { id: stored.id },
+        data: { attempts: { increment: 1 } },
+      });
+      throw invalid;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: user.id }, data: { emailVerifiedAt: new Date() } }),
+      this.prisma.emailVerificationCode.deleteMany({ where: { userId: user.id } }),
+    ]);
+
+    await this.categoriesService.ensureDefaults(user.id);
+
+    return this.issueTokens(user.id, user.email, user.role);
+  }
+
+  /** Reenvia o código. Resposta sempre igual, exista a conta ou não. */
+  async resendVerification(email: string) {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (user && user.isActive && !user.emailVerifiedAt) {
+      await this.sendVerificationCode(user);
+    }
+    return { message: 'Se este e-mail estiver aguardando verificação, enviamos um novo código.' };
+  }
+
+  /**
+   * Gera um código novo (invalidando os anteriores) e envia por e-mail.
+   * Sem `force`, respeita um intervalo mínimo entre envios pra não virar
+   * disparador de spam; o cadastro usa `force` porque é o primeiro envio.
+   */
+  async sendVerificationCode(
+    user: { id: string; name: string; email: string },
+    options: { force?: boolean } = {},
+  ) {
+    if (!options.force) {
+      const last = await this.prisma.emailVerificationCode.findFirst({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (last && Date.now() - last.createdAt.getTime() < VERIFY_CODE_RESEND_COOLDOWN_SECONDS * 1000) {
+        return;
+      }
+    }
+
+    const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
+
+    await this.prisma.$transaction([
+      this.prisma.emailVerificationCode.deleteMany({ where: { userId: user.id } }),
+      this.prisma.emailVerificationCode.create({
+        data: {
+          userId: user.id,
+          codeHash: this.hashCode(user.id, code),
+          expiresAt: new Date(Date.now() + VERIFY_CODE_EXPIRES_MINUTES * 60 * 1000),
+        },
+      }),
+    ]);
+
+    await this.mailService.send(
+      user.email,
+      `${code} é o seu código de verificação — PouPay`,
+      verificationEmailHtml(user.name, code, VERIFY_CODE_EXPIRES_MINUTES),
+    );
   }
 
   async refresh(refreshToken: string) {
@@ -178,6 +300,15 @@ export class AuthService {
     });
 
     return { accessToken, refreshToken };
+  }
+
+  // HMAC com o JWT_SECRET: um código de 6 dígitos tem só 1M de combinações,
+  // então um hash simples vazado seria quebrado na hora.
+  private hashCode(userId: string, code: string): string {
+    return crypto
+      .createHmac('sha256', process.env.JWT_SECRET ?? '')
+      .update(`${userId}:${code}`)
+      .digest('hex');
   }
 
   private hashToken(token: string): string {
