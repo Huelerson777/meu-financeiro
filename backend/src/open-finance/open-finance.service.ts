@@ -4,6 +4,7 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { CardsService } from '../cards/cards.service';
 import { toCardRows } from './card-import';
 import { PluggyClient } from './pluggy.client';
+import { syncFrom } from './sync-window';
 
 const BRAZIL_UTC_OFFSET_MS = 3 * 3600 * 1000;
 
@@ -15,10 +16,6 @@ function startOfTodayBrazil(): Date {
   const brazilNow = new Date(Date.now() - BRAZIL_UTC_OFFSET_MS);
   return new Date(Date.UTC(brazilNow.getUTCFullYear(), brazilNow.getUTCMonth(), brazilNow.getUTCDate()));
 }
-
-// Reprocessa uma janela antes da última sincronização: lançamentos pendentes no banco só aparecem depois.
-const OVERLAP_DAYS = 7;
-const DAY_MS = 24 * 3600 * 1000;
 
 @Injectable()
 export class OpenFinanceService {
@@ -74,10 +71,11 @@ export class OpenFinanceService {
     const account = await this.prisma.account.findFirst({ where: { id: accountId, userId } });
     if (!account) throw new ForbiddenException('Conta não encontrada ou não pertence ao usuário');
 
+    // Trocar a conta de destino mantém o corte original; ligar de novo começa de hoje.
     return this.prisma.bankAccountLink.upsert({
       where: { connectionId_pluggyAccountId: { connectionId: id, pluggyAccountId } },
       update: { accountId },
-      create: { connectionId: id, pluggyAccountId, accountId },
+      create: { connectionId: id, pluggyAccountId, accountId, startsAt: startOfTodayBrazil() },
     });
   }
 
@@ -122,14 +120,11 @@ export class OpenFinanceService {
   /** Traz as transações novas de cada conta ligada. Não mexe em contas sem ligação. */
   async sync(userId: string, id: string) {
     const connection = await this.getOwned(userId, id);
-    const from = connection.lastSyncAt
-      ? new Date(connection.lastSyncAt.getTime() - OVERLAP_DAYS * DAY_MS)
-      : startOfTodayBrazil();
     const startedAt = new Date();
 
     let created = 0;
     for (const link of connection.links) {
-      const remote = await this.pluggy.listTransactions(link.pluggyAccountId, from);
+      const remote = await this.pluggy.listTransactions(link.pluggyAccountId, syncFrom(link.startsAt, connection.lastSyncAt));
       const rows = remote
         .filter((t) => t.status !== 'PENDING')
         .map((t) => ({
@@ -151,8 +146,7 @@ export class OpenFinanceService {
       ).map((r) => ({ cardId: r.cardId, description: r.description, amount: Number(r.amount) }));
 
       for (const link of connection.cardLinks) {
-        const cardFrom = link.lastSyncAt ? new Date(link.lastSyncAt.getTime() - OVERLAP_DAYS * DAY_MS) : link.startsAt;
-        const remote = await this.pluggy.listTransactions(link.pluggyAccountId, cardFrom);
+        const remote = await this.pluggy.listTransactions(link.pluggyAccountId, syncFrom(link.startsAt, link.lastSyncAt));
         // Em cartão, compras da fatura aberta vêm como PENDING com id estável: precisam entrar.
         const rows = toCardRows(remote, recurring.filter((r) => r.cardId === link.cardId));
         created += (await this.cards.importFromBank(userId, link.cardId, rows)).created;

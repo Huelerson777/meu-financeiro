@@ -298,11 +298,14 @@ model BankConnection {
   @@map("bank_connections")
 }
 
+/// Conta da Pluggy ligada a uma conta do PouPay. `startsAt` é o corte da importação: o que veio
+/// antes já foi lançado à mão ou já está no saldo da conta, então a sincronização nunca busca aquém dele.
 model BankAccountLink {
-  id              String @id @default(uuid())
-  connectionId    String @map("connection_id")
-  pluggyAccountId String @map("pluggy_account_id")
-  accountId       String @map("account_id")
+  id              String   @id @default(uuid())
+  connectionId    String   @map("connection_id")
+  pluggyAccountId String   @map("pluggy_account_id")
+  accountId       String   @map("account_id")
+  startsAt        DateTime @map("starts_at")
 
   connection BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   account    Account        @relation(fields: [accountId], references: [id], onDelete: Cascade)
