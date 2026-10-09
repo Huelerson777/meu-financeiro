@@ -3,18 +3,25 @@ import { isIP } from 'net';
 import { resolve4 } from 'dns/promises';
 import * as nodemailer from 'nodemailer';
 
+const DEFAULT_FROM = 'PouPay <no-reply@usepoupay.com.br>';
+
 /**
- * Envio de e-mail transacional. Se as variáveis SMTP_* não estiverem
- * configuradas (dev local, ou produção ainda sem provedor definido), cai
- * num modo "dry run" que só loga o conteúdo — assim o fluxo de recuperação
- * de senha continua testável ponta a ponta sem depender de credenciais
- * reais de e-mail.
+ * Envio de e-mail transacional. Com RESEND_API_KEY envia pela API HTTPS do
+ * Resend — o Render (plano gratuito) bloqueia saída para as portas SMTP
+ * 25/465/587, então SMTP não funciona lá. Sem a chave, usa SMTP_* se houver
+ * (dev local ou hospedagem sem bloqueio). Sem nenhum dos dois, cai num modo
+ * "dry run" que só loga o conteúdo — assim o fluxo de verificação e de
+ * recuperação de senha continua testável sem credenciais reais.
  */
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
 
   async send(to: string, subject: string, html: string) {
+    if (process.env.RESEND_API_KEY) {
+      return this.sendWithResend(process.env.RESEND_API_KEY, to, subject, html);
+    }
+
     const host = process.env.SMTP_HOST;
     if (!host) {
       this.logger.warn(
@@ -41,11 +48,26 @@ export class MailService {
     });
 
     await transporter.sendMail({
-      from: process.env.SMTP_FROM ?? 'PouPay <no-reply@usepoupay.com.br>',
+      from: process.env.SMTP_FROM ?? DEFAULT_FROM,
       to,
       subject,
       html,
     });
+  }
+
+  private async sendWithResend(apiKey: string, to: string, subject: string, html: string) {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: process.env.MAIL_FROM ?? process.env.SMTP_FROM ?? DEFAULT_FROM, to: [to], subject, html }),
+      // Sem limite, um provedor lento deixa cadastro/reenvio de código pendurados.
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Resend respondeu ${response.status}: ${detail.slice(0, 300)}`);
+    }
   }
 
   /**

@@ -12,6 +12,8 @@
 | `PORT` | Porta HTTP da API | `3001` |
 | `NODE_ENV` | Ambiente de execução | `development` \| `production` |
 | `FRONTEND_URL` | Base usada para montar o link de redefinição de senha no e-mail (CORS já é aberto via `origin: true`) | `https://usepoupay.com.br` |
+| `RESEND_API_KEY` | Chave da API do [Resend](https://resend.com) para o e-mail transacional. **Obrigatório em produção no Render**: o plano gratuito bloqueia saída SMTP (25/465/587). Quando definida, `SMTP_*` é ignorado | `re_...` |
+| `MAIL_FROM` | Remetente do Resend; o domínio precisa estar verificado no Resend | `PouPay <no-reply@usepoupay.com.br>` |
 | `SMTP_HOST` / `SMTP_PORT` / `SMTP_SECURE` | Servidor SMTP do e-mail transacional (código de verificação e recuperação de senha). Sem `SMTP_HOST` o e-mail só é logado no console | `smtp.gmail.com` / `587` / `false` |
 | `SMTP_USER` / `SMTP_PASS` | Credenciais SMTP. No Gmail, `SMTP_PASS` é uma **senha de app** (exige verificação em 2 etapas) | `usepoupay@gmail.com` |
 | `SMTP_FROM` | Remetente exibido (o Gmail força o endereço da conta autenticada) | `PouPay <usepoupay@gmail.com>` |
