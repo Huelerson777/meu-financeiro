@@ -1,8 +1,11 @@
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowDownRight, ArrowUpRight, Tags } from 'lucide-react';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SingleValueTooltip } from '@/components/dashboard/chart-tooltips';
+import { UncategorizedExpensesModal } from '@/components/dashboard/uncategorized-expenses-modal';
+import { useUncategorizedExpenses } from '@/hooks/use-dashboard';
 import { formatCurrency } from '@/utils/currency';
 import { cn } from '@/utils/cn';
 import type { CategoryExpense } from '@/services/dashboard.service';
@@ -13,13 +16,19 @@ interface CategoryDonutCardProps {
   /** Orçamento por categoria (id -> valor) do mês exibido. */
   budgets?: Map<string, number>;
   isLoading: boolean;
+  /** Mês/ano exibidos — usados pelo painel de despesas sem categoria. */
+  month: number;
+  year: number;
   onSelect: (categoryId: string | null) => void;
 }
 
 const MAX_ROWS = 6;
 
 /** Rosca com o total gasto no centro + lista por categoria (percentual, valor e variação vs. mês anterior). */
-export function CategoryDonutCard({ data, previous, budgets, isLoading, onSelect }: CategoryDonutCardProps) {
+export function CategoryDonutCard({ data, previous, budgets, isLoading, month, year, onSelect }: CategoryDonutCardProps) {
+  const [showUncategorized, setShowUncategorized] = useState(false);
+  const { data: uncategorized } = useUncategorizedExpenses({ month, year });
+  const uncategorizedCount = uncategorized?.items.length ?? 0;
   const sorted = [...(data ?? [])].filter((c) => c.total > 0).sort((a, b) => b.total - a.total);
   const total = sorted.reduce((s, c) => s + c.total, 0);
   const rows = sorted.slice(0, MAX_ROWS);
@@ -33,6 +42,16 @@ export function CategoryDonutCard({ data, previous, budgets, isLoading, onSelect
     <Card>
       <CardHeader>
         <CardTitle>Distribuição dos gastos</CardTitle>
+        {uncategorizedCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowUncategorized(true)}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-semibold text-warning transition-theme hover:bg-warning/20"
+          >
+            <Tags className="h-3.5 w-3.5" />
+            Despesas sem categoria · {uncategorizedCount} · {formatCurrency(uncategorized?.total ?? 0)}
+          </button>
+        )}
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -124,6 +143,7 @@ export function CategoryDonutCard({ data, previous, budgets, isLoading, onSelect
           </div>
         )}
       </CardContent>
+      {showUncategorized && <UncategorizedExpensesModal month={month} year={year} onClose={() => setShowUncategorized(false)} />}
     </Card>
   );
 }

@@ -363,6 +363,8 @@ export default function DashboardPage() {
               previous={prevCategoryData}
               budgets={budgetMap}
               isLoading={catLoading}
+              month={selectedMonth}
+              year={selectedYear}
               onSelect={goToCategoryTransactions}
             />
           ),

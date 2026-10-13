@@ -14,6 +14,11 @@ export const dashboardService = {
       .get<{ data: CategoryExpense[] }>('/dashboard/expenses-by-category', { params })
       .then((r) => r.data.data),
 
+  getUncategorizedExpenses: (params?: { month?: number; year?: number }) =>
+    api
+      .get<{ data: UncategorizedExpenses }>('/dashboard/uncategorized-expenses', { params })
+      .then((r) => r.data.data),
+
   getUpcomingBills: () =>
     api.get('/dashboard/upcoming-bills').then((r) => r.data.data),
 
@@ -72,6 +77,22 @@ export interface PaymentsStatus {
   openExpenseTotal: number;
   openIncomeTotal: number;
   openItems: PaymentsStatusItem[];
+}
+
+export interface UncategorizedExpenseItem {
+  id: string;
+  /** Compra à qual a categoria é aplicada (em parcelas de cartão, é a compra inteira). */
+  transactionId: string;
+  kind: 'transaction' | 'installment';
+  description: string;
+  amount: number;
+  date: string;
+  source: string;
+}
+
+export interface UncategorizedExpenses {
+  total: number;
+  items: UncategorizedExpenseItem[];
 }
 
 export interface CategoryExpense {

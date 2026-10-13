@@ -18,6 +18,14 @@ export function useDashboardExpensesByCategory(params?: { month?: number; year?:
   });
 }
 
+export function useUncategorizedExpenses(params?: { month?: number; year?: number }) {
+  return useQuery({
+    queryKey: ['dashboard', 'uncategorized-expenses', params?.month, params?.year],
+    queryFn: () => dashboardService.getUncategorizedExpenses(params),
+    refetchInterval: 30_000,
+  });
+}
+
 export function useDashboardPaymentsStatus(params?: { month?: number; year?: number }) {
   return useQuery({
     queryKey: ['dashboard', 'payments-status', params?.month, params?.year],
