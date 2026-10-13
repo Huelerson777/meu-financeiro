@@ -45,6 +45,10 @@
 
   html {
     scroll-behavior: smooth;
+    /* Nenhum elemento (brilho decorativo, texto longo) pode alargar a página
+       além da tela no celular — evita ter que dar pinça pra caber tudo.
+       Só no html: o viewport vira o scroller e o sticky continua funcionando. */
+    overflow-x: hidden;
   }
 
   body {
