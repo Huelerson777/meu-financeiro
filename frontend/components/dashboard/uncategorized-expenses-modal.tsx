@@ -101,11 +101,11 @@ export function UncategorizedExpensesModal({ month, year, onClose }: Props) {
                       value=""
                       disabled={savingId === item.id}
                       onChange={(e) => assign(item.id, item.transactionId, e.target.value)}
-                      className="h-9 w-40 rounded-md border border-input bg-transparent px-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      className="h-9 w-40 rounded-md border border-input bg-card text-foreground px-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
                     >
-                      <option value="">Escolher categoria…</option>
+                      <option value="" className="bg-card text-foreground">Escolher categoria…</option>
                       {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
+                        <option key={c.id} value={c.id} className="bg-card text-foreground">
                           {c.name}
                         </option>
                       ))}
