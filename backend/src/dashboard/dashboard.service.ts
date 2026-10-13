@@ -438,6 +438,85 @@ export class DashboardService {
       .sort((a, b) => b.total - a.total);
   }
 
+  /**
+   * Despesas pagas no mês SEM categoria — é a diferença entre o "pago no mês"
+   * (cards) e a soma do gráfico por categoria. Usa os mesmos filtros de
+   * getIncomeExpenseTotals pra que a soma da lista feche com essa diferença.
+   * Parcelas de cartão carregam o id da compra (a categoria é da compra).
+   */
+  async getUncategorizedExpenses(userId: string, month?: number, year?: number) {
+    const now = new Date();
+    const targetMonth = month ?? now.getMonth() + 1;
+    const targetYear = year ?? now.getFullYear();
+    const dateFilter = { gte: new Date(targetYear, targetMonth - 1, 1), lt: new Date(targetYear, targetMonth, 1) };
+
+    const investmentAccounts = await this.prisma.account.findMany({
+      where: { userId, type: 'INVESTMENT', isArchived: false },
+      select: { id: true },
+    });
+    const investmentAccountIds = investmentAccounts.map((a) => a.id);
+
+    const [transactions, installments] = await Promise.all([
+      this.prisma.transaction.findMany({
+        where: {
+          userId,
+          type: 'EXPENSE',
+          status: 'PAID',
+          cardId: null,
+          categoryId: null,
+          date: dateFilter,
+          AND: [
+            { OR: [{ account: { includeInDashboard: true } }, { accountId: null }] },
+            investmentAccountIds.length > 0
+              ? { OR: [{ accountId: null }, { accountId: { notIn: investmentAccountIds } }] }
+              : {},
+          ],
+        },
+        select: { id: true, description: true, amount: true, date: true, account: { select: { name: true } } },
+      }),
+      this.prisma.installment.findMany({
+        where: {
+          paid: true,
+          paidAt: dateFilter,
+          transaction: { userId, cardId: { not: null }, categoryId: null },
+        },
+        select: {
+          id: true,
+          amount: true,
+          paidAt: true,
+          number: true,
+          transaction: { select: { id: true, description: true, card: { select: { name: true } } } },
+        },
+      }),
+    ]);
+
+    const items = [
+      ...transactions.map((t) => ({
+        id: t.id,
+        transactionId: t.id,
+        kind: 'transaction' as const,
+        description: t.description,
+        amount: Number(t.amount),
+        date: t.date,
+        source: t.account?.name ?? 'Sem conta',
+      })),
+      ...installments.map((i) => ({
+        id: i.id,
+        transactionId: i.transaction.id,
+        kind: 'installment' as const,
+        description: i.transaction.description,
+        amount: Number(i.amount),
+        date: i.paidAt!,
+        source: i.transaction.card?.name ?? 'Cartão',
+      })),
+    ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    return {
+      total: items.reduce((s, i) => s + i.amount, 0),
+      items,
+    };
+  }
+
   async getUpcomingBills(userId: string) {
     return this.prisma.transaction.findMany({
       // isInstallment: false — parcelas (cartão ou fora dele) já têm sua

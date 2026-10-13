@@ -56,6 +56,22 @@ export class DashboardController {
     );
   }
 
+  @Get('uncategorized-expenses')
+  @ApiOperation({ summary: 'Despesas pagas no mês sem categoria (pra categorizar)' })
+  @ApiQuery({ name: 'month', required: false, type: Number })
+  @ApiQuery({ name: 'year', required: false, type: Number })
+  getUncategorizedExpenses(
+    @CurrentUser() user: { id: string },
+    @Query('month') month?: string,
+    @Query('year') year?: string,
+  ) {
+    return this.dashboardService.getUncategorizedExpenses(
+      user.id,
+      month ? parseInt(month, 10) : undefined,
+      year ? parseInt(year, 10) : undefined,
+    );
+  }
+
   @Get('upcoming-bills')
   @ApiOperation({ summary: 'Contas a pagar mais próximas do vencimento' })
   getUpcomingBills(@CurrentUser() user: { id: string }) {
