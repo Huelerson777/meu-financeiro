@@ -139,3 +139,13 @@
     animation-duration: 1.2s !important;
   }
 }
+
+/* iOS Safari dá zoom automático ao focar campo com fonte < 16px (e não volta
+   sozinho). Em telas de toque os campos ficam com 16px; no desktop não muda. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
