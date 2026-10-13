@@ -25,6 +25,7 @@ import { LogsModule } from './logs/logs.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { McpModule } from './mcp/mcp.module';
 import { OpenFinanceModule } from './open-finance/open-finance.module';
+import { HealthController } from './health/health.controller';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { OpenFinanceModule } from './open-finance/open-finance.module';
     McpModule,
     OpenFinanceModule,
   ],
+  controllers: [HealthController],
   providers: [
     {
       provide: APP_GUARD,
