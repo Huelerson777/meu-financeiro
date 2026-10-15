@@ -25,7 +25,11 @@ async function bootstrap() {
   // Segurança
   app.use(helmet());
   app.enableCors({
-    origin: true, // O "true" libera o acesso tanto para o seu localhost quanto para os links da Vercel
+    // CORS_ORIGINS (lista separada por vírgula) restringe as origens aceitas;
+    // sem ela, mantém o comportamento aberto (localhost + links da Vercel).
+    origin: process.env.CORS_ORIGINS
+      ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
+      : true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     // A autenticação é 100% via header Authorization (Bearer token), sem cookies —
     // credentials:true não é necessário e, combinado com origin:true, permitiria

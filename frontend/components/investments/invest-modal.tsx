@@ -195,7 +195,7 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
         <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-5">
           {investmentAccounts.length === 0 && !loadingAccounts ? (
             <p className="text-sm text-amber-500">
-              Você ainda não tem uma conta do tipo "Investimento". Cadastre uma na aba Contas antes de registrar um aporte.
+              Você ainda não tem uma conta do tipo &ldquo;Investimento&rdquo;. Cadastre uma na aba Contas antes de registrar um aporte.
             </p>
           ) : (
             <>

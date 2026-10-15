@@ -344,7 +344,7 @@ export function RecurringOverview({ bills, purchases, loading, onAddIncome }: { 
             <CardHeader className="flex-row items-end justify-between space-y-0">
               <div>
                 <CardTitle>Receitas recorrentes cadastradas</CardTitle>
-                <p className="mt-1 text-xs text-muted-foreground">Entram todo mês como "a receber" e alimentam a Projeção.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Entram todo mês como &ldquo;a receber&rdquo; e alimentam a Projeção.</p>
               </div>
               <div className="flex items-end gap-4">
                 <div className="text-right">
@@ -364,7 +364,7 @@ export function RecurringOverview({ bills, purchases, loading, onAddIncome }: { 
             <CardContent>
               {incomeBills.length === 0 ? (
                 <p className="py-6 text-sm leading-relaxed text-muted-foreground">
-                  Nenhuma receita recorrente cadastrada. Cadastre seu salário (ou outra entrada fixa) e ele passa a aparecer todo mês em "Em aberto" para você confirmar o recebimento.
+                  Nenhuma receita recorrente cadastrada. Cadastre seu salário (ou outra entrada fixa) e ele passa a aparecer todo mês em &ldquo;Em aberto&rdquo; para você confirmar o recebimento.
                 </p>
               ) : (
                 <ul className="divide-y divide-border">
