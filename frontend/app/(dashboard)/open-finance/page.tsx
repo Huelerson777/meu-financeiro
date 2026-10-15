@@ -54,7 +54,7 @@ function ConnectionCard({ connection }: { connection: Connection }) {
       }),
   });
 
-  const { data: remote, isLoading, isError } = useQuery({
+  const { data: remote, isLoading, isError, refetch, isFetching } = useQuery({
     queryKey: ['open-finance', connection.id, 'accounts'],
     queryFn: () => api.get(`/open-finance/connections/${connection.id}/accounts`).then((r) => r.data.data as RemoteAccount[]),
   });
@@ -127,6 +127,17 @@ function ConnectionCard({ connection }: { connection: Connection }) {
       <CardContent className="space-y-3">
         {isLoading && <Skeleton className="h-16 w-full" />}
         {isError && <p className="text-sm text-danger">Não consegui ler as contas dessa conexão na Pluggy.</p>}
+        {remote && remote.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+            <p>
+              A Pluggy não retornou nenhuma conta para essa conexão. Verifique no Meu Pluggy se o banco terminou de
+              sincronizar (ou se pede uma nova autenticação) e confira se o itemId é de uma conexão de conta ou cartão.
+            </p>
+            <Button size="sm" variant="outline" className="mt-3" onClick={() => refetch()} isLoading={isFetching}>
+              Recarregar contas
+            </Button>
+          </div>
+        )}
         {remote?.map((acc) => (
           <div key={acc.id} className="grid gap-2 rounded-lg border border-border/70 p-3 sm:grid-cols-[1fr_16rem] sm:items-center">
             <div className="min-w-0">
