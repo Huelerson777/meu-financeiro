@@ -822,15 +822,29 @@ export class CardsService {
 
     return { paidCount: openInstallments.length, totalPaid: total };
   }
-/**
+  /**
+   * Busca as transações de uma compra pelo installmentGroupId. Compras à vista
+   * (1 parcela) não têm grupo, então o identificador pode ser o id da própria
+   * transação.
+   */
+  private async findPurchaseTransactions(groupOrTransactionId: string, userId: string) {
+    const byGroup = await this.prisma.transaction.findMany({
+      where: { installmentGroupId: groupOrTransactionId, userId, cardId: { not: null } },
+      include: { installments: true },
+    });
+    if (byGroup.length > 0) return byGroup;
+    return this.prisma.transaction.findMany({
+      where: { id: groupOrTransactionId, userId, cardId: { not: null } },
+      include: { installments: true },
+    });
+  }
+
+  /**
    * Exclui TODAS as parcelas de uma compra (mesmo installmentGroupId),
    * de uma vez só, e devolve o valor total pro limite disponível do cartão.
    */
   async deletePurchase(installmentGroupId: string, userId: string) {
-    const transactions = await this.prisma.transaction.findMany({
-      where: { installmentGroupId, userId },
-      include: { installments: true },
-    });
+    const transactions = await this.findPurchaseTransactions(installmentGroupId, userId);
     if (transactions.length === 0) throw new NotFoundException('Compra não encontrada');
 
     const cardId = transactions[0].cardId!;
@@ -843,7 +857,7 @@ export class CardsService {
         await tx.account.update({ where: { id: accountId }, data: { currentBalance: { increment: amount } } });
       }
 
-      await tx.transaction.deleteMany({ where: { installmentGroupId, userId } });
+      await tx.transaction.deleteMany({ where: { id: { in: transactions.map((t) => t.id) }, userId } });
       await tx.card.update({
         where: { id: cardId },
         data: { usedLimit: { decrement: totalAmount } },
@@ -879,10 +893,7 @@ export class CardsService {
    * parcela por parcela quando o número de parcelas pode até mudar).
    */
   async updatePurchase(installmentGroupId: string, userId: string, dto: CreatePurchaseDto) {
-    const existing = await this.prisma.transaction.findMany({
-      where: { installmentGroupId, userId },
-      include: { installments: true },
-    });
+    const existing = await this.findPurchaseTransactions(installmentGroupId, userId);
     if (existing.length === 0) throw new NotFoundException('Compra não encontrada');
 
     const cardId = existing[0].cardId!;
