@@ -31,6 +31,12 @@ describe('CardsService — regras puras', () => {
       expect(due).toEqual(new Date(2026, 1, 3));
     });
 
+    it('vencimento dia 31 não transborda em mês curto', () => {
+      // fecha dia 5, vence dia 31: compra em 02/jan -> ciclo jan; parcela 1 em fevereiro vence 28/fev
+      expect(service.calculateInstallmentDueDate(new Date(2026, 0, 2), 5, 31, 1)).toEqual(new Date(2026, 1, 28));
+      expect(service.calculateInstallmentDueDate(new Date(2026, 0, 2), 5, 31, 3)).toEqual(new Date(2026, 3, 30));
+    });
+
     it('cada parcela cai um mês depois, virando o ano', () => {
       const due = service.calculateInstallmentDueDate(new Date(2026, 10, 20), 5, 12, 2);
       expect(due).toEqual(new Date(2027, 1, 12));

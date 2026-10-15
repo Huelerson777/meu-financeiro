@@ -998,7 +998,11 @@ export class CardsService {
       dueMonth += 1;
     }
 
-    return new Date(cycleYear, dueMonth + installmentIndex, dueDay);
+    // dueDay 31 em mês de 30 dias (ou fevereiro) não pode transbordar pro
+    // mês seguinte — limita ao último dia do mês do vencimento.
+    const targetMonth = dueMonth + installmentIndex;
+    const lastDay = new Date(cycleYear, targetMonth + 1, 0).getDate();
+    return new Date(cycleYear, targetMonth, Math.min(dueDay, lastDay));
   }
 
   private async assertOwnership(id: string, userId: string) {
