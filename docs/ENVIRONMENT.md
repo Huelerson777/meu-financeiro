@@ -35,6 +35,9 @@ Veja `backend/.env.example` para o arquivo pronto para copiar.
 | Variável | Descrição | Exemplo |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | URL base da API (incluindo `/api`) | `http://localhost:3001/api` |
+| `API_PROXY_TARGET` | (opcional, só frontend) origem do backend. Ativa o rewrite `/api-proxy/*` → `<alvo>/api/*` | `https://poupay-api.onrender.com` |
+
+**Refresh token em cookie httpOnly (first-party):** em produção, defina na Vercel `API_PROXY_TARGET=<URL do backend, sem /api>` e `NEXT_PUBLIC_API_URL=/api-proxy`. Com a API sob a mesma origem do site, o refresh token trafega só no cookie `poupay_rt` (httpOnly, Secure, SameSite=Lax) e sai do JSON/localStorage. Sem essas variáveis o comportamento antigo continua (token no corpo). O backend aceita `REFRESH_COOKIE_PATH` (padrão `/api-proxy/auth`).
 
 Veja `frontend/.env.example` para o arquivo pronto para copiar.
 

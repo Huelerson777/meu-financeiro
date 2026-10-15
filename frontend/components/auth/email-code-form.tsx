@@ -11,7 +11,7 @@ const RESEND_COOLDOWN_SECONDS = 60;
 interface EmailCodeFormProps {
   email: string;
   /** Chamado com o resultado de /auth/verify-email (tokens) quando o código confere. */
-  onVerified: (tokens: { accessToken: string; refreshToken: string }) => void | Promise<void>;
+  onVerified: (tokens: { accessToken: string; refreshToken?: string }) => void | Promise<void>;
   /** Se o código acabou de ser enviado (cadastro/login), o reenvio já começa em espera. */
   startCooldown?: boolean;
 }

@@ -1,9 +1,9 @@
 /** @type {import('next').NextConfig} */
 const isDev = process.env.NODE_ENV !== 'production';
 
-// Origem da API (NEXT_PUBLIC_API_URL é resolvida em build) — única origem
-// externa permitida em connect-src. Next injeta scripts inline de hidratação,
-// então script-src precisa de 'unsafe-inline' (sem nonce); 'unsafe-eval' só
+// Origem da API (NEXT_PUBLIC_API_URL Ã© resolvida em build) â€” Ãºnica origem
+// externa permitida em connect-src. Next injeta scripts inline de hidrataÃ§Ã£o,
+// entÃ£o script-src precisa de 'unsafe-inline' (sem nonce); 'unsafe-eval' sÃ³
 // em dev (HMR/React Refresh).
 const apiOrigin = (() => {
   try {
@@ -35,8 +35,17 @@ const securityHeaders = [
   { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
 ];
 
+// Proxy da API sob a mesma origem do site: com NEXT_PUBLIC_API_URL=/api-proxy e
+// API_PROXY_TARGET apontando pro backend, o cookie httpOnly do refresh token
+// vira first-party (sem isso, Safari/Brave bloqueiam cookie de terceiro).
+const proxyTarget = (process.env.API_PROXY_TARGET ?? '').replace(/\/+$/, '');
+
 const nextConfig = {
   poweredByHeader: false,
+  async rewrites() {
+    if (!proxyTarget) return [];
+    return [{ source: '/api-proxy/:path*', destination: `${proxyTarget}/api/:path*` }];
+  },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

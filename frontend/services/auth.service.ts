@@ -13,8 +13,6 @@ export const authService = {
   resendVerification: (email: string) =>
     api.post('/auth/resend-verification', { email }).then((r) => r.data.data),
 
-  logout: (refreshToken: string) => api.post('/auth/logout', { refreshToken }),
-
   forgotPassword: (email: string) => api.post('/auth/forgot-password', { email }).then((r) => r.data.data),
 
   resetPassword: (token: string, newPassword: string) =>
