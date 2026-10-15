@@ -1,4 +1,6 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { clearRefreshCookie, deliverTokens, readRefreshCookie } from './refresh-cookie';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { VerifyEmailDto } from './dto/verify-email.dto';
@@ -25,8 +27,12 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Confirma o e-mail com o código de 6 dígitos e devolve os tokens' })
-  verifyEmail(@Body() dto: VerifyEmailDto) {
-    return this.authService.verifyEmail(dto.email, dto.code);
+  async verifyEmail(
+    @Body() dto: VerifyEmailDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    return deliverTokens(req, res, await this.authService.verifyEmail(dto.email, dto.code));
   }
 
   @Post('resend-verification')
@@ -40,22 +46,28 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Autentica o usuário e retorna os tokens' })
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const tokens = await this.authService.login(dto);
+    return deliverTokens(req, res, tokens, dto.rememberMe ? 28 : 7);
   }
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Gera um novo access token a partir do refresh token' })
-  refresh(@Body() dto: RefreshTokenDto) {
-    return this.authService.refresh(dto.refreshToken);
+  async refresh(@Body() dto: RefreshTokenDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    // Cookie tem prioridade; o corpo cobre clientes legados (token no localStorage).
+    const token = readRefreshCookie(req) ?? dto.refreshToken;
+    if (!token) throw new UnauthorizedException('Refresh token ausente');
+    return deliverTokens(req, res, await this.authService.refresh(token));
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Revoga o refresh token e encerra a sessão' })
-  logout(@Body() dto: RefreshTokenDto) {
-    return this.authService.logout(dto.refreshToken);
+  async logout(@Body() dto: RefreshTokenDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const token = readRefreshCookie(req) ?? dto.refreshToken;
+    clearRefreshCookie(res);
+    return token ? this.authService.logout(token) : { message: 'Sessão encerrada com sucesso' };
   }
 
   @Post('forgot-password')

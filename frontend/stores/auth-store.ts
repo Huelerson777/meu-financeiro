@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { User } from '@/types';
 import { setSessionCookie, clearSessionCookie } from '@/utils/session-cookie';
 import { useLastActivityStore } from './last-activity-store';
+import { API_BASE_URL, TRANSPORT_HEADERS, USES_COOKIE_TRANSPORT } from '@/services/api';
 
 interface AuthState {
   user: User | null;
@@ -11,7 +12,8 @@ interface AuthState {
   rememberMe: boolean;
   hasHydrated: boolean;
   setUser: (user: User) => void;
-  setTokens: (accessToken: string, refreshToken: string, rememberMe?: boolean) => void;
+  /** refreshToken só vem no corpo no modo legado (API em outra origem); no modo cookie fica null. */
+  setTokens: (accessToken: string, refreshToken?: string | null, rememberMe?: boolean) => void;
   logout: () => void;
   setHasHydrated: (value: boolean) => void;
 }
@@ -30,7 +32,7 @@ export const useAuthStore = create<AuthState>()(
       rememberMe: false,
       hasHydrated: false,
       setUser: (user) => set({ user }),
-      setTokens: (accessToken, refreshToken, rememberMe = false) => {
+      setTokens: (accessToken, refreshToken = null, rememberMe = false) => {
         setSessionCookie(rememberMe);
         // Um login/registro bem-sucedido conta como atividade — sem isso,
         // um timestamp velho de uma sessão anterior (de horas atrás, já
@@ -40,6 +42,17 @@ export const useAuthStore = create<AuthState>()(
         set({ accessToken, refreshToken, rememberMe });
       },
       logout: () => {
+        // Revoga no servidor e limpa o cookie httpOnly (best-effort — o
+        // logout local não pode depender da rede).
+        if (typeof window !== 'undefined') {
+          const { refreshToken } = useAuthStore.getState();
+          fetch(`${API_BASE_URL}/auth/logout`, {
+            method: 'POST',
+            credentials: USES_COOKIE_TRANSPORT ? 'include' : 'omit',
+            headers: { 'Content-Type': 'application/json', ...TRANSPORT_HEADERS },
+            body: JSON.stringify(refreshToken ? { refreshToken } : {}),
+          }).catch(() => undefined);
+        }
         clearSessionCookie();
         set({ user: null, accessToken: null, refreshToken: null, rememberMe: false });
       },
