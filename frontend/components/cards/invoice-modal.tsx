@@ -159,7 +159,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
     const { name } = parseInstallmentLabel(item.description);
     if (!(await confirmDialog(`Excluir TODAS as parcelas de "${name}"? Essa ação não pode ser desfeita.`))) return;
     try {
-      await api.delete(`/cards/purchases/${item.installmentGroupId}`);
+      await api.delete(`/cards/purchases/${item.installmentGroupId ?? item.id}`);
       fetchInvoices();
     } catch (err: any) {
       notifyAlert('Erro ao excluir compra.');
@@ -238,7 +238,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
         : Array.isArray(raw?.items) ? raw.items
         : Array.isArray(raw) ? raw
         : [];
-      const group = all.filter((t: any) => t.installmentGroupId === item.installmentGroupId);
+      const group = all.filter((t: any) => (item.installmentGroupId ? t.installmentGroupId === item.installmentGroupId : t.id === item.id));
       if (group.length === 0) return;
 
       const totalAmount = group.reduce((acc: number, t: any) => acc + Number(t.amount), 0);
@@ -246,7 +246,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
       const { name } = parseInstallmentLabel(item.description);
 
       setPurchaseToEdit({
-        installmentGroupId: item.installmentGroupId,
+        installmentGroupId: item.installmentGroupId ?? item.id,
         description: name,
         totalAmount,
         installmentsCount: group.length,
