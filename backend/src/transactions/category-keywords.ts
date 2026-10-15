@@ -10,6 +10,22 @@ export function normalize(text: string): string {
 }
 
 /**
+ * Palavras que aparecem em quase toda descrição de banco (Pix, TED...) e não dizem nada sobre a
+ * categoria. Sem ignorá-las, "Pix recebido de Fulano" casa com qualquer "Pix enviado ..." do
+ * histórico e herda a categoria dele (ex.: Mercado/Alimentação).
+ */
+export const GENERIC_BANK_WORDS = new Set([
+  'pix', 'ted', 'doc', 'transferencia', 'transf', 'recebida', 'recebido', 'recebidos', 'enviada',
+  'enviado', 'enviados', 'pagamento', 'pagto', 'compra', 'debito', 'credito', 'deposito', 'via',
+  'para', 'por', 'com', 'qrs', 'qr', 'code', 'conta', 'banco', 'ltda', 'sa',
+]);
+
+/** Palavras relevantes de uma descrição normalizada (sem as genéricas de banco). */
+export function meaningfulWords(normalized: string): string[] {
+  return normalized.split(/\s+/).filter((w) => w.length > 2 && !GENERIC_BANK_WORDS.has(w));
+}
+
+/**
  * Fallback de sugestão de categoria pra quando o usuário ainda não tem
  * histórico suficiente (ver TransactionsService.suggestCategory). Cada
  * palavra-chave é comparada contra a descrição normalizada (sem acento,
