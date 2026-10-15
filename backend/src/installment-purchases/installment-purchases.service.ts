@@ -244,7 +244,13 @@ export class InstallmentPurchasesService {
   }
 
   private addMonths(date: Date, months: number): Date {
-    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, date.getUTCDate()));
+    // Dia 31 + 1 mês não pode virar 03/mar: limita ao último dia do mês-alvo.
+    // Sempre parte da data original (não da parcela anterior), então 31/jan
+    // gera 28/fev e volta a 31/mar.
+    const target = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + months, 1));
+    const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+    target.setUTCDate(Math.min(date.getUTCDate(), lastDay));
+    return target;
   }
 
   /**
