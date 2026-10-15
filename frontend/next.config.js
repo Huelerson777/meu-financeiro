@@ -1,12 +1,15 @@
 /** @type {import('next').NextConfig} */
+const securityHeaders = [
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'X-Frame-Options', value: 'DENY' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+];
+
 const nextConfig = {
-  eslint: {
-    // Ignora os avisos do ESLint durante o deploy na Vercel
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    // Ignora os erros de tipagem durante o deploy na Vercel
-    ignoreBuildErrors: true,
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: '/:path*', headers: securityHeaders }];
   },
 };
 

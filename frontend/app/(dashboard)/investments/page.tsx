@@ -104,7 +104,7 @@ export default function InvestmentsPage() {
           <h1 className="font-display text-3xl font-bold tracking-tight">Investimentos</h1>
           <p className="text-sm text-muted-foreground mt-1 mb-6">
             Histórico dos seus aportes mensais — o mesmo valor que aparece no card
-            "Investido" do Dashboard.
+            &ldquo;Investido&rdquo; do Dashboard.
           </p>
         </div>
         <Button onClick={() => setIsInvestModalOpen(true)} className="gap-1.5">
@@ -151,8 +151,8 @@ export default function InvestmentsPage() {
           </div>
           <h2 className="text-lg font-semibold">Nenhuma conta de investimento ainda</h2>
           <p className="text-sm text-foreground max-w-md">
-            Cadastre uma conta do tipo "Investimento" na aba Contas e depois use
-            o botão "Novo aporte" acima — os aportes vão aparecer aqui
+            Cadastre uma conta do tipo &ldquo;Investimento&rdquo; na aba Contas e depois use
+            o botão &ldquo;Novo aporte&rdquo; acima — os aportes vão aparecer aqui
             automaticamente.
           </p>
         </div>
@@ -176,14 +176,14 @@ export default function InvestmentsPage() {
             <div className="p-6 pb-0">
               <h2 className="font-semibold mb-1">Minhas posições</h2>
               <p className="text-xs text-foreground mb-4">
-                Ativos registrados com "Registrar ativo" em "Novo aporte" — valor atualizado automaticamente pra renda fixa e ações/fundos com ticker.
+                Ativos registrados com &ldquo;Registrar ativo&rdquo; em &ldquo;Novo aporte&rdquo; — valor atualizado automaticamente pra renda fixa e ações/fundos com ticker.
               </p>
             </div>
             {positionsLoading ? (
               <div className="text-sm text-foreground p-6 pt-0">Carregando...</div>
             ) : !positions || positions.length === 0 ? (
               <p className="text-sm text-foreground p-6 pt-0">
-                Nenhuma posição registrada ainda. Clique em "Novo aporte" e escolha "Registrar ativo".
+                Nenhuma posição registrada ainda. Clique em &ldquo;Novo aporte&rdquo; e escolha &ldquo;Registrar ativo&rdquo;.
               </p>
             ) : (
               <>
