@@ -3,7 +3,7 @@ import { Prisma, TransactionStatus, TransactionType } from '@prisma/client';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { CATEGORY_KEYWORDS, normalize } from './category-keywords';
+import { CATEGORY_KEYWORDS, meaningfulWords, normalize } from './category-keywords';
 import { ImportPreviewDto, ImportTransactionsDto } from './dto/import-transactions.dto';
 
 type TxClient = Prisma.TransactionClient;
@@ -344,7 +344,7 @@ export class TransactionsService {
       const duplicate = left > 0;
       if (duplicate) pool.set(key, left - 1);
 
-      const suggestion = suggest(row.description);
+      const suggestion = suggest(row.description, type);
       return { duplicate, categoryId: suggestion?.id ?? null, categoryName: suggestion?.name ?? null };
     });
   }
@@ -415,7 +415,7 @@ export class TransactionsService {
             data: {
               userId,
               accountId,
-              categoryId: suggest(row.description)?.id,
+              categoryId: suggest(row.description, type)?.id,
               type,
               description: row.description.trim().slice(0, 200) || 'Sem descrição',
               amount,
@@ -437,7 +437,7 @@ export class TransactionsService {
     const [history, categories] = await Promise.all([
       this.prisma.transaction.findMany({
         where: { userId, categoryId: { not: null }, type: { in: ['INCOME', 'EXPENSE'] } },
-        select: { description: true, categoryId: true },
+        select: { description: true, categoryId: true, type: true },
         orderBy: { date: 'desc' },
         take: 1000,
       }),
@@ -445,20 +445,25 @@ export class TransactionsService {
     ]);
     const byId = new Map(categories.map((c) => [c.id, c]));
     const byName = new Map(categories.map((c) => [c.name, c]));
-    const normalizedHistory = history.map((h) => ({ desc: normalize(h.description), categoryId: h.categoryId! }));
+    const normalizedHistory = history.map((h) => ({
+      desc: normalize(h.description),
+      categoryId: h.categoryId!,
+      type: h.type,
+    }));
 
-    return (description: string): { id: string; name: string } | null => {
+    return (description: string, type: 'INCOME' | 'EXPENSE' = 'EXPENSE'): { id: string; name: string } | null => {
       const query = normalize(description);
       if (!query) return null;
 
       const score = new Map<string, number>();
-      const queryWords = new Set(query.split(/\s+/).filter((w) => w.length > 2));
+      const queryWords = new Set(meaningfulWords(query));
       for (const h of normalizedHistory) {
-        if (!h.desc) continue;
+        // Entrada só aprende com entrada, saída com saída: um Pix recebido nunca herda a categoria de uma compra.
+        if (!h.desc || h.type !== type) continue;
         let points = 0;
         if (h.desc === query) points = 100;
         else if (h.desc.includes(query) || query.includes(h.desc)) points = 60;
-        else points = h.desc.split(/\s+/).filter((w) => w.length > 2 && queryWords.has(w)).length * 20;
+        else points = meaningfulWords(h.desc).filter((w) => queryWords.has(w)).length * 20;
         if (points > 0) score.set(h.categoryId, (score.get(h.categoryId) ?? 0) + points);
       }
       if (score.size > 0) {
@@ -467,8 +472,15 @@ export class TransactionsService {
         if (found) return found;
       }
 
+      // As palavras-chave são todas de despesa; entrada fica sem categoria em vez de chutar.
+      if (type === 'INCOME') return null;
+
+      const queryTokens = new Set(query.split(/\s+/));
       for (const [keyword, categoryName] of Object.entries(CATEGORY_KEYWORDS)) {
-        if (query.includes(normalize(keyword))) {
+        const k = normalize(keyword);
+        // Palavra inteira: "bar" não deve casar com "Barbosa", nem "luz" com "Luzia".
+        const hit = k.includes(' ') ? ` ${query} `.includes(` ${k} `) : queryTokens.has(k);
+        if (hit) {
           const found = byName.get(categoryName);
           if (found) return found;
         }

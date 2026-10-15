@@ -51,7 +51,7 @@ describe('TransactionsService', () => {
     it('sugere categoria pelo histórico do usuário e cai nas palavras-chave quando não há histórico', async () => {
       prisma.transaction.findMany
         .mockResolvedValueOnce([]) // existentes
-        .mockResolvedValueOnce([{ description: 'Padaria Estrela', categoryId: 'cat-food' }]); // histórico
+        .mockResolvedValueOnce([{ description: 'Padaria Estrela', categoryId: 'cat-food', type: 'EXPENSE' }]); // histórico
       prisma.category.findMany.mockResolvedValue([
         { id: 'cat-food', name: 'Alimentação' },
         { id: 'cat-carro', name: 'Carro' },
@@ -69,6 +69,29 @@ describe('TransactionsService', () => {
       expect(result[0].categoryId).toBe('cat-food'); // histórico
       expect(result[1].categoryId).toBe('cat-carro'); // palavra-chave "uber" -> Carro
       expect(result[2].categoryId).toBeNull();
+    });
+
+    it('Pix recebido não herda categoria de despesa do histórico nem de palavra-chave', async () => {
+      prisma.transaction.findMany
+        .mockResolvedValueOnce([]) // existentes
+        .mockResolvedValueOnce([
+          { description: 'Pix enviado Mercado Silva', categoryId: 'cat-food', type: 'EXPENSE' },
+          { description: 'Pix enviado Joao', categoryId: 'cat-food', type: 'EXPENSE' },
+        ]);
+      prisma.category.findMany.mockResolvedValue([{ id: 'cat-food', name: 'Mercado/Alimentação' }]);
+
+      const result = await service.previewImport(userId, {
+        accountId: 'acc-1',
+        rows: [
+          { date: '2026-10-03', description: 'Pix recebido Joao Barbosa', amount: 100 },
+          { date: '2026-10-03', description: 'Pix recebido Feira Livre', amount: 50 },
+          { date: '2026-10-03', description: 'Pix enviado Joao', amount: -30 },
+        ],
+      });
+
+      expect(result[0].categoryId).toBeNull();
+      expect(result[1].categoryId).toBeNull();
+      expect(result[2].categoryId).toBe('cat-food'); // saída continua aprendendo com saída
     });
 
     it('recusa conta de outro usuário', async () => {
