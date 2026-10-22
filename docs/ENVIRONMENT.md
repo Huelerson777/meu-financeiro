@@ -27,6 +27,7 @@
 | `TWILIO_AUTH_TOKEN` | Auth Token da Twilio — valida `X-Twilio-Signature` e autentica o envio. Secreto | console.twilio.com |
 | `TWILIO_WHATSAPP_FROM` | Número WhatsApp da Twilio que responde (sandbox: `+14155238886`) | Messaging → Try it out → WhatsApp |
 | `TWILIO_WEBHOOK_URL` | URL pública **exata** colada no console da Twilio (a assinatura é calculada sobre ela) | `https://<backend>.onrender.com/api/whatsapp/twilio` |
+| `WHATSAPP_CRON_SECRET` | Segredo do endpoint `POST /api/whatsapp/digest` (resumo diário). O workflow `.github/workflows/whatsapp-digest.yml` o envia no header `x-cron-secret`; use o mesmo valor no *secret* `WHATSAPP_CRON_SECRET` do repositório. Secreto | string aleatória longa |
 | `TRANSCRIPTION_API_KEY` | Chave do serviço de transcrição de áudio (opcional). Sem ela o bot responde que ainda não ouve áudios. Secreta | console.groq.com (grátis) ou platform.openai.com |
 | `TRANSCRIPTION_API_URL` | Endpoint compatível com a OpenAI (opcional; default OpenAI) | `https://api.groq.com/openai/v1/audio/transcriptions` |
 | `TRANSCRIPTION_MODEL` | Modelo de transcrição (opcional; default `whisper-1`) | `whisper-large-v3-turbo` (Groq) |

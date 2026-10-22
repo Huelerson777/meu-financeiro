@@ -41,6 +41,15 @@ export function buildTwiml(replies: string[]): string {
     .join('')}</Response>`;
 }
 
+/** Compara o segredo do cron em tempo constante; sem segredo configurado, nega sempre. */
+export function isValidCronSecret(expected: string | undefined, received: string | undefined): boolean {
+  if (!expected || !received) return false;
+  const expectedBuf = Buffer.from(expected);
+  const receivedBuf = Buffer.from(received);
+  if (expectedBuf.length !== receivedBuf.length) return false;
+  return crypto.timingSafeEqual(expectedBuf, receivedBuf);
+}
+
 /** "whatsapp:+5547999999999" -> "5547999999999" */
 export function digitsOnly(address: string): string {
   return address.replace(/\D/g, '');

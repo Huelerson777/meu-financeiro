@@ -599,7 +599,8 @@ Regras:
     return { data: buffer.toString('base64'), mimeType: meta.mime_type };
   }
 
-  private replyViaMeta: Reply = async (to, text) => {
+  /** Envia pela Meta. Devolve a descrição do erro, ou null se deu certo. */
+  private async sendViaMeta(to: string, text: string): Promise<string | null> {
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
 
@@ -614,18 +615,19 @@ Regras:
       }),
     });
 
-    if (!res.ok) {
-      this.logger.error(`Falha ao enviar mensagem WhatsApp (Meta) para ${to}: ${res.status} ${await res.text()}`);
-    }
-  };
+    return res.ok ? null : `${res.status} ${await res.text()}`;
+  }
 
-  private replyViaTwilio: Reply = async (to, text) => {
+  /**
+   * Envia pela API da Twilio. A Twilio entrega celulares brasileiros num
+   * formato (com ou sem o 9º dígito) e às vezes só aceita o envio no outro:
+   * tenta as duas formas. Devolve a descrição do último erro, ou null.
+   */
+  private async sendViaTwilio(to: string, text: string): Promise<string | null> {
     const sid = process.env.TWILIO_ACCOUNT_SID;
     const token = process.env.TWILIO_AUTH_TOKEN;
     const fromNumber = process.env.TWILIO_WHATSAPP_FROM;
 
-    // A Twilio entrega celulares brasileiros num formato (com ou sem o 9º
-    // dígito) e às vezes só aceita o envio no outro: tenta as duas formas.
     let lastError = '';
     for (const number of phoneVariants(to)) {
       const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
@@ -641,12 +643,38 @@ Regras:
         }),
       });
 
-      if (res.ok) return;
+      if (res.ok) return null;
       lastError = `${number}: ${res.status} ${await res.text()}`;
     }
+    return lastError;
+  }
 
-    this.logger.error(`Falha ao enviar mensagem WhatsApp (Twilio) para ${to} — ${lastError}`);
+  private replyViaMeta: Reply = async (to, text) => {
+    const error = await this.sendViaMeta(to, text);
+    if (error) this.logger.error(`Falha ao enviar mensagem WhatsApp (Meta) para ${to}: ${error}`);
   };
+
+  private replyViaTwilio: Reply = async (to, text) => {
+    const error = await this.sendViaTwilio(to, text);
+    if (error) this.logger.error(`Falha ao enviar mensagem WhatsApp (Twilio) para ${to} — ${error}`);
+  };
+
+  /**
+   * Mensagem iniciada pelo sistema (resumo diário). Usa a Twilio se ela
+   * estiver configurada, senão a Meta. Fora da janela de 24h o WhatsApp
+   * recusa texto livre (exige template aprovado) — nesse caso devolve false.
+   */
+  async sendProactiveMessage(to: string, text: string): Promise<boolean> {
+    const useTwilio = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN);
+    const error = await (useTwilio ? this.sendViaTwilio(to, text) : this.sendViaMeta(to, text)).catch(
+      (err: Error) => err.message,
+    );
+    if (error) {
+      this.logger.error(`Falha ao enviar aviso WhatsApp (${useTwilio ? 'Twilio' : 'Meta'}) para ${to}: ${error}`);
+      return false;
+    }
+    return true;
+  }
 
   private async downloadTwilioMedia(url: string, mimeType: string): Promise<{ data: string; mimeType: string }> {
     const sid = process.env.TWILIO_ACCOUNT_SID;
