@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Headers, HttpCode, Logger, Post, Query, Req, Res } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, Logger, Post, Query, Req, Res } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { WhatsappService } from './whatsapp.service';
-import { buildTwiml } from './whatsapp-utils';
+import { DigestService } from './digest.service';
+import { buildTwiml, isValidCronSecret } from './whatsapp-utils';
 
 /**
  * Webhook chamado pela Meta (WhatsApp Cloud API) — não usa JwtAuthGuard,
@@ -16,7 +17,10 @@ import { buildTwiml } from './whatsapp-utils';
 export class WhatsappController {
   private readonly logger = new Logger(WhatsappController.name);
 
-  constructor(private readonly whatsappService: WhatsappService) {}
+  constructor(
+    private readonly whatsappService: WhatsappService,
+    private readonly digestService: DigestService,
+  ) {}
 
   @Get('webhook')
   verifyWebhook(
@@ -73,5 +77,20 @@ export class WhatsappController {
 
     const replies = await this.whatsappService.handleTwilioPayload(body);
     res.send(buildTwiml(replies));
+  }
+
+  /**
+   * Dispara o resumo diário. Chamado por um agendador externo (workflow do
+   * GitHub): o Render grátis dorme por inatividade, então cron interno não é
+   * confiável. Protegido por WHATSAPP_CRON_SECRET; sem ele configurado, sempre
+   * nega. `?dryRun=true` devolve os textos sem enviar nada.
+   */
+  @Post('digest')
+  @HttpCode(200)
+  runDigest(@Headers('x-cron-secret') secret: string, @Query('dryRun') dryRun?: string) {
+    if (!isValidCronSecret(process.env.WHATSAPP_CRON_SECRET, secret)) {
+      throw new ForbiddenException('Segredo inválido');
+    }
+    return this.digestService.sendDailyDigests({ dryRun: dryRun === 'true' });
   }
 }

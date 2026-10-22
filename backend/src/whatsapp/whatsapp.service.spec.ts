@@ -407,3 +407,63 @@ describe('WhatsappService — consultas', () => {
     expect(replies[0]).toContain('✅ Lançado: Uber');
   });
 });
+
+describe('WhatsappService — envio proativo', () => {
+  const originalFetch = global.fetch;
+  const env = { ...process.env };
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env = { ...env };
+  });
+
+  it('usa a Twilio quando configurada e tenta a outra forma do número se a primeira falhar', async () => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC123';
+    process.env.TWILIO_AUTH_TOKEN = 'tok';
+    process.env.TWILIO_WHATSAPP_FROM = '+14155238886';
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 422, text: async () => 'sem destinatário' })
+      .mockResolvedValueOnce({ ok: true });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { service } = setup();
+
+    const ok = await service.sendProactiveMessage('554988048805', 'resumo');
+
+    expect(ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain('api.twilio.com');
+    expect(fetchMock.mock.calls[0][1].body.get('To')).toBe('whatsapp:+554988048805');
+    expect(fetchMock.mock.calls[1][1].body.get('To')).toBe('whatsapp:+5549988048805');
+  });
+
+  it('devolve false quando a Twilio recusa as duas formas (ex.: fora da janela de 24h)', async () => {
+    process.env.TWILIO_ACCOUNT_SID = 'AC123';
+    process.env.TWILIO_AUTH_TOKEN = 'tok';
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 400, text: async () => 'ContentSid Required' }) as unknown as typeof fetch;
+    const { service } = setup();
+
+    expect(await service.sendProactiveMessage('5549988048805', 'resumo')).toBe(false);
+  });
+
+  it('cai na Meta quando a Twilio não está configurada', async () => {
+    delete process.env.TWILIO_ACCOUNT_SID;
+    delete process.env.TWILIO_AUTH_TOKEN;
+    process.env.WHATSAPP_PHONE_NUMBER_ID = '999';
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { service } = setup();
+
+    expect(await service.sendProactiveMessage('5549988048805', 'resumo')).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toContain('graph.facebook.com');
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).to).toBe('5549988048805');
+  });
+
+  it('não propaga exceção de rede: devolve false', async () => {
+    delete process.env.TWILIO_ACCOUNT_SID;
+    global.fetch = jest.fn().mockRejectedValue(new Error('sem rede')) as unknown as typeof fetch;
+    const { service } = setup();
+
+    expect(await service.sendProactiveMessage('5549988048805', 'resumo')).toBe(false);
+  });
+});

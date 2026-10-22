@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { buildTwiml, digitsOnly, isValidTwilioSignature, phoneVariants } from './whatsapp-utils';
+import { buildTwiml, digitsOnly, isValidCronSecret, isValidTwilioSignature, phoneVariants } from './whatsapp-utils';
 
 describe('isValidTwilioSignature', () => {
   const token = 'auth-token-de-teste';
@@ -29,6 +29,20 @@ describe('isValidTwilioSignature', () => {
     expect(isValidTwilioSignature(undefined, url, params, sign(params))).toBe(false);
     expect(isValidTwilioSignature(token, undefined, params, sign(params))).toBe(false);
     expect(isValidTwilioSignature(token, url, params, undefined)).toBe(false);
+  });
+});
+
+describe('isValidCronSecret', () => {
+  it('aceita só o segredo exato', () => {
+    expect(isValidCronSecret('s3gredo', 's3gredo')).toBe(true);
+    expect(isValidCronSecret('s3gredo', 's3gredO')).toBe(false);
+    expect(isValidCronSecret('s3gredo', 's3gredo-mais-longo')).toBe(false);
+  });
+
+  it('nega sempre quando o segredo não está configurado ou não foi enviado', () => {
+    expect(isValidCronSecret(undefined, 'qualquer')).toBe(false);
+    expect(isValidCronSecret('', '')).toBe(false);
+    expect(isValidCronSecret('s3gredo', undefined)).toBe(false);
   });
 });
 

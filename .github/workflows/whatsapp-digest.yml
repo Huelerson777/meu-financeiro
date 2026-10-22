@@ -1,0 +1,28 @@
+name: Resumo diário no WhatsApp
+
+# 00:00 UTC = 21:00 em Brasília. O backend roda no Render (plano grátis dorme
+# por inatividade), então o disparo vem de fora: este workflow chama o endpoint.
+# Precisa do secret WHATSAPP_CRON_SECRET (o mesmo valor da variável de ambiente
+# no Render). Sem ele, o job só avisa e termina sem erro.
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar o endpoint do resumo
+        env:
+          CRON_SECRET: ${{ secrets.WHATSAPP_CRON_SECRET }}
+          BACKEND_URL: ${{ vars.BACKEND_URL || 'https://financeiro-1o4l.onrender.com' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "WHATSAPP_CRON_SECRET não configurado; nada a fazer."
+            exit 0
+          fi
+          curl --fail --silent --show-error \
+            --max-time 120 --retry 3 --retry-delay 20 --retry-all-errors \
+            -X POST -H "x-cron-secret: $CRON_SECRET" \
+            "$BACKEND_URL/api/whatsapp/digest"
