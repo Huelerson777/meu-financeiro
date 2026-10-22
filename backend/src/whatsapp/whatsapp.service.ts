@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { CategoriesService } from '../categories/categories.service';
 import { CREATE_TRANSACTION_TOOL } from './create-transaction-tool';
+import { isTranscriptionConfigured, transcribeAudio } from './transcription';
 import { digitsOnly, isValidTwilioSignature, phoneVariants } from './whatsapp-utils';
 import {
   RECEIPT_FOOTER,
@@ -23,7 +24,7 @@ const MODEL =process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 /** Mensagem recebida já normalizada, independente do provedor (Meta ou Twilio). */
 type IncomingMessage = {
   from: string;
-  type: 'text' | 'image' | 'other';
+  type: 'text' | 'image' | 'audio' | 'other';
   text?: string;
   caption?: string;
   loadMedia?: () => Promise<{ data: string; mimeType: string }>;
@@ -132,6 +133,9 @@ export class WhatsappService {
         loadMedia: () => this.downloadMetaMedia(message.image.id),
       };
     }
+    if (message.type === 'audio') {
+      return { from: message.from, type: 'audio', loadMedia: () => this.downloadMetaMedia(message.audio.id) };
+    }
     return { from: message.from, type: 'other' };
   }
 
@@ -147,6 +151,9 @@ export class WhatsappService {
         caption: params.Body || undefined,
         loadMedia: () => this.downloadTwilioMedia(params.MediaUrl0, mediaType),
       };
+    }
+    if (numMedia > 0 && mediaType.startsWith('audio/')) {
+      return { from, type: 'audio', loadMedia: () => this.downloadTwilioMedia(params.MediaUrl0, mediaType) };
     }
     if (numMedia === 0) {
       return { from, type: 'text', text: params.Body ?? '' };
@@ -425,7 +432,22 @@ Regras:
       return content;
     }
 
-    await reply(message.from, 'Por enquanto eu só entendo texto ou foto do comprovante 🙂');
+    if (message.type === 'audio' && message.loadMedia) {
+      if (!isTranscriptionConfigured()) {
+        await reply(message.from, 'Ainda não consigo ouvir áudios por aqui. Manda por texto ou foto do comprovante 🙂');
+        return null;
+      }
+
+      const { data, mimeType } = await message.loadMedia();
+      const transcript = await transcribeAudio(Buffer.from(data, 'base64'), mimeType);
+      if (!transcript) {
+        await reply(message.from, 'Não consegui entender o áudio. Pode repetir ou mandar por texto?');
+        return null;
+      }
+      return [{ type: 'text', text: transcript }];
+    }
+
+    await reply(message.from, 'Por enquanto eu só entendo texto, áudio ou foto do comprovante 🙂');
     return null;
   }
 
