@@ -9,7 +9,8 @@ import { digitsOnly, isValidTwilioSignature, phoneVariants } from './whatsapp-ut
 
 const GRAPH_API_VERSION = 'v20.0';
 const GRAPH_API_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
+const TWILIO_REPLY_WINDOW_MS = 12_000;
+const MODEL =process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 
 /** Mensagem recebida já normalizada, independente do provedor (Meta ou Twilio). */
 type IncomingMessage = {
@@ -71,8 +72,30 @@ export class WhatsappService {
     return isValidTwilioSignature(process.env.TWILIO_AUTH_TOKEN, url, params, signature);
   }
 
-  async handleTwilioPayload(params: Record<string, string>) {
-    await this.processMessage(this.normalizeTwilioMessage(params), this.replyViaTwilio);
+  /**
+   * Processa a mensagem e devolve as respostas pra irem no corpo (TwiML) da
+   * resposta do webhook — é assim que a Twilio entrega respostas no WhatsApp
+   * sem exigir template nem número verificado (conta trial). Se o Claude
+   * passar de TWILIO_REPLY_WINDOW_MS (a Twilio desiste em ~15s), o que
+   * sobrar vai pela API de envio.
+   */
+  async handleTwilioPayload(params: Record<string, string>): Promise<string[]> {
+    const replies: string[] = [];
+    let windowOpen = true;
+    const reply: Reply = async (to, text) => {
+      if (windowOpen) replies.push(text);
+      else await this.replyViaTwilio(to, text);
+    };
+
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, TWILIO_REPLY_WINDOW_MS);
+    });
+
+    await Promise.race([this.processMessage(this.normalizeTwilioMessage(params), reply), timeout]);
+    clearTimeout(timer);
+    windowOpen = false;
+    return replies;
   }
 
   private normalizeMetaMessage(message: any): IncomingMessage {

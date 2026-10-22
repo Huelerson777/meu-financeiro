@@ -25,6 +25,22 @@ export function isValidTwilioSignature(
   return crypto.timingSafeEqual(expectedBuf, receivedBuf);
 }
 
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/** Monta o TwiML com uma <Message> por resposta (vazio = não responde nada). */
+export function buildTwiml(replies: string[]): string {
+  return `<?xml version="1.0" encoding="UTF-8"?><Response>${replies
+    .map((r) => `<Message>${escapeXml(r)}</Message>`)
+    .join('')}</Response>`;
+}
+
 /** "whatsapp:+5547999999999" -> "5547999999999" */
 export function digitsOnly(address: string): string {
   return address.replace(/\D/g, '');

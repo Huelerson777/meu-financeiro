@@ -1,5 +1,5 @@
 import * as crypto from 'crypto';
-import { digitsOnly, isValidTwilioSignature, phoneVariants } from './whatsapp-utils';
+import { buildTwiml, digitsOnly, isValidTwilioSignature, phoneVariants } from './whatsapp-utils';
 
 describe('isValidTwilioSignature', () => {
   const token = 'auth-token-de-teste';
@@ -29,6 +29,20 @@ describe('isValidTwilioSignature', () => {
     expect(isValidTwilioSignature(undefined, url, params, sign(params))).toBe(false);
     expect(isValidTwilioSignature(token, undefined, params, sign(params))).toBe(false);
     expect(isValidTwilioSignature(token, url, params, undefined)).toBe(false);
+  });
+});
+
+describe('buildTwiml', () => {
+  it('uma Message por resposta, com XML escapado', () => {
+    expect(buildTwiml(['Lançado: R$ 20 & "mercado" <ok>', 'segunda'])).toBe(
+      '<?xml version="1.0" encoding="UTF-8"?><Response>' +
+        '<Message>Lançado: R$ 20 &amp; &quot;mercado&quot; &lt;ok&gt;</Message>' +
+        '<Message>segunda</Message></Response>',
+    );
+  });
+
+  it('sem respostas devolve Response vazio', () => {
+    expect(buildTwiml([])).toBe('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
   });
 });
 
