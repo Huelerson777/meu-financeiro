@@ -6,6 +6,14 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { CategoriesService } from '../categories/categories.service';
 import { CREATE_TRANSACTION_TOOL } from './create-transaction-tool';
 import { digitsOnly, isValidTwilioSignature, phoneVariants } from './whatsapp-utils';
+import {
+  RECEIPT_FOOTER,
+  RECEIPT_WINDOW_MS,
+  UNDO_LAST_TRANSACTION_TOOL,
+  UPDATE_LAST_TRANSACTION_TOOL,
+  WHATSAPP_NOTE,
+  formatBRL,
+} from './receipt-tools';
 
 const GRAPH_API_VERSION = 'v20.0';
 const GRAPH_API_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
@@ -23,6 +31,20 @@ type IncomingMessage = {
 
 /** Como responder: cada provedor entrega o texto de um jeito. */
 type Reply = (to: string, text: string) => Promise<void>;
+
+/** Último lançamento feito pelo WhatsApp, ainda dentro da janela do recibo. */
+type LastTransaction = {
+  id: string;
+  type: string;
+  description: string;
+  amount: number;
+  date: Date;
+  status: string;
+  accountName: string | null;
+  categoryName: string | null;
+};
+
+type NamedItem = { id: string; name: string };
 
 type AnthropicMessage = { role: 'user' | 'assistant'; content: Anthropic.ContentBlockParam[] };
 
@@ -160,28 +182,36 @@ export class WhatsappService {
     const history: AnthropicMessage[] = (session?.messages as any) ?? [];
     const messages: AnthropicMessage[] = [...history, { role: 'user', content: userContent }];
 
-    const [accounts, categories] = await Promise.all([
+    const [accounts, categories, lastTransaction] = await Promise.all([
       this.prisma.account.findMany({
         where: { userId: user.id, isArchived: false },
         select: { id: true, name: true },
       }),
       this.categoriesService.findAll(user.id),
+      this.findLastWhatsappTransaction(user.id),
     ]);
 
     const response = await this.anthropic.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system: this.buildSystemPrompt(accounts, categories),
+      system: this.buildSystemPrompt(accounts, categories, lastTransaction),
       messages,
-      tools: [CREATE_TRANSACTION_TOOL],
+      tools: [CREATE_TRANSACTION_TOOL, UPDATE_LAST_TRANSACTION_TOOL, UNDO_LAST_TRANSACTION_TOOL],
     });
 
     const toolUse = response.content.find(
       (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
     );
 
-    if (toolUse && toolUse.name === 'create_transaction') {
-      await this.finalizeTransaction(user.id, from, toolUse.input as Record<string, unknown>, accounts, categories, reply);
+    if (toolUse) {
+      const input = toolUse.input as Record<string, unknown>;
+      if (toolUse.name === 'create_transaction') {
+        await this.finalizeTransaction(user.id, from, input, accounts, categories, reply);
+      } else if (toolUse.name === 'update_last_transaction') {
+        await this.updateLastTransaction(user.id, from, input, accounts, categories, lastTransaction, reply);
+      } else if (toolUse.name === 'undo_last_transaction') {
+        await this.undoLastTransaction(user.id, from, lastTransaction, reply);
+      }
       if (session) await this.prisma.whatsappSession.delete({ where: { id: session.id } });
       return;
     }
@@ -239,16 +269,115 @@ export class WhatsappService {
       categoryId: category?.id,
       status: status as 'PAID' | 'PENDING',
       date: `${date}T12:00:00.000Z`,
+      notes: WHATSAPP_NOTE,
     });
 
-    const amountLabel = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    const parts = [description, amountLabel, account.name, category?.name].filter(Boolean);
-    await reply(from, `✅ Lançado: ${parts.join(' — ')}`);
+    const parts = [description, formatBRL(amount), account.name, category?.name].filter(Boolean);
+    await reply(from, `✅ Lançado: ${parts.join(' — ')}\n${RECEIPT_FOOTER}`);
+  }
+
+  /** Último lançamento feito por aqui nas últimas 24h (é o único editável/desfazível). */
+  private async findLastWhatsappTransaction(userId: string): Promise<LastTransaction | null> {
+    const tx = await this.prisma.transaction.findFirst({
+      where: {
+        userId,
+        notes: WHATSAPP_NOTE,
+        createdAt: { gte: new Date(Date.now() - RECEIPT_WINDOW_MS) },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { account: { select: { name: true } }, category: { select: { name: true } } },
+    });
+    if (!tx) return null;
+
+    return {
+      id: tx.id,
+      type: tx.type,
+      description: tx.description,
+      amount: Number(tx.amount),
+      date: tx.date,
+      status: tx.status,
+      accountName: tx.account?.name ?? null,
+      categoryName: tx.category?.name ?? null,
+    };
+  }
+
+  private async undoLastTransaction(
+    userId: string,
+    from: string,
+    last: LastTransaction | null,
+    reply: Reply,
+  ) {
+    if (!last) {
+      await reply(from, 'Não achei nenhum lançamento feito por aqui nas últimas 24h pra desfazer.');
+      return;
+    }
+
+    await this.transactionsService.remove(last.id, userId);
+    const parts = [last.description, formatBRL(last.amount), last.accountName].filter(Boolean);
+    await reply(from, `↩️ Desfeito: ${parts.join(' — ')}`);
+  }
+
+  private async updateLastTransaction(
+    userId: string,
+    from: string,
+    input: Record<string, unknown>,
+    accounts: NamedItem[],
+    categories: NamedItem[],
+    last: LastTransaction | null,
+    reply: Reply,
+  ) {
+    if (!last) {
+      await reply(from, 'Não achei nenhum lançamento feito por aqui nas últimas 24h pra corrigir.');
+      return;
+    }
+
+    // Mesma validação defensiva do create: conta/categoria só se forem do usuário.
+    const dto: Record<string, unknown> = {};
+    const changes: string[] = [];
+
+    const amount = typeof input.amount === 'number' ? input.amount : Number(input.amount);
+    if (input.amount !== undefined && amount > 0 && amount !== last.amount) {
+      dto.amount = amount;
+      changes.push(`valor: ${formatBRL(last.amount)} → ${formatBRL(amount)}`);
+    }
+    if (typeof input.description === 'string' && input.description && input.description !== last.description) {
+      dto.description = input.description;
+      changes.push(`descrição: ${last.description} → ${input.description}`);
+    }
+    const account = accounts.find((a) => a.id === input.accountId);
+    if (account && account.name !== last.accountName) {
+      dto.accountId = account.id;
+      changes.push(`conta: ${last.accountName ?? '—'} → ${account.name}`);
+    }
+    const category = categories.find((c) => c.id === input.categoryId);
+    if (category && category.name !== last.categoryName) {
+      dto.categoryId = category.id;
+      changes.push(`categoria: ${last.categoryName ?? '—'} → ${category.name}`);
+    }
+    if (typeof input.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
+      dto.date = `${input.date}T12:00:00.000Z`;
+      changes.push(`data: ${input.date.split('-').reverse().join('/')}`);
+    }
+    if (input.status === 'PAID' || input.status === 'PENDING') {
+      if (input.status !== last.status) {
+        dto.status = input.status;
+        changes.push(`status: ${input.status === 'PAID' ? 'pago' : 'pendente'}`);
+      }
+    }
+
+    if (changes.length === 0) {
+      await reply(from, 'Não entendi o que mudar. Diga, por exemplo: "o valor é 25" ou "era na conta Inter".');
+      return;
+    }
+
+    await this.transactionsService.update(last.id, userId, dto);
+    await reply(from, `✏️ Corrigido (${last.description}):\n• ${changes.join('\n• ')}`);
   }
 
   private buildSystemPrompt(
     accounts: { id: string; name: string }[],
     categories: { id: string; name: string }[],
+    lastTransaction: LastTransaction | null,
   ): string {
     const accountsList = accounts.map((a) => `- ${a.name} (id: ${a.id})`).join('\n') || '(nenhuma conta cadastrada)';
     const categoriesList = categories.map((c) => `- ${c.name} (id: ${c.id})`).join('\n') || '(nenhuma categoria cadastrada)';
@@ -263,12 +392,19 @@ ${categoriesList}
 
 Data de hoje: ${new Date().toISOString().split('T')[0]}
 
+${
+  lastTransaction
+    ? `Último lançamento feito por aqui (ainda corrigível por 24h): ${lastTransaction.description}, ${formatBRL(lastTransaction.amount)}, conta ${lastTransaction.accountName ?? 'sem conta'}, categoria ${lastTransaction.categoryName ?? 'sem categoria'}, status ${lastTransaction.status}.`
+    : 'Nenhum lançamento recente feito por aqui (nada pra corrigir ou desfazer).'
+}
+
 Regras:
 - Se vier uma foto de comprovante, leia dela o valor, o estabelecimento/descrição e a data.
 - Categoria é opcional — use se ficar óbvio pela descrição, senão deixe de fora.
 - Conta é obrigatória. Se houver mais de uma conta e não estiver claro qual usar, PERGUNTE antes de chamar a ferramenta (responda só com texto, sem tool call).
 - Se faltar o valor ou a descrição, pergunte.
 - Assim que tiver tipo, descrição, valor e conta definidos, chame create_transaction — não peça confirmação por texto antes, a confirmação final quem manda é o sistema depois de lançar.
+- Se o usuário disser que errou algo do último lançamento ("o valor é 25", "era na Inter", "na verdade foi ontem"), chame update_last_transaction só com o que muda. Se pedir pra desfazer/cancelar/apagar o que acabou de lançar, chame undo_last_transaction. Essas duas só valem pro último lançamento acima; qualquer outro lançamento só se mexe pelo app.
 - Respostas em português, curtas e diretas (é WhatsApp).`;
   }
 

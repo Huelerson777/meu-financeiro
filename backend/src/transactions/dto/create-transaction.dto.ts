@@ -24,4 +24,8 @@ export class CreateTransactionDto {
 
   @IsDateString()
   date: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
