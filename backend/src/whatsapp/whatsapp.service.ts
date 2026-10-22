@@ -308,22 +308,28 @@ Regras:
     const token = process.env.TWILIO_AUTH_TOKEN;
     const fromNumber = process.env.TWILIO_WHATSAPP_FROM;
 
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64'),
-      },
-      body: new URLSearchParams({
-        From: `whatsapp:${fromNumber}`,
-        To: `whatsapp:+${digitsOnly(to)}`,
-        Body: text,
-      }),
-    });
+    // A Twilio entrega celulares brasileiros num formato (com ou sem o 9º
+    // dígito) e às vezes só aceita o envio no outro: tenta as duas formas.
+    let lastError = '';
+    for (const number of phoneVariants(to)) {
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64'),
+        },
+        body: new URLSearchParams({
+          From: `whatsapp:${fromNumber}`,
+          To: `whatsapp:+${number}`,
+          Body: text,
+        }),
+      });
 
-    if (!res.ok) {
-      this.logger.error(`Falha ao enviar mensagem WhatsApp (Twilio) para ${to}: ${res.status} ${await res.text()}`);
+      if (res.ok) return;
+      lastError = `${number}: ${res.status} ${await res.text()}`;
     }
+
+    this.logger.error(`Falha ao enviar mensagem WhatsApp (Twilio) para ${to} — ${lastError}`);
   };
 
   private async downloadTwilioMedia(url: string, mimeType: string): Promise<{ data: string; mimeType: string }> {
