@@ -23,6 +23,10 @@
 | `WHATSAPP_PHONE_NUMBER_ID` | ID do número do WhatsApp associado ao app | painel do produto WhatsApp |
 | `WHATSAPP_APP_SECRET` | App Secret (App Settings → Basic) — valida a assinatura HMAC dos webhooks | — |
 | `WHATSAPP_VERIFY_TOKEN` | String qualquer escolhida por você, repetida na configuração do webhook no dashboard da Meta | string aleatória |
+| `TWILIO_ACCOUNT_SID` | Account SID da Twilio (alternativa à Meta direta; webhook em `POST /api/whatsapp/twilio`) | console.twilio.com |
+| `TWILIO_AUTH_TOKEN` | Auth Token da Twilio — valida `X-Twilio-Signature` e autentica o envio. Secreto | console.twilio.com |
+| `TWILIO_WHATSAPP_FROM` | Número WhatsApp da Twilio que responde (sandbox: `+14155238886`) | Messaging → Try it out → WhatsApp |
+| `TWILIO_WEBHOOK_URL` | URL pública **exata** colada no console da Twilio (a assinatura é calculada sobre ela) | `https://<backend>.onrender.com/api/whatsapp/twilio` |
 | `ANTHROPIC_API_KEY` | Chave da API da Anthropic, usada pra interpretar as mensagens/fotos do WhatsApp | console.anthropic.com |
 | `ANTHROPIC_MODEL` | Modelo usado na interpretação (opcional, tem default) | `claude-sonnet-5-5` |
 
