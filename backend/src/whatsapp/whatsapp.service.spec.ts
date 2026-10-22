@@ -1,5 +1,11 @@
 import { WhatsappService } from './whatsapp.service';
+import { isTranscriptionConfigured, transcribeAudio } from './transcription';
 import { RECEIPT_FOOTER, WHATSAPP_NOTE, formatBRL } from './receipt-tools';
+
+jest.mock('./transcription', () => ({
+  isTranscriptionConfigured: jest.fn(),
+  transcribeAudio: jest.fn(),
+}));
 
 const USER = { id: 'user-1' };
 const ACCOUNTS = [
@@ -174,5 +180,72 @@ describe('WhatsappService — recibo com corrigir/desfazer', () => {
 
     expect(transactions.update).not.toHaveBeenCalled();
     expect(replies[0]).toContain('Não achei nenhum lançamento');
+  });
+});
+
+describe('WhatsappService — áudio', () => {
+  const originalFetch = global.fetch;
+  const audioParams = {
+    From: 'whatsapp:+5549988048805',
+    Body: '',
+    NumMedia: '1',
+    MediaContentType0: 'audio/ogg',
+    MediaUrl0: 'https://api.twilio.com/media/abc',
+  };
+
+  beforeEach(() => {
+    (isTranscriptionConfigured as jest.Mock).mockReset();
+    (transcribeAudio as jest.Mock).mockReset();
+    global.fetch = jest.fn().mockResolvedValue({ arrayBuffer: async () => new TextEncoder().encode('ogg-bytes').buffer }) as unknown as typeof fetch;
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it('transcreve o áudio e trata o texto como a mensagem do usuário', async () => {
+    const { service, create } = setup();
+    (isTranscriptionConfigured as jest.Mock).mockReturnValue(true);
+    (transcribeAudio as jest.Mock).mockResolvedValue('gastei vinte no mercado');
+    create.mockResolvedValue(textOnly('Qual conta?'));
+
+    const replies = await service.handleTwilioPayload(audioParams);
+
+    expect(transcribeAudio).toHaveBeenCalledWith(expect.any(Buffer), 'audio/ogg');
+    expect(create.mock.calls[0][0].messages.at(-1).content).toEqual([{ type: 'text', text: 'gastei vinte no mercado' }]);
+    expect(replies).toEqual(['Qual conta?']);
+  });
+
+  it('avisa que não ouve áudio quando a transcrição não está configurada', async () => {
+    const { service, create } = setup();
+    (isTranscriptionConfigured as jest.Mock).mockReturnValue(false);
+
+    const replies = await service.handleTwilioPayload(audioParams);
+
+    expect(create).not.toHaveBeenCalled();
+    expect(transcribeAudio).not.toHaveBeenCalled();
+    expect(replies[0]).toContain('Ainda não consigo ouvir áudios');
+  });
+
+  it('pede pra repetir quando a transcrição vem vazia', async () => {
+    const { service, create } = setup();
+    (isTranscriptionConfigured as jest.Mock).mockReturnValue(true);
+    (transcribeAudio as jest.Mock).mockResolvedValue('');
+
+    const replies = await service.handleTwilioPayload(audioParams);
+
+    expect(create).not.toHaveBeenCalled();
+    expect(replies[0]).toContain('Não consegui entender o áudio');
+  });
+
+  it('responde com erro amigável se o serviço de transcrição falhar', async () => {
+    const { service, create } = setup();
+    (isTranscriptionConfigured as jest.Mock).mockReturnValue(true);
+    (transcribeAudio as jest.Mock).mockRejectedValue(new Error('boom'));
+
+    const replies = await service.handleTwilioPayload(audioParams);
+
+    expect(create).not.toHaveBeenCalled();
+    expect(replies[0]).toContain('não consegui processar');
   });
 });

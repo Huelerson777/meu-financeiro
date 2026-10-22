@@ -27,6 +27,9 @@
 | `TWILIO_AUTH_TOKEN` | Auth Token da Twilio — valida `X-Twilio-Signature` e autentica o envio. Secreto | console.twilio.com |
 | `TWILIO_WHATSAPP_FROM` | Número WhatsApp da Twilio que responde (sandbox: `+14155238886`) | Messaging → Try it out → WhatsApp |
 | `TWILIO_WEBHOOK_URL` | URL pública **exata** colada no console da Twilio (a assinatura é calculada sobre ela) | `https://<backend>.onrender.com/api/whatsapp/twilio` |
+| `TRANSCRIPTION_API_KEY` | Chave do serviço de transcrição de áudio (opcional). Sem ela o bot responde que ainda não ouve áudios. Secreta | console.groq.com (grátis) ou platform.openai.com |
+| `TRANSCRIPTION_API_URL` | Endpoint compatível com a OpenAI (opcional; default OpenAI) | `https://api.groq.com/openai/v1/audio/transcriptions` |
+| `TRANSCRIPTION_MODEL` | Modelo de transcrição (opcional; default `whisper-1`) | `whisper-large-v3-turbo` (Groq) |
 | `ANTHROPIC_API_KEY` | Chave da API da Anthropic, usada pra interpretar as mensagens/fotos do WhatsApp | console.anthropic.com |
 | `ANTHROPIC_MODEL` | Modelo usado na interpretação (opcional, tem default) | `claude-sonnet-5-5` |
 
