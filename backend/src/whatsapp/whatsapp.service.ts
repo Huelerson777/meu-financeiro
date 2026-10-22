@@ -4,7 +4,16 @@ import Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { CategoriesService } from '../categories/categories.service';
+import { DashboardService } from '../dashboard/dashboard.service';
+import { ReportsService } from '../reports/reports.service';
 import { CREATE_TRANSACTION_TOOL } from './create-transaction-tool';
+import {
+  MAX_QUERY_ROUNDS,
+  QUERY_TOOLS,
+  QUERY_TOOL_NAMES,
+  parseIsoDate,
+  todayInBrazil,
+} from './query-tools';
 import { isTranscriptionConfigured, transcribeAudio } from './transcription';
 import { digitsOnly, isValidTwilioSignature, phoneVariants } from './whatsapp-utils';
 import {
@@ -58,6 +67,8 @@ export class WhatsappService {
     private prisma: PrismaService,
     private transactionsService: TransactionsService,
     private categoriesService: CategoriesService,
+    private dashboardService: DashboardService,
+    private reportsService: ReportsService,
   ) {}
 
   /**
@@ -198,16 +209,38 @@ export class WhatsappService {
       this.findLastWhatsappTransaction(user.id),
     ]);
 
-    const response = await this.anthropic.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: this.buildSystemPrompt(accounts, categories, lastTransaction),
-      messages,
-      tools: [CREATE_TRANSACTION_TOOL, UPDATE_LAST_TRANSACTION_TOOL, UNDO_LAST_TRANSACTION_TOOL],
-    });
+    const system = this.buildSystemPrompt(accounts, categories, lastTransaction);
+    const tools = [CREATE_TRANSACTION_TOOL, UPDATE_LAST_TRANSACTION_TOOL, UNDO_LAST_TRANSACTION_TOOL, ...QUERY_TOOLS];
+    const ask = (conversation: AnthropicMessage[]) =>
+      this.anthropic.messages.create({ model: MODEL, max_tokens: 1024, system, messages: conversation, tools });
+
+    // As idas e vindas das ferramentas de consulta ficam só nesta conversa de
+    // trabalho; o histórico salvo (messages) guarda apenas o que o usuário e
+    // o assistente disseram de fato.
+    const working: AnthropicMessage[] = [...messages];
+    let response = await ask(working);
+
+    for (let round = 0; round < MAX_QUERY_ROUNDS; round++) {
+      const toolUses = response.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use');
+      const queries = toolUses.filter((b) => QUERY_TOOL_NAMES.has(b.name));
+      if (queries.length === 0 || queries.length < toolUses.length) break;
+
+      working.push({ role: 'assistant', content: response.content });
+      working.push({
+        role: 'user',
+        content: await Promise.all(
+          queries.map(async (q) => ({
+            type: 'tool_result' as const,
+            tool_use_id: q.id,
+            content: await this.runQueryTool(user.id, q.name, q.input as Record<string, unknown>),
+          })),
+        ),
+      });
+      response = await ask(working);
+    }
 
     const toolUse = response.content.find(
-      (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
+      (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use' && !QUERY_TOOL_NAMES.has(block.name),
     );
 
     if (toolUse) {
@@ -223,8 +256,19 @@ export class WhatsappService {
       return;
     }
 
-    // Sem chamada de ferramenta: o texto é uma pergunta/comentário pro usuário.
-    const updatedMessages: AnthropicMessage[] = [...messages, { role: 'assistant', content: response.content }];
+    // Sem chamada de ferramenta de escrita: o texto é resposta/pergunta pro usuário.
+    const textBlocks = response.content.filter((block): block is Anthropic.TextBlock => block.type === 'text');
+    const textReply = textBlocks
+      .map((block) => block.text)
+      .join('\n')
+      .trim();
+
+    if (!textReply) {
+      await reply(from, 'Não consegui buscar isso agora. Pode tentar de novo?');
+      return;
+    }
+
+    const updatedMessages: AnthropicMessage[] = [...messages, { role: 'assistant', content: textBlocks }];
     if (session) {
       await this.prisma.whatsappSession.update({
         where: { id: session.id },
@@ -236,13 +280,103 @@ export class WhatsappService {
       });
     }
 
-    const textReply = response.content
-      .filter((block): block is Anthropic.TextBlock => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
-      .trim();
+    await reply(from, textReply);
+  }
 
-    if (textReply) await reply(from, textReply);
+  /** Executa uma ferramenta de consulta e devolve o resultado como JSON (ou {error}) pro modelo. */
+  private async runQueryTool(userId: string, name: string, input: Record<string, unknown>): Promise<string> {
+    try {
+      return JSON.stringify(await this.queryData(userId, name, input));
+    } catch (err) {
+      this.logger.error(`Falha na consulta ${name}`, err);
+      return JSON.stringify({ error: 'Não foi possível consultar esse dado agora.' });
+    }
+  }
+
+  private async queryData(userId: string, name: string, input: Record<string, unknown>) {
+    const type = input.type === 'INCOME' ? 'INCOME' : 'EXPENSE';
+
+    if (name === 'get_month_summary') {
+      const month = typeof input.month === 'number' && input.month >= 1 && input.month <= 12 ? input.month : undefined;
+      const year = typeof input.year === 'number' && input.year >= 2000 && input.year <= 2100 ? input.year : undefined;
+      const summary = await this.dashboardService.getSummary(userId, month, year);
+      return {
+        mes: month ?? 'atual',
+        ano: year ?? 'atual',
+        saldoAtualTotal: summary.currentBalance,
+        receitas: summary.totalIncome,
+        despesas: summary.totalExpense,
+        investido: summary.totalInvested,
+        quantoSobrou: summary.leftovers,
+        variacaoVsMesAnteriorPct: summary.comparison,
+      };
+    }
+
+    if (name === 'get_spending_by_category') {
+      const report = await this.reportsService.getByCategory(
+        userId,
+        parseIsoDate(input.startDate),
+        parseIsoDate(input.endDate),
+        type,
+      );
+      return {
+        de: report.startDate,
+        ate: report.endDate,
+        tipo: report.type,
+        total: report.total,
+        categorias: report.items.slice(0, 10).map((i) => ({ nome: i.name, valor: i.amount, percentual: i.percentage })),
+      };
+    }
+
+    if (name === 'search_transactions') {
+      const today = todayInBrazil();
+      const start = parseIsoDate(input.startDate) ?? `${today.slice(0, 8)}01`;
+      const end = parseIsoDate(input.endDate) ?? today;
+      const where = {
+        userId,
+        status: 'PAID' as const,
+        type: type as 'INCOME' | 'EXPENSE',
+        date: { gte: new Date(`${start}T00:00:00.000Z`), lte: new Date(`${end}T23:59:59.999Z`) },
+        ...(typeof input.categoryId === 'string' && input.categoryId ? { categoryId: input.categoryId } : {}),
+        ...(typeof input.text === 'string' && input.text.trim()
+          ? { description: { contains: input.text.trim(), mode: 'insensitive' as const } }
+          : {}),
+      };
+
+      const [agg, recent] = await Promise.all([
+        this.prisma.transaction.aggregate({ where, _sum: { amount: true }, _count: true }),
+        this.prisma.transaction.findMany({
+          where,
+          orderBy: { date: 'desc' },
+          take: 8,
+          select: { description: true, amount: true, date: true, category: { select: { name: true } } },
+        }),
+      ]);
+
+      return {
+        de: start,
+        ate: end,
+        tipo: type,
+        total: Number(agg._sum.amount ?? 0),
+        quantidade: agg._count,
+        ultimos: recent.map((t) => ({
+          descricao: t.description,
+          valor: Number(t.amount),
+          data: t.date.toISOString().slice(0, 10),
+          categoria: t.category?.name ?? null,
+        })),
+      };
+    }
+
+    if (name === 'get_account_balances') {
+      const accounts = await this.prisma.account.findMany({
+        where: { userId, isArchived: false },
+        select: { name: true, type: true, currentBalance: true },
+      });
+      return accounts.map((a) => ({ conta: a.name, tipo: a.type, saldo: Number(a.currentBalance) }));
+    }
+
+    return { error: 'Consulta desconhecida' };
   }
 
   private async finalizeTransaction(
@@ -259,7 +393,7 @@ export class WhatsappService {
     const account = accounts.find((a) => a.id === input.accountId);
     const category = typeof input.categoryId === 'string' ? categories.find((c) => c.id === input.categoryId) : undefined;
     const status = input.status === 'PENDING' ? 'PENDING' : 'PAID';
-    const date = typeof input.date === 'string' && input.date ? input.date : new Date().toISOString().split('T')[0];
+    const date = typeof input.date === 'string' && input.date ? input.date : todayInBrazil();
 
     // Validação defensiva: nunca confia cegamente no que o modelo mandou —
     // conta/categoria precisam ser exatamente uma das que pertencem ao usuário.
@@ -397,7 +531,7 @@ ${accountsList}
 Categorias disponíveis:
 ${categoriesList}
 
-Data de hoje: ${new Date().toISOString().split('T')[0]}
+Data de hoje: ${todayInBrazil()}
 
 ${
   lastTransaction
@@ -412,6 +546,7 @@ Regras:
 - Se faltar o valor ou a descrição, pergunte.
 - Assim que tiver tipo, descrição, valor e conta definidos, chame create_transaction — não peça confirmação por texto antes, a confirmação final quem manda é o sistema depois de lançar.
 - Se o usuário disser que errou algo do último lançamento ("o valor é 25", "era na Inter", "na verdade foi ontem"), chame update_last_transaction só com o que muda. Se pedir pra desfazer/cancelar/apagar o que acabou de lançar, chame undo_last_transaction. Essas duas só valem pro último lançamento acima; qualquer outro lançamento só se mexe pelo app.
+- Perguntas sobre gastos, receitas, saldo ou "quanto sobrou" se respondem com as ferramentas de consulta (get_month_summary, get_spending_by_category, search_transactions, get_account_balances). Nunca invente ou estime valores: use só o que a ferramenta devolveu. Datas sempre AAAA-MM-DD; "esse mês" = do dia 1 até hoje; "mês passado" = o mês anterior inteiro. Só lançamentos já pagos entram nas consultas; diga isso se for relevante. Valores em reais (R$ 1.234,56).
 - Respostas em português, curtas e diretas (é WhatsApp).`;
   }
 

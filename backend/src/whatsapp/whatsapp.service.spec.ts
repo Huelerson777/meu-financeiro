@@ -1,5 +1,6 @@
 import { WhatsappService } from './whatsapp.service';
 import { isTranscriptionConfigured, transcribeAudio } from './transcription';
+import { MAX_QUERY_ROUNDS } from './query-tools';
 import { RECEIPT_FOOTER, WHATSAPP_NOTE, formatBRL } from './receipt-tools';
 
 jest.mock('./transcription', () => ({
@@ -42,7 +43,11 @@ function setup(options: { lastTx?: typeof LAST_TX | null } = {}) {
   const prisma = {
     user: { findFirst: jest.fn().mockResolvedValue(USER) },
     account: { findMany: jest.fn().mockResolvedValue(ACCOUNTS) },
-    transaction: { findFirst: jest.fn().mockResolvedValue(options.lastTx === undefined ? null : options.lastTx) },
+    transaction: {
+      findFirst: jest.fn().mockResolvedValue(options.lastTx === undefined ? null : options.lastTx),
+      aggregate: jest.fn().mockResolvedValue({ _sum: { amount: 0 }, _count: 0 }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     whatsappSession: {
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({}),
@@ -56,15 +61,41 @@ function setup(options: { lastTx?: typeof LAST_TX | null } = {}) {
     remove: jest.fn().mockResolvedValue({ id: 'tx-1' }),
   };
   const categories = { findAll: jest.fn().mockResolvedValue(CATEGORIES) };
+  const dashboard = {
+    getSummary: jest.fn().mockResolvedValue({
+      currentBalance: 5000,
+      totalIncome: 8000,
+      totalExpense: 3000,
+      totalInvested: 500,
+      leftovers: 4500,
+      comparison: { expenseChangePct: 10 },
+      monthlyFlow: ['não deve ir pro modelo'],
+    }),
+  };
+  const reports = {
+    getByCategory: jest.fn().mockResolvedValue({
+      startDate: '2026-10-01',
+      endDate: '2026-10-31',
+      type: 'EXPENSE',
+      total: 300,
+      items: [{ name: 'Mercado', amount: 200, percentage: 66.7, color: '#fff', icon: 'x', categoryId: 'c' }],
+    }),
+  };
 
-  const service = new WhatsappService(prisma as any, transactions as any, categories as any);
+  const service = new WhatsappService(
+    prisma as any,
+    transactions as any,
+    categories as any,
+    dashboard as any,
+    reports as any,
+  );
   const create = jest.fn();
   (service as any).anthropic = { messages: { create } };
 
   const send = (body: string) =>
     service.handleTwilioPayload({ From: 'whatsapp:+5549988048805', Body: body, NumMedia: '0' });
 
-  return { service, prisma, transactions, create, send };
+  return { service, prisma, transactions, dashboard, reports, create, send };
 }
 
 describe('WhatsappService — recibo com corrigir/desfazer', () => {
@@ -105,6 +136,10 @@ describe('WhatsappService — recibo com corrigir/desfazer', () => {
       'create_transaction',
       'update_last_transaction',
       'undo_last_transaction',
+      'get_month_summary',
+      'get_spending_by_category',
+      'search_transactions',
+      'get_account_balances',
     ]);
   });
 
@@ -247,5 +282,128 @@ describe('WhatsappService — áudio', () => {
 
     expect(create).not.toHaveBeenCalled();
     expect(replies[0]).toContain('não consegui processar');
+  });
+});
+
+describe('WhatsappService — consultas', () => {
+  const queryTurn = (name: string, input: Record<string, unknown> = {}) => ({
+    content: [{ type: 'tool_use', id: `q-${name}`, name, input }],
+  });
+
+  it('executa a consulta, devolve o resultado ao modelo e responde com o texto final', async () => {
+    const { send, create, dashboard } = setup();
+    create
+      .mockResolvedValueOnce(queryTurn('get_month_summary', { month: 9, year: 2026 }))
+      .mockResolvedValueOnce(textOnly('Sobraram R$ 4.500,00 em setembro.'));
+
+    const replies = await send('quanto sobrou em setembro?');
+
+    expect(dashboard.getSummary).toHaveBeenCalledWith(USER.id, 9, 2026);
+    expect(create).toHaveBeenCalledTimes(2);
+    const secondCall = create.mock.calls[1][0].messages;
+    const toolResult = secondCall.at(-1).content[0];
+    expect(toolResult.type).toBe('tool_result');
+    expect(toolResult.tool_use_id).toBe('q-get_month_summary');
+    const payload = JSON.parse(toolResult.content);
+    expect(payload.quantoSobrou).toBe(4500);
+    expect(payload.monthlyFlow).toBeUndefined();
+    expect(replies).toEqual(['Sobraram R$ 4.500,00 em setembro.']);
+  });
+
+  it('guarda no histórico só o texto, sem as idas e vindas da ferramenta', async () => {
+    const { send, create, prisma } = setup();
+    create
+      .mockResolvedValueOnce(queryTurn('get_account_balances'))
+      .mockResolvedValueOnce(textOnly('Inter: R$ 100,00'));
+
+    await send('qual meu saldo?');
+
+    const saved = prisma.whatsappSession.create.mock.calls[0][0].data.messages;
+    expect(saved).toHaveLength(2);
+    expect(saved[0]).toEqual({ role: 'user', content: [{ type: 'text', text: 'qual meu saldo?' }] });
+    expect(saved[1].role).toBe('assistant');
+    expect(JSON.stringify(saved)).not.toContain('tool_use');
+  });
+
+  it('busca por texto na descrição, só pagos, ignorando datas inválidas', async () => {
+    const { send, create, prisma } = setup();
+    prisma.transaction.aggregate.mockResolvedValue({ _sum: { amount: 150.5 }, _count: 3 });
+    create
+      .mockResolvedValueOnce(
+        queryTurn('search_transactions', { text: 'ifood', startDate: '2026-10-01', endDate: 'amanhã' }),
+      )
+      .mockResolvedValueOnce(textOnly('R$ 150,50 no iFood'));
+
+    await send('quanto gastei no ifood?');
+
+    const where = prisma.transaction.aggregate.mock.calls[0][0].where;
+    expect(where.userId).toBe(USER.id);
+    expect(where.status).toBe('PAID');
+    expect(where.type).toBe('EXPENSE');
+    expect(where.description).toEqual({ contains: 'ifood', mode: 'insensitive' });
+    expect(where.date.gte).toEqual(new Date('2026-10-01T00:00:00.000Z'));
+    expect(where.date.lte).toBeInstanceOf(Date);
+    const payload = JSON.parse(create.mock.calls[1][0].messages.at(-1).content[0].content);
+    expect(payload.total).toBe(150.5);
+    expect(payload.quantidade).toBe(3);
+  });
+
+  it('consulta por categoria repassa período e tipo validados', async () => {
+    const { send, create, reports } = setup();
+    create
+      .mockResolvedValueOnce(
+        queryTurn('get_spending_by_category', { startDate: '2026-08-01', endDate: '2026-08-31', type: 'INCOME' }),
+      )
+      .mockResolvedValueOnce(textOnly('ok'));
+
+    await send('de onde veio minha renda em agosto?');
+
+    expect(reports.getByCategory).toHaveBeenCalledWith(USER.id, '2026-08-01', '2026-08-31', 'INCOME');
+  });
+
+  it('erro na consulta vira {error} pro modelo, sem derrubar a conversa', async () => {
+    const { send, create, dashboard } = setup();
+    dashboard.getSummary.mockRejectedValue(new Error('db fora do ar'));
+    create
+      .mockResolvedValueOnce(queryTurn('get_month_summary'))
+      .mockResolvedValueOnce(textOnly('Não consegui consultar agora.'));
+
+    const replies = await send('quanto sobrou?');
+
+    const payload = JSON.parse(create.mock.calls[1][0].messages.at(-1).content[0].content);
+    expect(payload.error).toBeDefined();
+    expect(replies).toEqual(['Não consegui consultar agora.']);
+  });
+
+  it('limita as rodadas de consulta e usa mensagem de fallback', async () => {
+    const { send, create } = setup();
+    create.mockResolvedValue(queryTurn('get_account_balances'));
+
+    const replies = await send('saldo?');
+
+    expect(create).toHaveBeenCalledTimes(1 + MAX_QUERY_ROUNDS);
+    expect(replies).toEqual(['Não consegui buscar isso agora. Pode tentar de novo?']);
+  });
+
+  it('se o modelo pedir consulta junto com escrita, executa só a escrita', async () => {
+    const { send, create, transactions, dashboard } = setup();
+    create.mockResolvedValue({
+      content: [
+        { type: 'tool_use', id: 'a', name: 'get_month_summary', input: {} },
+        {
+          type: 'tool_use',
+          id: 'b',
+          name: 'create_transaction',
+          input: { type: 'EXPENSE', description: 'Uber', amount: 30, accountId: 'acc-inter' },
+        },
+      ],
+    });
+
+    const replies = await send('gastei 30 de uber na inter');
+
+    expect(dashboard.getSummary).not.toHaveBeenCalled();
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(transactions.create).toHaveBeenCalledTimes(1);
+    expect(replies[0]).toContain('✅ Lançado: Uber');
   });
 });
