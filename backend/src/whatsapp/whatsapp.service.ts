@@ -5,10 +5,23 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { CategoriesService } from '../categories/categories.service';
 import { CREATE_TRANSACTION_TOOL } from './create-transaction-tool';
+import { digitsOnly, isValidTwilioSignature, phoneVariants } from './whatsapp-utils';
 
 const GRAPH_API_VERSION = 'v20.0';
 const GRAPH_API_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
+
+/** Mensagem recebida já normalizada, independente do provedor (Meta ou Twilio). */
+type IncomingMessage = {
+  from: string;
+  type: 'text' | 'image' | 'other';
+  text?: string;
+  caption?: string;
+  loadMedia?: () => Promise<{ data: string; mimeType: string }>;
+};
+
+/** Como responder: cada provedor entrega o texto de um jeito. */
+type Reply = (to: string, text: string) => Promise<void>;
 
 type AnthropicMessage = { role: 'user' | 'assistant'; content: Anthropic.ContentBlockParam[] };
 
@@ -40,37 +53,82 @@ export class WhatsappService {
     return crypto.timingSafeEqual(expectedBuf, receivedBuf);
   }
 
+  /** Webhook da Meta (WhatsApp Cloud API). */
   async handleWebhookPayload(body: any) {
     const entries = body?.entry ?? [];
     for (const entry of entries) {
       for (const change of entry.changes ?? []) {
         const messages = change.value?.messages ?? [];
         for (const message of messages) {
-          await this.handleIncomingMessage(message).catch(async (err) => {
-            this.logger.error(`Erro processando mensagem de ${message.from}`, err);
-            await this.sendWhatsappMessage(
-              message.from,
-              'Ops, não consegui processar essa mensagem. Pode tentar de novo?',
-            ).catch(() => {});
-          });
+          await this.processMessage(this.normalizeMetaMessage(message), this.replyViaMeta);
         }
       }
     }
   }
 
-  private async handleIncomingMessage(message: any) {
-    const from = message.from as string;
+  /** Webhook da Twilio (form-urlencoded). Valida a assinatura antes de processar. */
+  verifyTwilioSignature(url: string | undefined, params: Record<string, unknown>, signature: string | undefined) {
+    return isValidTwilioSignature(process.env.TWILIO_AUTH_TOKEN, url, params, signature);
+  }
 
-    const user = await this.prisma.user.findUnique({ where: { whatsappNumber: from } });
+  async handleTwilioPayload(params: Record<string, string>) {
+    await this.processMessage(this.normalizeTwilioMessage(params), this.replyViaTwilio);
+  }
+
+  private normalizeMetaMessage(message: any): IncomingMessage {
+    if (message.type === 'text') {
+      return { from: message.from, type: 'text', text: message.text?.body ?? '' };
+    }
+    if (message.type === 'image') {
+      return {
+        from: message.from,
+        type: 'image',
+        caption: message.image.caption,
+        loadMedia: () => this.downloadMetaMedia(message.image.id),
+      };
+    }
+    return { from: message.from, type: 'other' };
+  }
+
+  private normalizeTwilioMessage(params: Record<string, string>): IncomingMessage {
+    const from = digitsOnly(params.From ?? '');
+    const numMedia = Number(params.NumMedia ?? 0);
+    const mediaType = params.MediaContentType0 ?? '';
+
+    if (numMedia > 0 && mediaType.startsWith('image/')) {
+      return {
+        from,
+        type: 'image',
+        caption: params.Body || undefined,
+        loadMedia: () => this.downloadTwilioMedia(params.MediaUrl0, mediaType),
+      };
+    }
+    if (numMedia === 0) {
+      return { from, type: 'text', text: params.Body ?? '' };
+    }
+    return { from, type: 'other' };
+  }
+
+  private async processMessage(message: IncomingMessage, reply: Reply) {
+    await this.handleIncomingMessage(message, reply).catch(async (err) => {
+      this.logger.error(`Erro processando mensagem de ${message.from}`, err);
+      await reply(message.from, 'Ops, não consegui processar essa mensagem. Pode tentar de novo?').catch(() => {});
+    });
+  }
+
+  private async handleIncomingMessage(message: IncomingMessage, reply: Reply) {
+    const from = message.from;
+
+    const user = await this.prisma.user.findFirst({ where: { whatsappNumber: { in: phoneVariants(from) } } });
     if (!user) {
-      await this.sendWhatsappMessage(
+      await reply(
         from,
         'Esse número não está vinculado a nenhuma conta PouPay. Cadastre-o em Configurações → Perfil no app.',
       );
       return;
     }
 
-    const userContent = await this.buildUserContent(message);
+    const userContent = await this.buildUserContent(message, reply);
     if (!userContent) return;
 
     const session = await this.prisma.whatsappSession.findFirst({
@@ -100,7 +158,7 @@ export class WhatsappService {
     );
 
     if (toolUse && toolUse.name === 'create_transaction') {
-      await this.finalizeTransaction(user.id, from, toolUse.input as Record<string, unknown>, accounts, categories);
+      await this.finalizeTransaction(user.id, from, toolUse.input as Record<string, unknown>, accounts, categories, reply);
       if (session) await this.prisma.whatsappSession.delete({ where: { id: session.id } });
       return;
     }
@@ -124,7 +182,7 @@ export class WhatsappService {
       .join('\n')
       .trim();
 
-    if (textReply) await this.sendWhatsappMessage(from, textReply);
+    if (textReply) await reply(from, textReply);
   }
 
   private async finalizeTransaction(
@@ -133,6 +191,7 @@ export class WhatsappService {
     input: Record<string, unknown>,
     accounts: { id: string; name: string }[],
     categories: { id: string; name: string }[],
+    reply: Reply,
   ) {
     const type = input.type === 'INCOME' ? 'INCOME' : input.type === 'EXPENSE' ? 'EXPENSE' : null;
     const description = typeof input.description === 'string' ? input.description : null;
@@ -145,7 +204,7 @@ export class WhatsappService {
     // Validação defensiva: nunca confia cegamente no que o modelo mandou —
     // conta/categoria precisam ser exatamente uma das que pertencem ao usuário.
     if (!type || !description || !amount || amount <= 0 || !account) {
-      await this.sendWhatsappMessage(from, 'Não consegui confirmar os dados do lançamento. Pode reenviar com mais detalhes?');
+      await reply(from, 'Não consegui confirmar os dados do lançamento. Pode reenviar com mais detalhes?');
       return;
     }
 
@@ -161,7 +220,7 @@ export class WhatsappService {
 
     const amountLabel = amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const parts = [description, amountLabel, account.name, category?.name].filter(Boolean);
-    await this.sendWhatsappMessage(from, `✅ Lançado: ${parts.join(' — ')}`);
+    await reply(from, `✅ Lançado: ${parts.join(' — ')}`);
   }
 
   private buildSystemPrompt(
@@ -190,28 +249,28 @@ Regras:
 - Respostas em português, curtas e diretas (é WhatsApp).`;
   }
 
-  private async buildUserContent(message: any): Promise<Anthropic.ContentBlockParam[] | null> {
+  private async buildUserContent(message: IncomingMessage, reply: Reply): Promise<Anthropic.ContentBlockParam[] | null> {
     if (message.type === 'text') {
-      return [{ type: 'text', text: message.text?.body ?? '' }];
+      return [{ type: 'text', text: message.text ?? '' }];
     }
 
-    if (message.type === 'image') {
-      const { data, mimeType } = await this.downloadMedia(message.image.id);
+    if (message.type === 'image' && message.loadMedia) {
+      const { data, mimeType } = await message.loadMedia();
       const content: Anthropic.ContentBlockParam[] = [
         {
           type: 'image',
           source: { type: 'base64', media_type: mimeType as 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp', data },
         },
       ];
-      if (message.image.caption) content.push({ type: 'text', text: message.image.caption });
+      if (message.caption) content.push({ type: 'text', text: message.caption });
       return content;
     }
 
-    await this.sendWhatsappMessage(message.from, 'Por enquanto eu só entendo texto ou foto do comprovante 🙂');
+    await reply(message.from, 'Por enquanto eu só entendo texto ou foto do comprovante 🙂');
     return null;
   }
 
-  private async downloadMedia(mediaId: string): Promise<{ data: string; mimeType: string }> {
+  private async downloadMetaMedia(mediaId: string): Promise<{ data: string; mimeType: string }> {
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
     const metaRes = await fetch(`${GRAPH_API_URL}/${mediaId}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -224,7 +283,7 @@ Regras:
     return { data: buffer.toString('base64'), mimeType: meta.mime_type };
   }
 
-  private async sendWhatsappMessage(to: string, text: string) {
+  private replyViaMeta: Reply = async (to, text) => {
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
     const token = process.env.WHATSAPP_ACCESS_TOKEN;
 
@@ -240,7 +299,40 @@ Regras:
     });
 
     if (!res.ok) {
-      this.logger.error(`Falha ao enviar mensagem WhatsApp para ${to}: ${res.status} ${await res.text()}`);
+      this.logger.error(`Falha ao enviar mensagem WhatsApp (Meta) para ${to}: ${res.status} ${await res.text()}`);
     }
+  };
+
+  private replyViaTwilio: Reply = async (to, text) => {
+    const sid = process.env.TWILIO_ACCOUNT_SID;
+    const token = process.env.TWILIO_AUTH_TOKEN;
+    const fromNumber = process.env.TWILIO_WHATSAPP_FROM;
+
+    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64'),
+      },
+      body: new URLSearchParams({
+        From: `whatsapp:${fromNumber}`,
+        To: `whatsapp:+${digitsOnly(to)}`,
+        Body: text,
+      }),
+    });
+
+    if (!res.ok) {
+      this.logger.error(`Falha ao enviar mensagem WhatsApp (Twilio) para ${to}: ${res.status} ${await res.text()}`);
+    }
+  };
+
+  private async downloadTwilioMedia(url: string, mimeType: string): Promise<{ data: string; mimeType: string }> {
+    const sid = process.env.TWILIO_ACCOUNT_SID;
+    const token = process.env.TWILIO_AUTH_TOKEN;
+    const res = await fetch(url, {
+      headers: { Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64') },
+    });
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return { data: buffer.toString('base64'), mimeType };
   }
 }
