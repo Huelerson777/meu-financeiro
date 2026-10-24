@@ -270,7 +270,7 @@ function SpendCard({ props, insights }: { props: InsightsHeroProps; insights: In
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-border/70 bg-card shadow-soft">
       <div className="px-5 pt-5">
-        <p className="text-sm text-muted-foreground">{negative && props.limit == null ? 'Faltam para fechar o mês' : 'Você ainda pode gastar'}</p>
+        <p className="text-sm text-muted-foreground">{negative ? (props.limit == null ? 'Faltam para fechar o mês' : 'Você ultrapassou o limite em') : 'Você ainda pode gastar'}</p>
         {props.isLoading ? (
           <Skeleton className="mt-2 h-9 w-44" />
         ) : (
@@ -279,6 +279,12 @@ function SpendCard({ props, insights }: { props: InsightsHeroProps; insights: In
               {formatCurrency(Math.abs(remaining))}
             </span>
             {props.limit != null && <span className="text-sm text-muted-foreground">/ {formatCurrency(props.limit)}</span>}
+          </p>
+        )}
+        {props.limit != null && negative && !props.isLoading && (
+          <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-danger">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            Você já gastou {formatCurrency(props.expense)}, acima dos {formatCurrency(props.limit)} planejados.
           </p>
         )}
         {props.limit == null && !props.isLoading && (
