@@ -284,7 +284,7 @@ function SpendCard({ props, insights }: { props: InsightsHeroProps; insights: In
         {props.limit != null && negative && !props.isLoading && (
           <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-danger">
             <AlertTriangle className="h-3.5 w-3.5" />
-            Você já gastou {formatCurrency(props.expense)}, acima dos {formatCurrency(props.limit)} planejados.
+            Limite de {formatCurrency(props.limit)}, gasto total de {formatCurrency(props.expense)}.
           </p>
         )}
         {props.limit == null && !props.isLoading && (
