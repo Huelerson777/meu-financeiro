@@ -12,12 +12,14 @@ interface PaymentsStatusCardProps {
   status?: PaymentsStatus;
   isLoading: boolean;
   onPay: (item: PaymentsStatusItem) => void;
+  /** Conta fixa que não existe neste mês (não volta a ser gerada). */
+  onSkip?: (item: PaymentsStatusItem) => void;
 }
 
 const VISIBLE = 6;
 
 /** Pago x em aberto no mês: barra de progresso, os dois totais e a lista do que falta, com ação direta. */
-export function PaymentsStatusCard({ status, isLoading, onPay }: PaymentsStatusCardProps) {
+export function PaymentsStatusCard({ status, isLoading, onPay, onSkip }: PaymentsStatusCardProps) {
   const [showAll, setShowAll] = useState(false);
   const paid = status?.paidExpenseTotal ?? 0;
   const open = status?.openExpenseTotal ?? 0;
@@ -97,6 +99,15 @@ export function PaymentsStatusCard({ status, isLoading, onPay }: PaymentsStatusC
                         {item.type === 'INCOME' ? '+ ' : ''}
                         {formatCurrency(item.amount)}
                       </span>
+                      {item.isRecurring && onSkip && (
+                        <button
+                          onClick={() => onSkip(item)}
+                          title="Não terei esta conta neste mês"
+                          className="h-8 rounded-md px-2 text-xs font-semibold text-muted-foreground transition-theme hover:bg-muted hover:text-foreground active:scale-95"
+                        >
+                          Pular mês
+                        </button>
+                      )}
                       <button
                         onClick={() => onPay(item)}
                         className="h-8 rounded-md bg-primary/10 px-3 text-xs font-bold text-primary transition-theme hover:bg-primary hover:text-primary-foreground active:scale-95"

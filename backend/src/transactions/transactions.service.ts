@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { monthKey, pickRecurringMatch } from '../recurring-bills/recurring-match';
 import { Prisma, TransactionStatus, TransactionType } from '@prisma/client';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
@@ -223,6 +224,17 @@ export class TransactionsService {
         await this.applyBalanceEffect(tx, existing.accountId, existing.type, Number(existing.amount), -1);
       }
 
+      // Excluir o lançamento do mês de uma conta fixa significa "esse mês não tem": registra o mês
+      // pulado, senão o sync de contas fixas recriaria o lançamento na próxima abertura do app.
+      if (existing.recurringBillId && existing.status !== 'PAID') {
+        const month = monthKey(existing.date);
+        await tx.recurringBillSkip.upsert({
+          where: { recurringBillId_month: { recurringBillId: existing.recurringBillId, month } },
+          update: {},
+          create: { recurringBillId: existing.recurringBillId, month },
+        });
+      }
+
       await tx.transaction.delete({ where: { id } });
       return { id };
     });
@@ -406,11 +418,43 @@ export class TransactionsService {
 
     const suggest = await this.buildCategorySuggester(userId);
 
+    // Contas fixas ainda em aberto na conta: se o banco mostra que foi pago, baixa a fixa (atualizando
+    // o valor real, ex: energia que muda todo mês) em vez de criar um segundo lançamento.
+    const open = (
+      await this.prisma.transaction.findMany({
+        where: {
+          userId,
+          recurringBillId: { not: null },
+          status: { in: ['PENDING', 'OVERDUE'] },
+          OR: [{ accountId }, { accountId: null }],
+        },
+        select: { id: true, description: true, amount: true, date: true, type: true },
+      })
+    ).map((t) => ({ ...t, amount: Number(t.amount) }));
+    const taken = new Set<string>();
+
     return this.prisma.$transaction(
       async (tx) => {
+        let settled = 0;
         for (const row of fresh) {
           const type: TransactionType = row.amount > 0 ? 'INCOME' : 'EXPENSE';
           const amount = Math.abs(row.amount);
+
+          const match = pickRecurringMatch(
+            { description: row.description, amount, type, date: row.date },
+            open.filter((o) => !taken.has(o.id)),
+          );
+          if (match) {
+            taken.add(match.id);
+            await tx.transaction.update({
+              where: { id: match.id },
+              data: { status: 'PAID', amount, date: row.date, accountId, externalId: row.externalId },
+            });
+            await this.applyBalanceEffect(tx, accountId, type, amount, 1);
+            settled++;
+            continue;
+          }
+
           await tx.transaction.create({
             data: {
               userId,
@@ -426,10 +470,53 @@ export class TransactionsService {
           });
           await this.applyBalanceEffect(tx, accountId, type, amount, 1);
         }
-        return { created: fresh.length };
+        return { created: fresh.length - settled, settledRecurring: settled };
       },
       { timeout: 60_000 },
     );
+  }
+
+  /**
+   * Quem marcou a conta fixa como paga à mão ANTES de a sincronização do banco trazer o mesmo pagamento
+   * fica com o gasto duas vezes (e o saldo da conta errado). Aqui funde cada par: mantém o lançamento do
+   * banco (valor real), herda a conta fixa e a categoria do manual, e apaga o manual devolvendo o saldo.
+   * Só funde com valor praticamente igual (±R$ 1) e na mesma conta; `apply: false` só lista.
+   */
+  async mergeManualRecurringWithBank(userId: string, opts: { accountId?: string; apply?: boolean } = {}) {
+    const apply = opts.apply ?? true;
+    const where = { userId, status: 'PAID' as const, type: { in: ['INCOME', 'EXPENSE'] as TransactionType[] }, ...(opts.accountId ? { accountId: opts.accountId } : {}) };
+    const [bank, manual] = await Promise.all([
+      this.prisma.transaction.findMany({ where: { ...where, externalId: { not: null }, recurringBillId: null }, orderBy: { date: 'asc' } }),
+      this.prisma.transaction.findMany({ where: { ...where, externalId: null, recurringBillId: { not: null }, cardId: null } }),
+    ]);
+
+    const taken = new Set<string>();
+    const merged: { bank: string; manual: string; description: string; amount: number }[] = [];
+    for (const b of bank) {
+      const candidates = manual
+        .filter((m) => m.accountId === b.accountId && !taken.has(m.id) && Math.abs(Number(m.amount) - Number(b.amount)) <= 1)
+        .map((m) => ({ ...m, amount: Number(m.amount) }));
+      const match = pickRecurringMatch(
+        { description: b.description, amount: Number(b.amount), type: b.type, date: b.date },
+        // pickRecurringMatch olha o lançamento pendente à frente da data do banco; aqui o manual pode estar dos dois lados.
+        candidates.map((c) => ({ ...c, date: new Date(Math.min(c.date.getTime(), b.date.getTime() + 15 * 86400000)) })),
+      );
+      if (!match) continue;
+      taken.add(match.id);
+      merged.push({ bank: b.id, manual: match.id, description: b.description, amount: Number(b.amount) });
+      if (!apply) continue;
+
+      const m = manual.find((x) => x.id === match.id)!;
+      await this.prisma.$transaction(async (tx) => {
+        await this.applyBalanceEffect(tx, m.accountId, m.type, Number(m.amount), -1);
+        await tx.transaction.delete({ where: { id: m.id } });
+        await tx.transaction.update({
+          where: { id: b.id },
+          data: { recurringBillId: m.recurringBillId, categoryId: m.categoryId ?? b.categoryId },
+        });
+      });
+    }
+    return { merged: merged.length, items: merged };
   }
 
   /** Mesmo critério de suggestCategory (histórico do usuário, depois palavras-chave), com tudo carregado uma vez. */

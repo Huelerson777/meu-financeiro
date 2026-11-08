@@ -16,7 +16,8 @@ describe('RecurringBillsService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
-      transaction: { findFirst: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
+      transaction: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]), create: jest.fn(), update: jest.fn(), updateMany: jest.fn() },
+      recurringBillSkip: { findUnique: jest.fn().mockResolvedValue(null) },
       category: { findFirst: jest.fn() },
       account: { findFirst: jest.fn() },
     };
@@ -81,6 +82,23 @@ describe('RecurringBillsService', () => {
       prisma.recurringBill.findMany.mockResolvedValue([{ id: 'r1', dueDay: 5, defaultAmount: 10 }]);
       prisma.transaction.findFirst.mockResolvedValue({ id: 't' });
       expect(await service.sync(userId)).toEqual({ generated: 0 });
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
+
+    it('não recria a conta num mês que o usuário pulou', async () => {
+      prisma.recurringBill.findMany.mockResolvedValue([{ id: 'r1', description: 'Futebol', dueDay: 10, defaultAmount: 80, type: 'EXPENSE' }]);
+      prisma.transaction.findFirst.mockResolvedValue(null);
+      prisma.recurringBillSkip.findUnique.mockResolvedValue({ id: 's' });
+      expect(await service.sync(userId)).toEqual({ generated: 0 });
+      expect(prisma.transaction.create).not.toHaveBeenCalled();
+    });
+
+    it('vincula o pagamento que o banco já trouxe em vez de gerar um em aberto duplicado', async () => {
+      prisma.recurringBill.findMany.mockResolvedValue([{ id: 'r1', description: 'Energia', dueDay: 10, defaultAmount: 300, type: 'EXPENSE', accountId: 'a' }]);
+      prisma.transaction.findFirst.mockResolvedValue(null);
+      prisma.transaction.findMany.mockResolvedValue([{ id: 'bank1', description: 'Pagamento para CELESC DISTRIBUICAO S.A' }]);
+      expect(await service.sync(userId)).toEqual({ generated: 0 });
+      expect(prisma.transaction.update).toHaveBeenCalledWith({ where: { id: 'bank1' }, data: { recurringBillId: 'r1' } });
       expect(prisma.transaction.create).not.toHaveBeenCalled();
     });
 

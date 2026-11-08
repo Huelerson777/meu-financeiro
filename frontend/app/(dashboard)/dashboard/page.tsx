@@ -33,6 +33,7 @@ import { AiQuickAddCard } from '@/components/dashboard/ai-quick-add-card';
 import { WidgetPicker, useDashboardWidgetOrder, WIDGET_SPANS } from '@/components/dashboard/widget-picker';
 import { AccountVisibilityPicker, useHiddenAccountIds } from '@/components/dashboard/account-visibility-picker';
 import { PaymentModal } from '@/components/cards/payment-modal';
+import { notifyAlert, confirmDialog } from '@/utils/notify';
 import {
   useDashboardSummary,
   useDashboardExpensesByCategory,
@@ -212,6 +213,19 @@ export default function DashboardPage() {
     }
   };
 
+  // Conta fixa que não existe neste mês (ex: futebol): exclui o lançamento do mês e o backend
+  // registra o mês como pulado, então ela não é recriada — e volta normal no mês seguinte.
+  const handleSkipRecurring = async (item: PaymentsStatusItem) => {
+    if (!(await confirmDialog(`Pular "${item.description}" neste mês? Ela volta normalmente no próximo mês.`))) return;
+    try {
+      await api.delete(`/transactions/${item.id}`);
+      refetchPaymentsStatus();
+      refetchSummary();
+    } catch {
+      notifyAlert('Não foi possível pular esta conta.');
+    }
+  };
+
   const handlePaymentSuccess = () => {
     setPayingItem(null);
     refetchPaymentsStatus();
@@ -343,7 +357,7 @@ export default function DashboardPage() {
               changePct={data?.comparison?.leftoversChangePct}
             />
           ),
-          paymentsStatus: <PaymentsStatusCard status={paymentsStatus} isLoading={paymentsLoading} onPay={setPayingItem} />,
+          paymentsStatus: <PaymentsStatusCard status={paymentsStatus} isLoading={paymentsLoading} onPay={setPayingItem} onSkip={handleSkipRecurring} />,
           netWorth: <NetWorthCard points={netWorthData} isLoading={netWorthLoading} />,
           goalsSummary: <GoalsSummaryCard summary={goalsSummary} isLoading={goalsLoading} />,
           balanceChart: (

@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateRecurringBillDto } from './dto/create-recurring-bill.dto';
 import { UpdateRecurringBillDto } from './dto/update-recurring-bill.dto';
+import { monthKey, nameScore } from './recurring-match';
 
 @Injectable()
 export class RecurringBillsService {
@@ -103,6 +104,36 @@ export class RecurringBillsService {
         select: { id: true },
       });
       if (alreadyGenerated) continue;
+
+      // Mês pulado de propósito (ex: sem futebol em novembro): não recria.
+      const skipped = await this.prisma.recurringBillSkip.findUnique({
+        where: { recurringBillId_month: { recurringBillId: bill.id, month: monthKey(monthStart) } },
+        select: { id: true },
+      });
+      if (skipped) continue;
+
+      // O banco (Open Finance) pode já ter lançado o pagamento deste mês antes de o pendente existir:
+      // vincula em vez de gerar um "em aberto" duplicado.
+      const bankPaid = await this.prisma.transaction.findMany({
+        where: {
+          userId,
+          type: bill.type,
+          status: 'PAID',
+          recurringBillId: null,
+          externalId: { not: null },
+          date: { gte: new Date(monthStart.getTime() - 3 * 3600 * 1000), lt: monthEnd },
+          ...(bill.accountId ? { accountId: bill.accountId } : {}),
+        },
+        select: { id: true, description: true },
+      });
+      const adopted = bankPaid
+        .map((t) => ({ t, score: nameScore(bill.description, t.description) }))
+        .filter((x) => x.score > 0)
+        .sort((a, b) => b.score - a.score)[0];
+      if (adopted) {
+        await this.prisma.transaction.update({ where: { id: adopted.t.id }, data: { recurringBillId: bill.id } });
+        continue;
+      }
 
       let amount: number = bill.defaultAmount != null ? Number(bill.defaultAmount) : 0;
       if (bill.defaultAmount == null) {
