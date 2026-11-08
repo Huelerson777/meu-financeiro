@@ -62,6 +62,8 @@ export interface GoalsSummary {
 export interface PaymentsStatusItem {
   id: string;
   kind: 'transaction' | 'installment';
+  /** Lançamento gerado por uma conta fixa: pode ser pulado só neste mês. */
+  isRecurring?: boolean;
   type: 'INCOME' | 'EXPENSE';
   description: string;
   amount: number;

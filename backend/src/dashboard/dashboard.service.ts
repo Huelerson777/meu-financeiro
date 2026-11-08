@@ -600,6 +600,7 @@ export class DashboardService {
     const pendingItems = pendingTransactions.map((t) => ({
       id: t.id,
       kind: 'transaction' as const,
+      isRecurring: t.recurringBillId != null,
       type: t.type,
       description: t.description,
       amount: Number(t.amount),

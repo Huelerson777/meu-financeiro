@@ -458,9 +458,24 @@ model RecurringBill {
   category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   account      Account?      @relation(fields: [accountId], references: [id], onDelete: SetNull)
   transactions Transaction[]
+  skips        RecurringBillSkip[]
 
   @@index([userId])
   @@map("recurring_bills")
+}
+
+/// Mês em que o usuário decidiu NÃO ter essa conta fixa (ex: futebol de novembro). Sem isso, excluir o
+/// lançamento do mês faria o sync recriá-lo. `month` é "YYYY-MM".
+model RecurringBillSkip {
+  id              String   @id @default(uuid())
+  recurringBillId String   @map("recurring_bill_id")
+  month           String
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  recurringBill RecurringBill @relation(fields: [recurringBillId], references: [id], onDelete: Cascade)
+
+  @@unique([recurringBillId, month])
+  @@map("recurring_bill_skips")
 }
 
 model Installment {

@@ -154,6 +154,9 @@ export class OpenFinanceService {
       }
     }
 
+    // Conta fixa marcada à mão antes de o banco trazer o mesmo pagamento: funde para não duplicar gasto/saldo.
+    await this.transactions.mergeManualRecurringWithBank(userId);
+
     await this.prisma.bankConnection.update({ where: { id }, data: { lastSyncAt: startedAt } });
     return { created, linkedAccounts: connection.links.length + connection.cardLinks.length };
   }
