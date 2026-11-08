@@ -12,6 +12,7 @@ function setup() {
     account: { findFirst: jest.fn().mockResolvedValue({ id: 'acc' }) },
     category: { findMany: jest.fn().mockResolvedValue([]) },
     transaction: { findMany: jest.fn() },
+    installment: { findMany: jest.fn().mockResolvedValue([]) },
     $transaction: jest.fn(async (cb: any) => cb(tx)),
   };
   return { prisma, tx, service: new TransactionsService(prisma) };
@@ -34,6 +35,21 @@ describe('contas fixas x banco', () => {
       data: { status: 'PAID', amount: 245.65, date: d('2026-11-06'), accountId: 'acc', externalId: 'pluggy:1' },
     });
     expect(tx.account.update).toHaveBeenCalledTimes(1); // saldo mexe uma única vez
+  });
+
+  it('não importa a saída do banco que é a fatura de cartão já baixada no app (evita descontar 2x)', async () => {
+    const { prisma, tx, service } = setup();
+    prisma.transaction.findMany.mockResolvedValue([]);
+    const at = new Date('2026-11-06T00:00:00Z');
+    prisma.installment.findMany.mockResolvedValue(
+      [3.86, 235.47, 34.99, 5.9, 110].map((amount) => ({ amount, paidAt: at, transaction: { cardId: 'card' } })),
+    );
+    const r = await service.importFromBank('u', 'acc', [
+      { externalId: 'pluggy:fat', date: d('2026-11-06'), description: 'Pagamento para BANCO XP S.A', amount: -390.22 },
+    ]);
+    expect(r.created).toBe(0);
+    expect(tx.transaction.create).not.toHaveBeenCalled();
+    expect(tx.account.update).not.toHaveBeenCalled();
   });
 
   it('gasto comum continua virando lançamento novo', async () => {

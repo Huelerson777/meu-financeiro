@@ -413,8 +413,13 @@ export class TransactionsService {
       select: { externalId: true },
     });
     const knownIds = new Set(known.map((k) => k.externalId));
-    const fresh = rows.filter((r) => r.amount !== 0 && !knownIds.has(r.externalId));
+    let fresh = rows.filter((r) => r.amount !== 0 && !knownIds.has(r.externalId));
     if (fresh.length === 0) return { created: 0 };
+
+    // Pagar parcelas de cartão pelo app já debita a conta. O banco depois traz o mesmo pagamento da
+    // fatura como saída: importá-lo descontaria a fatura duas vezes no saldo.
+    fresh = await this.withoutCardPaymentsAlreadyBooked(userId, accountId, fresh);
+    if (fresh.length === 0) return { created: 0, settledRecurring: 0 };
 
     const suggest = await this.buildCategorySuggester(userId);
 
@@ -517,6 +522,47 @@ export class TransactionsService {
       });
     }
     return { merged: merged.length, items: merged };
+  }
+
+  /**
+   * Descarta saídas do banco que são o pagamento de parcelas de cartão já baixadas no app: o valor bate
+   * com a soma das parcelas de um mesmo cartão pagas a partir desta conta, com até 3 dias de diferença.
+   */
+  private async withoutCardPaymentsAlreadyBooked<T extends { date: Date; amount: number }>(
+    userId: string,
+    accountId: string,
+    rows: T[],
+  ): Promise<T[]> {
+    const outflows = rows.filter((r) => r.amount < 0);
+    if (outflows.length === 0) return rows;
+    const times = outflows.map((r) => r.date.getTime());
+    const DAY = 86400000;
+    const paid = await this.prisma.installment.findMany({
+      where: {
+        paid: true,
+        paidFromAccountId: accountId,
+        paidAt: { gte: new Date(Math.min(...times) - 4 * DAY), lte: new Date(Math.max(...times) + 4 * DAY) },
+        transaction: { userId },
+      },
+      select: { amount: true, paidAt: true, transaction: { select: { cardId: true } } },
+    });
+    if (paid.length === 0) return rows;
+
+    const groups = new Map<string, { cents: number; at: number }>();
+    for (const i of paid) {
+      if (!i.paidAt) continue;
+      const day = i.paidAt.toISOString().slice(0, 10);
+      const key = `${i.transaction.cardId}|${day}`;
+      const g = groups.get(key) ?? { cents: 0, at: i.paidAt.getTime() };
+      g.cents += Math.round(Number(i.amount) * 100);
+      groups.set(key, g);
+    }
+    const booked = [...groups.values()];
+    return rows.filter((r) => {
+      if (r.amount >= 0) return true;
+      const cents = Math.round(Math.abs(r.amount) * 100);
+      return !booked.some((g) => g.cents === cents && Math.abs(g.at - r.date.getTime()) <= 3 * DAY);
+    });
   }
 
   /** Mesmo critério de suggestCategory (histórico do usuário, depois palavras-chave), com tudo carregado uma vez. */
