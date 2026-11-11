@@ -5,7 +5,7 @@ import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
-import { AuthService } from './auth.service';
+import { AuthService, refreshTokenDays } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -17,7 +17,10 @@ import { ResetPasswordDto } from './dto/reset-password.dto';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // Limites por rota (por IP), mais apertados que o global: cadastro e
+  // recuperação disparam e-mail, e login/reset são alvo de força bruta.
   @Post('register')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Cria uma nova conta de usuário' })
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -45,10 +48,11 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({ summary: 'Autentica o usuário e retorna os tokens' })
   async login(@Body() dto: LoginDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const tokens = await this.authService.login(dto);
-    return deliverTokens(req, res, tokens, dto.rememberMe ? 28 : 7);
+    return deliverTokens(req, res, tokens, refreshTokenDays(dto.rememberMe));
   }
 
   @Post('refresh')
@@ -58,7 +62,8 @@ export class AuthController {
     // Cookie tem prioridade; o corpo cobre clientes legados (token no localStorage).
     const token = readRefreshCookie(req) ?? dto.refreshToken;
     if (!token) throw new UnauthorizedException('Refresh token ausente');
-    return deliverTokens(req, res, await this.authService.refresh(token));
+    const { rememberMe, ...tokens } = await this.authService.refresh(token);
+    return deliverTokens(req, res, tokens, refreshTokenDays(rememberMe));
   }
 
   @Post('logout')
@@ -72,6 +77,7 @@ export class AuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @ApiOperation({ summary: 'Envia um link de recuperação de senha por e-mail' })
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto.email);
@@ -79,6 +85,7 @@ export class AuthController {
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({ summary: 'Redefine a senha a partir do token recebido por e-mail' })
   resetPassword(@Body() dto: ResetPasswordDto) {
     return this.authService.resetPassword(dto.token, dto.newPassword);

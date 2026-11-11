@@ -171,7 +171,7 @@ export function CardsView() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
           {cards.map((c) => {
             const cardColor = c.color || DEFAULT_COLOR;
             const openInvoice = Number(c.currentInvoiceOpenTotal ?? 0);
@@ -208,7 +208,8 @@ export function CardsView() {
                   </button>
                 </div>
 
-                <div className="relative flex items-center gap-3">
+                {/* pr-16: reserva o canto dos botões Editar/Excluir (absolutos), senão o nome passa por baixo deles */}
+                <div className="relative flex items-center gap-3 pr-16">
                   {isImageIcon(c.icon) ? (
                     <AccountAvatar name={c.name} color={cardColor} icon={c.icon} className="h-11 w-11" />
                   ) : (

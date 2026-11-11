@@ -7,6 +7,8 @@ import { BrapiService } from './rate-sources/brapi.service';
 import { calculateAccruedValue } from './accrual.util';
 import { CreatePositionDto } from './dto/create-position.dto';
 import { UpdatePositionDto } from './dto/update-position.dto';
+import { todayInBrazil } from '../common/utils/brazil-date';
+import { parseDateOnly } from '../common/utils/date-only';
 
 /**
  * Aporte simples = transferência pra uma conta do tipo INVESTMENT.
@@ -130,7 +132,7 @@ export class InvestmentsService {
     }
 
     const { quantity, averagePrice } = this.resolveQuantityAndPrice(dto);
-    const startDate = this.parseDateOnly(dto.startDate ?? dto.date ?? this.todayIsoDate());
+    const startDate = parseDateOnly(dto.startDate ?? dto.date ?? this.todayIsoDate());
 
     if (dto.category === 'FIXED_INCOME' && (!dto.indexer || dto.rate == null)) {
       throw new BadRequestException('Renda fixa precisa de indexador e taxa contratada');
@@ -144,6 +146,9 @@ export class InvestmentsService {
           toAccountId: dto.toAccountId,
           amount: dto.amount,
           description: dto.description || `Aporte: ${dto.name}`,
+          // Sem isto o aporte ficava sempre com a data de hoje, mesmo quando o
+          // usuário informava outra — e caía no mês errado em "aportes por mês".
+          date: this.transferDate(dto.date),
         })
       ).id;
     } else {
@@ -161,23 +166,36 @@ export class InvestmentsService {
         ? Math.round((dto.currentAmount / quantity) * 100) / 100
         : averagePrice;
 
-    return this.prisma.investment.create({
-      data: {
-        userId,
-        accountId: dto.toAccountId,
-        transferId,
-        name: dto.name,
-        category: dto.category,
-        ticker: dto.ticker,
-        quantity,
-        averagePrice,
-        currentPrice,
-        indexer: dto.category === 'FIXED_INCOME' ? dto.indexer : undefined,
-        rate: dto.category === 'FIXED_INCOME' ? dto.rate : undefined,
-        startDate,
-        ...(currentPrice !== averagePrice ? { lastValuedAt: new Date() } : {}),
-      },
-    });
+    try {
+      return await this.prisma.investment.create({
+        data: {
+          userId,
+          accountId: dto.toAccountId,
+          transferId,
+          name: dto.name,
+          category: dto.category,
+          ticker: dto.ticker,
+          quantity,
+          averagePrice,
+          currentPrice,
+          indexer: dto.category === 'FIXED_INCOME' ? dto.indexer : undefined,
+          rate: dto.category === 'FIXED_INCOME' ? dto.rate : undefined,
+          startDate,
+          ...(currentPrice !== averagePrice ? { lastValuedAt: new Date() } : {}),
+        },
+      });
+    } catch (error) {
+      // O dinheiro já foi movido acima (transferência ou crédito direto): se a
+      // posição não gravar, desfaz — senão o saldo muda sem ativo nenhum.
+      if (transferId) {
+        await this.accountsService.removeTransfer(transferId, userId).catch(() => undefined);
+      } else {
+        await this.prisma.account
+          .update({ where: { id: dto.toAccountId }, data: { currentBalance: { decrement: dto.amount } } })
+          .catch(() => undefined);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -311,7 +329,7 @@ export class InvestmentsService {
         ticker: dto.ticker,
         indexer: dto.indexer,
         rate: dto.rate,
-        startDate: dto.startDate ? this.parseDateOnly(dto.startDate) : undefined,
+        startDate: dto.startDate ? parseDateOnly(dto.startDate) : undefined,
         currentPrice: dto.currentPrice,
         quantity: dto.quantity,
         averagePrice: dto.averagePrice,
@@ -360,17 +378,12 @@ export class InvestmentsService {
   }
 
   private todayIsoDate(): string {
-    return new Date().toISOString().split('T')[0];
+    return todayInBrazil();
   }
 
-  /**
-   * Converte um "YYYY-MM-DD" pro dia local certo (mesma lógica usada em
-   * cards.service.ts) — evita o troca-de-dia por fuso ao usar `new Date(str)`.
-   */
-  private parseDateOnly(value: string): Date {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-    if (!match) return new Date(value);
-    const [, year, month, day] = match;
-    return new Date(Number(year), Number(month) - 1, Number(day));
+  /** "AAAA-MM-DD" vira meio-dia UTC (mesmo formato que o frontend manda nas transferências), sem trocar de dia por fuso. */
+  private transferDate(value?: string): string | undefined {
+    if (!value) return undefined;
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00.000Z` : value;
   }
 }

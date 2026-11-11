@@ -1,10 +1,35 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 
 const ACCESS_TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 dias — clientes MCP remotos nem sempre fazem refresh silencioso
 const REFRESH_TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 dias
 const AUTH_CODE_TTL_MS = 5 * 60 * 1000; // 5 min, uso único
+const MAX_REDIRECT_URIS = 10;
+const MAX_REDIRECT_URI_LENGTH = 2000;
+const MAX_CLIENT_NAME_LENGTH = 100;
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/**
+ * Só aceita redirect_uri https (qualquer host) ou http em loopback (cliente
+ * local, ex: Claude Code em http://localhost:PORTA/callback). O registro de
+ * cliente é aberto (qualquer um pode se registrar), e a tela de consentimento
+ * manda o navegador pra essa URL: sem este filtro, um "javascript:..."
+ * registrado como redirect_uri executaria script na origem do app (roubo de
+ * sessão) quando a vítima clicasse em Autorizar/Cancelar.
+ */
+export function isAllowedRedirectUri(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length === 0 || value.length > MAX_REDIRECT_URI_LENGTH) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.hash || url.username || url.password) return false;
+  if (url.protocol === 'https:') return true;
+  return url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname);
+}
 
 /**
  * Erro que carrega uma URL de redirect — usado quando o client_id/redirect_uri
@@ -54,11 +79,18 @@ export class McpOAuthService {
 
   async registerClient(body: any) {
     const redirectUris = body?.redirect_uris;
-    if (!Array.isArray(redirectUris) || redirectUris.length === 0 || !redirectUris.every((u) => typeof u === 'string')) {
-      throw new BadRequestException('redirect_uris é obrigatório e precisa ser uma lista de URLs');
+    if (!Array.isArray(redirectUris) || redirectUris.length === 0 || redirectUris.length > MAX_REDIRECT_URIS) {
+      throw new BadRequestException(`redirect_uris é obrigatório e precisa ser uma lista de 1 a ${MAX_REDIRECT_URIS} URLs`);
+    }
+    if (!redirectUris.every(isAllowedRedirectUri)) {
+      throw new BadRequestException('redirect_uris só aceita URLs https, ou http em localhost/127.0.0.1');
     }
 
-    const clientName = typeof body?.client_name === 'string' ? body.client_name : null;
+    // O nome aparece na tela de consentimento: sem caracteres de controle e com tamanho limitado.
+    const clientName =
+      typeof body?.client_name === 'string'
+        ? body.client_name.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MAX_CLIENT_NAME_LENGTH) || null
+        : null;
     const clientId = crypto.randomUUID();
 
     await this.prisma.mcpClient.create({
@@ -90,10 +122,7 @@ export class McpOAuthService {
       throw new BadRequestException('client_id e redirect_uri são obrigatórios');
     }
 
-    const client = await this.prisma.mcpClient.findUnique({ where: { clientId: client_id } });
-    if (!client || !client.redirectUris.includes(redirect_uri)) {
-      throw new BadRequestException('client_id ou redirect_uri inválidos');
-    }
+    const client = await this.findClientForRedirect(client_id, redirect_uri);
 
     const errorRedirect = (error: string, description: string) => {
       const url = new URL(redirect_uri);
@@ -133,10 +162,7 @@ export class McpOAuthService {
     userId: string,
     params: { clientId: string; redirectUri: string; codeChallenge: string; codeChallengeMethod: string },
   ) {
-    const client = await this.prisma.mcpClient.findUnique({ where: { clientId: params.clientId } });
-    if (!client || !client.redirectUris.includes(params.redirectUri)) {
-      throw new BadRequestException('client_id ou redirect_uri inválidos');
-    }
+    await this.findClientForRedirect(params.clientId, params.redirectUri);
     if (params.codeChallengeMethod !== 'S256') {
       throw new BadRequestException('Só o code_challenge_method S256 é suportado');
     }
@@ -157,9 +183,30 @@ export class McpOAuthService {
     return { code: rawCode };
   }
 
+  /**
+   * Dados do cliente pra tela de consentimento, já validados no servidor: o
+   * nome registrado (e não o que vier na URL, que qualquer um monta à mão) e
+   * o host pra onde o navegador será mandado. A tela só redireciona depois
+   * desta checagem — inclusive no "Cancelar".
+   */
+  async getClientInfo(clientId: string | undefined, redirectUri: string | undefined) {
+    const client = await this.findClientForRedirect(clientId, redirectUri);
+    return { clientName: client.clientName, redirectHost: new URL(redirectUri as string).host };
+  }
+
+  /** client_id registrado + redirect_uri que pertence a ele e ainda é aceita pelas regras atuais. */
+  private async findClientForRedirect(clientId: string | undefined, redirectUri: string | undefined) {
+    const invalid = new BadRequestException('client_id ou redirect_uri inválidos');
+    if (typeof clientId !== 'string' || !clientId || !isAllowedRedirectUri(redirectUri)) throw invalid;
+
+    const client = await this.prisma.mcpClient.findUnique({ where: { clientId } });
+    if (!client || !client.redirectUris.includes(redirectUri)) throw invalid;
+    return client;
+  }
+
   async exchangeAuthorizationCode(body: any) {
     const { code, redirect_uri: redirectUri, client_id: clientId, code_verifier: codeVerifier } = body ?? {};
-    if (!code || !redirectUri || !clientId || !codeVerifier) {
+    if (![code, redirectUri, clientId, codeVerifier].every((v) => typeof v === 'string' && v.length > 0)) {
       throw new BadRequestException('code, redirect_uri, client_id e code_verifier são obrigatórios');
     }
 
@@ -177,14 +224,20 @@ export class McpOAuthService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      await tx.mcpAuthorizationCode.update({ where: { id: stored.id }, data: { consumed: true } });
+      // Consome o código de forma atômica: duas trocas simultâneas do mesmo
+      // código não podem emitir dois tokens (o código é de uso único).
+      const claimed = await tx.mcpAuthorizationCode.updateMany({
+        where: { id: stored.id, consumed: false },
+        data: { consumed: true },
+      });
+      if (claimed.count === 0) throw new BadRequestException('Código de autorização inválido ou expirado');
       return this.issueTokens(tx as unknown as PrismaService, stored.userId, stored.clientId);
     });
   }
 
   async refreshToken(body: any) {
     const { refresh_token: refreshToken, client_id: clientId } = body ?? {};
-    if (!refreshToken) throw new BadRequestException('refresh_token é obrigatório');
+    if (typeof refreshToken !== 'string' || !refreshToken) throw new BadRequestException('refresh_token é obrigatório');
 
     const stored = await this.prisma.mcpToken.findUnique({ where: { refreshTokenHash: this.hash(refreshToken) } });
     if (!stored || stored.revoked || stored.refreshExpiresAt < new Date()) {
@@ -198,6 +251,57 @@ export class McpOAuthService {
       await tx.mcpToken.update({ where: { id: stored.id }, data: { revoked: true } });
       return this.issueTokens(tx as unknown as PrismaService, stored.userId, stored.clientId);
     });
+  }
+
+  /**
+   * Aplicativos que hoje têm acesso à conta do usuário (tela de
+   * Configurações). O token é trocado a cada renovação, então a "conexão" é
+   * o conjunto de tokens daquele cliente: vale desde o primeiro emitido.
+   */
+  async listConnections(userId: string) {
+    const now = new Date();
+    const tokens = await this.prisma.mcpToken.findMany({
+      where: { userId },
+      select: {
+        clientId: true,
+        createdAt: true,
+        revoked: true,
+        refreshExpiresAt: true,
+        client: { select: { clientName: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const byClient = new Map<
+      string,
+      { clientId: string; clientName: string | null; connectedAt: Date; lastRenewedAt: Date; active: boolean }
+    >();
+    for (const token of tokens) {
+      const entry = byClient.get(token.clientId) ?? {
+        clientId: token.clientId,
+        clientName: token.client.clientName,
+        connectedAt: token.createdAt,
+        lastRenewedAt: token.createdAt,
+        active: false,
+      };
+      entry.lastRenewedAt = token.createdAt;
+      if (!token.revoked && token.refreshExpiresAt > now) entry.active = true;
+      byClient.set(token.clientId, entry);
+    }
+
+    return [...byClient.values()]
+      .filter((c) => c.active)
+      .map(({ active: _active, ...connection }) => connection);
+  }
+
+  /** Corta o acesso de um aplicativo: revoga todos os tokens dele pra este usuário. */
+  async revokeConnection(userId: string, clientId: string) {
+    const result = await this.prisma.mcpToken.updateMany({
+      where: { userId, clientId, revoked: false },
+      data: { revoked: true },
+    });
+    if (result.count === 0) throw new NotFoundException('Conexão não encontrada');
+    return { revoked: true };
   }
 
   private async issueTokens(db: PrismaService, userId: string, clientId: string) {

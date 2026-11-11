@@ -1,11 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { AccountType } from '@prisma/client';
-import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsNumber, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { MAX_ICON_LENGTH } from '../../common/utils/icon';
 
 export class CreateAccountDto {
   @ApiProperty({ example: 'Conta Corrente Nubank' })
   @IsString()
   @MinLength(2)
+  @MaxLength(80)
   name: string;
 
   @ApiProperty({ enum: AccountType, example: AccountType.CHECKING })
@@ -25,6 +27,7 @@ export class CreateAccountDto {
   @ApiPropertyOptional({ example: 'landmark' })
   @IsOptional()
   @IsString()
+  @MaxLength(MAX_ICON_LENGTH)
   icon?: string;
 
   @ApiPropertyOptional({

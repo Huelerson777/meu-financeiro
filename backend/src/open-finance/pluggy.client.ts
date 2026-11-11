@@ -2,6 +2,9 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 
 const API = 'https://api.pluggy.ai';
 const KEY_TTL_MS = 100 * 60 * 1000; // a apiKey da Pluggy vale 2h
+// Sem limite, uma chamada pendurada segurava a sincronização pra sempre — e a
+// trava "uma sincronização por conexão" (OpenFinanceService) nunca era solta.
+const REQUEST_TIMEOUT_MS = 20_000;
 
 export interface PluggyAccount {
   id: string;
@@ -42,7 +45,7 @@ export class PluggyClient {
       throw new ServiceUnavailableException('Open Finance não configurado (PLUGGY_CLIENT_ID / PLUGGY_CLIENT_SECRET)');
     }
 
-    const response = await fetch(`${API}/auth`, {
+    const response = await this.request(`${API}/auth`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ clientId, clientSecret }),
@@ -58,12 +61,21 @@ export class PluggyClient {
 
   private async get<T>(path: string, params: Record<string, string | number>): Promise<T> {
     const query = new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)]));
-    const response = await fetch(`${API}${path}?${query}`, { headers: { 'X-API-KEY': await this.getApiKey() } });
+    const response = await this.request(`${API}${path}?${query}`, { headers: { 'X-API-KEY': await this.getApiKey() } });
     if (!response.ok) {
       this.logger.warn(`Pluggy GET ${path} falhou: status ${response.status}`);
       throw new ServiceUnavailableException(`A Pluggy respondeu com erro (${response.status})`);
     }
     return (await response.json()) as T;
+  }
+
+  private async request(url: string, init: RequestInit): Promise<Response> {
+    try {
+      return await fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    } catch (error) {
+      this.logger.warn(`Pluggy não respondeu: ${(error as Error).message}`);
+      throw new ServiceUnavailableException('A Pluggy não respondeu a tempo. Tente de novo em instantes.');
+    }
   }
 
   async listAccounts(itemId: string): Promise<PluggyAccount[]> {

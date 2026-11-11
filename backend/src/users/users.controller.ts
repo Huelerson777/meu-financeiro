@@ -5,6 +5,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsersService } from './users.service';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangePasswordDto } from '../auth/dto/change-password.dto';
+import { DeleteAccountDto } from './dto/delete-account.dto';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -29,7 +30,7 @@ export class UsersController {
   }
 
   @Delete()
-  deleteAccount(@CurrentUser() user: { id: string }) {
-    return this.usersService.deleteAccount(user.id);
+  deleteAccount(@CurrentUser() user: { id: string }, @Body() dto: DeleteAccountDto) {
+    return this.usersService.deleteAccount(user.id, dto.password);
   }
 }

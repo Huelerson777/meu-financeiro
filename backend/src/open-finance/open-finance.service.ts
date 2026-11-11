@@ -67,7 +67,8 @@ export class OpenFinanceService {
   }
 
   async link(userId: string, id: string, pluggyAccountId: string, accountId: string) {
-    await this.getOwned(userId, id);
+    const connection = await this.getOwned(userId, id);
+    await this.assertRemoteAccount(connection.itemId, pluggyAccountId);
     const account = await this.prisma.account.findFirst({ where: { id: accountId, userId } });
     if (!account) throw new ForbiddenException('Conta não encontrada ou não pertence ao usuário');
 
@@ -85,7 +86,8 @@ export class OpenFinanceService {
   }
 
   async linkCard(userId: string, id: string, pluggyAccountId: string, cardId: string) {
-    await this.getOwned(userId, id);
+    const connection = await this.getOwned(userId, id);
+    await this.assertRemoteAccount(connection.itemId, pluggyAccountId);
     const card = await this.prisma.card.findFirst({ where: { id: cardId, userId } });
     if (!card) throw new ForbiddenException('Cartão não encontrado ou não pertence ao usuário');
 
@@ -159,6 +161,18 @@ export class OpenFinanceService {
 
     await this.prisma.bankConnection.update({ where: { id }, data: { lastSyncAt: startedAt } });
     return { created, linkedAccounts: connection.links.length + connection.cardLinks.length };
+  }
+
+  /**
+   * A conta/cartão remoto precisa pertencer ao item desta conexão. A sincronização busca as transações
+   * pelo `pluggyAccountId` com as credenciais do app (que enxergam todos os itens), então sem esta
+   * conferência daria pra ligar o id de uma conta de outro item e importar transações que não são do usuário.
+   */
+  private async assertRemoteAccount(itemId: string, pluggyAccountId: string) {
+    const accounts = await this.pluggy.listAccounts(itemId);
+    if (!accounts.some((a) => a.id === pluggyAccountId)) {
+      throw new ForbiddenException('Esta conta não pertence à conexão informada');
+    }
   }
 
   private async getOwned(userId: string, id: string) {

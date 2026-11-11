@@ -19,9 +19,10 @@ interface AuthState {
 }
 
 /**
- * Estado de autenticação persistido no cliente.
- * Os tokens ficam em memória + localStorage (via persist) para sobreviver
- * a reloads; em produção considere httpOnly cookies para o refresh token.
+ * Estado de autenticação persistido no cliente (memória + localStorage, via
+ * persist, pra sobreviver a reloads). Com a API sob a mesma origem
+ * (/api-proxy) o refresh token fica só no cookie httpOnly e `refreshToken`
+ * aqui é sempre null; ele só é preenchido no modo legado (API em outra origem).
  */
 export const useAuthStore = create<AuthState>()(
   persist(

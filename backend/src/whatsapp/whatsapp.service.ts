@@ -28,6 +28,11 @@ import {
 const GRAPH_API_VERSION = 'v20.0';
 const GRAPH_API_URL = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
 const TWILIO_REPLY_WINDOW_MS = 12_000;
+// A conversa inteira vai pra API de IA a cada mensagem. Uma sessão só é
+// apagada quando vira lançamento; quem só faz perguntas acumulava histórico
+// (e custo por mensagem) sem fim. Guarda as últimas trocas — número par, pra
+// continuar começando numa mensagem do usuário.
+const MAX_HISTORY_MESSAGES = 20;
 const MODEL =process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 
 /** Mensagem recebida já normalizada, independente do provedor (Meta ou Twilio). */
@@ -182,7 +187,10 @@ export class WhatsappService {
   private async handleIncomingMessage(message: IncomingMessage, reply: Reply) {
     const from = message.from;
 
-    const user = await this.prisma.user.findFirst({ where: { whatsappNumber: { in: phoneVariants(from) } } });
+    // isActive: conta excluída/desativada não lança nem consulta nada pelo WhatsApp.
+    const user = await this.prisma.user.findFirst({
+      where: { whatsappNumber: { in: phoneVariants(from) }, isActive: true },
+    });
     if (!user) {
       await reply(
         from,
@@ -268,7 +276,9 @@ export class WhatsappService {
       return;
     }
 
-    const updatedMessages: AnthropicMessage[] = [...messages, { role: 'assistant', content: textBlocks }];
+    const updatedMessages: AnthropicMessage[] = [...messages, { role: 'assistant' as const, content: textBlocks }].slice(
+      -MAX_HISTORY_MESSAGES,
+    );
     if (session) {
       await this.prisma.whatsappSession.update({
         where: { id: session.id },
@@ -393,7 +403,8 @@ export class WhatsappService {
     const account = accounts.find((a) => a.id === input.accountId);
     const category = typeof input.categoryId === 'string' ? categories.find((c) => c.id === input.categoryId) : undefined;
     const status = input.status === 'PENDING' ? 'PENDING' : 'PAID';
-    const date = typeof input.date === 'string' && input.date ? input.date : todayInBrazil();
+    // Data fora do formato (o modelo às vezes manda "ontem" ou "11/11") cai pra hoje em vez de estourar no banco.
+    const date = parseIsoDate(input.date) ?? todayInBrazil();
 
     // Validação defensiva: nunca confia cegamente no que o modelo mandou —
     // conta/categoria precisam ser exatamente uma das que pertencem ao usuário.

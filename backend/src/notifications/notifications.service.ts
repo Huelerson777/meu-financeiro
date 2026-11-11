@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { NotificationType } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { DashboardService } from '../dashboard/dashboard.service';
+import { KeyedSingleFlight } from '../common/utils/single-flight';
 
 const DUE_SOON_DAYS = 5;
 
@@ -14,6 +15,7 @@ const MONTH_NAMES = [
 export class NotificationsService {
   // evita refazer as consultas de orçamento/metas a cada refetch do sino (que roda a cada minuto)
   private lastPlanningSync = new Map<string, number>();
+  private readonly syncFlight = new KeyedSingleFlight<void>();
 
   constructor(
     private prisma: PrismaService,
@@ -36,9 +38,7 @@ export class NotificationsService {
    * para o mesmo lançamento (controlado por referenceId).
    */
   async list(userId: string) {
-    await this.syncDueSoon(userId);
-    await this.syncInvoiceClosed(userId);
-    await this.syncPlanning(userId);
+    await this.syncAll(userId);
     return this.prisma.notification.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
@@ -47,10 +47,22 @@ export class NotificationsService {
   }
 
   async unreadCount(userId: string) {
-    await this.syncDueSoon(userId);
-    await this.syncInvoiceClosed(userId);
-    await this.syncPlanning(userId);
+    await this.syncAll(userId);
     return this.prisma.notification.count({ where: { userId, read: false } });
+  }
+
+  /**
+   * Gera os avisos pendentes, uma execução por usuário de cada vez. Cada sync
+   * lê "o que já foi avisado" e depois cria o que falta; duas chamadas
+   * simultâneas (duas abas abertas, lista + contador) liam antes de qualquer
+   * uma gravar e criavam o mesmo aviso em dobro.
+   */
+  private syncAll(userId: string) {
+    return this.syncFlight.run(userId, async () => {
+      await this.syncDueSoon(userId);
+      await this.syncInvoiceClosed(userId);
+      await this.syncPlanning(userId);
+    });
   }
 
   async markRead(id: string, userId: string) {
@@ -245,7 +257,10 @@ export class NotificationsService {
 
       let dueMonth = closingMonth;
       if (card.dueDay < card.closingDay) dueMonth += 1;
-      const dueDate = new Date(closingYear, dueMonth, card.dueDay);
+      // Vencimento dia 31 em mês de 30 dias (ou fevereiro) não pode transbordar
+      // pro mês seguinte — mesma regra de CardsService.calculateInstallmentDueDate.
+      const lastDayOfDueMonth = new Date(closingYear, dueMonth + 1, 0).getDate();
+      const dueDate = new Date(closingYear, dueMonth, Math.min(card.dueDay, lastDayOfDueMonth));
 
       const start = new Date(dueDate.getFullYear(), dueDate.getMonth(), 1);
       const end = new Date(dueDate.getFullYear(), dueDate.getMonth() + 1, 1);

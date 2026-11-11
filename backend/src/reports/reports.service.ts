@@ -202,7 +202,13 @@ export class ReportsService {
       orderBy: { date: 'asc' },
     });
 
-    const escape = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    // Texto começando com = + - @ é lido como fórmula pelo Excel/Sheets: a
+    // descrição pode vir de fora (banco via Open Finance, WhatsApp), então
+    // ganha um apóstrofo na frente pra ser tratada como texto.
+    const escape = (value: string) => {
+      const safe = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+      return `"${safe.replace(/"/g, '""')}"`;
+    };
     const header = ['Data', 'Descrição', 'Tipo', 'Categoria', 'Conta', 'Status', 'Valor'];
     const rows = transactions.map((t) => [
       t.date.toISOString().split('T')[0],

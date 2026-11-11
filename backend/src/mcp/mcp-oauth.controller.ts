@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -31,7 +32,10 @@ export class McpOAuthController {
     res.json(this.oauthService.getProtectedResourceMetadata(originOf(req)));
   }
 
+  // Registro é aberto (sem autenticação) por exigência da spec — o limite
+  // evita que alguém encha a tabela de clientes.
   @Post('mcp/oauth/register')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async register(@Body() body: any, @Res() res: Response) {
     try {
       const client = await this.oauthService.registerClient(body);
@@ -76,10 +80,33 @@ export class McpOAuthController {
    * tela de consentimento (frontend/app/mcp/authorize) já autenticada pelo
    * login normal do PouPay.
    */
+  /**
+   * Também sob "/api": a tela de consentimento confere aqui o cliente e a
+   * redirect_uri antes de mostrar os botões (ver McpOAuthService.getClientInfo).
+   */
+  @UseGuards(JwtAuthGuard)
+  @Get('mcp/oauth/client')
+  clientInfo(@Query('client_id') clientId?: string, @Query('redirect_uri') redirectUri?: string) {
+    return this.oauthService.getClientInfo(clientId, redirectUri);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('mcp/oauth/consent')
   consent(@CurrentUser() user: { id: string }, @Body() dto: OAuthConsentDto) {
     return this.oauthService.createAuthorizationCode(user.id, dto);
+  }
+
+  /** Aplicativos conectados à conta (Configurações) — também sob "/api". */
+  @UseGuards(JwtAuthGuard)
+  @Get('mcp/connections')
+  connections(@CurrentUser() user: { id: string }) {
+    return this.oauthService.listConnections(user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('mcp/connections/:clientId')
+  revokeConnection(@CurrentUser() user: { id: string }, @Param('clientId') clientId: string) {
+    return this.oauthService.revokeConnection(user.id, clientId);
   }
 }
 

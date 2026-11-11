@@ -18,6 +18,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const rememberMe = useAuthStore((s) => s.rememberMe);
   const setUser = useAuthStore((s) => s.setUser);
 
   useEffect(() => {
@@ -32,7 +33,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [hasHydrated, accessToken, router]);
 
-  useIdleLogout(hasHydrated && !!accessToken);
+  // "Lembrar de mim" é justamente pedir pra não ser deslogado: sem esta
+  // exceção, o logoff por inatividade (15 min, inclusive com o app fechado)
+  // derrubava a sessão de qualquer jeito e a opção não fazia nada.
+  useIdleLogout(hasHydrated && !!accessToken && !rememberMe);
 
   // O login só grava os tokens (ver login/page.tsx) — o nome do usuário só
   // fica disponível depois dessa busca, seja logo após o login ou ao

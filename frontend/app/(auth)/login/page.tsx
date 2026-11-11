@@ -17,7 +17,7 @@ import { useAuthStore } from '@/stores/auth-store';
 
 const loginSchema = z.object({
   email: z.string().email('Informe um e-mail válido'),
-  password: z.string().min(6, 'A senha deve ter ao menos 6 caracteres'),
+  password: z.string().min(1, 'Informe sua senha'),
   rememberMe: z.boolean().optional(),
 });
 
@@ -110,7 +110,10 @@ export default function LoginPage() {
 
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <input type="checkbox" className="h-4 w-4 rounded border-border" {...register('rememberMe')} />
-            Lembrar de mim
+            <span>
+              Lembrar de mim
+              <span className="block text-xs">Não sai sozinho por inatividade. Use só no seu aparelho.</span>
+            </span>
           </label>
 
           <Button type="submit" isLoading={isSubmitting} className="mt-2 w-full">

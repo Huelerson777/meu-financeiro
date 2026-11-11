@@ -1,3 +1,5 @@
+import { escapeHtml } from '../common/utils/escape-html';
+
 /** Corpo do e-mail com o código de verificação de cadastro. */
 export function verificationEmailHtml(name: string, code: string, expiresMinutes: number) {
   return (
@@ -9,8 +11,4 @@ export function verificationEmailHtml(name: string, code: string, expiresMinutes
     `<p style="color:#6b7280;font-size:13px">Se você não criou uma conta no PouPay, pode ignorar este e-mail.</p>` +
     `</div>`
   );
-}
-
-function escapeHtml(value: string) {
-  return value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }

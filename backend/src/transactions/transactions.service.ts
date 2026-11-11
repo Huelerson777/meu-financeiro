@@ -187,6 +187,28 @@ export class TransactionsService {
         throw new ForbiddenException('Transferências não podem ser editadas por aqui');
       }
 
+      // Parcela (compra no cartão ou parcelamento): valor, pagamento e conta
+      // vivem na Installment e no limite do cartão, não aqui. Editar por esta
+      // rota debitaria a conta de novo e deixaria parcela/limite fora de
+      // sincronia — só descrição, categoria e observação podem mudar.
+      if (existing.cardId || existing.isInstallment) {
+        const changesMoney =
+          (dto.amount !== undefined && Number(dto.amount) !== Number(existing.amount)) ||
+          (dto.type !== undefined && dto.type !== existing.type) ||
+          (dto.status !== undefined && dto.status !== existing.status);
+        if (changesMoney) {
+          throw new ForbiddenException(
+            existing.cardId
+              ? 'Compras no cartão têm valor e pagamento alterados pela fatura (Contas e Cartões). Aqui só dá pra mudar descrição e categoria.'
+              : 'Parcelas têm valor e pagamento alterados em Recorrentes → Parcelamentos. Aqui só dá pra mudar descrição e categoria.',
+          );
+        }
+        return tx.transaction.update({
+          where: { id },
+          data: { description: dto.description, categoryId: dto.categoryId, notes: dto.notes },
+        });
+      }
+
       // Reverte o efeito no saldo da transação como estava antes de editar
       if (existing.status === 'PAID') {
         await this.applyBalanceEffect(tx, existing.accountId, existing.type, Number(existing.amount), -1);
@@ -217,6 +239,18 @@ export class TransactionsService {
         throw new ForbiddenException(
           'Transferências não podem ser excluídas por aqui (exclua pela conta de origem/destino)',
         );
+      }
+      // Apagar só a Transaction de uma parcela não devolveria o limite do
+      // cartão nem o que já foi debitado da conta no pagamento — a exclusão
+      // certa (CardsService.deletePurchase / InstallmentPurchasesService.remove)
+      // desfaz tudo junto.
+      if (existing.cardId) {
+        throw new ForbiddenException(
+          'Compras no cartão são excluídas pela fatura do cartão (Contas e Cartões), para devolver o limite e o valor já pago.',
+        );
+      }
+      if (existing.isInstallment) {
+        throw new ForbiddenException('Parcelas são excluídas em Recorrentes → Parcelamentos, junto com o parcelamento.');
       }
 
       // Reverte o efeito no saldo antes de apagar

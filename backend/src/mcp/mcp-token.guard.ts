@@ -29,8 +29,13 @@ export class McpTokenGuard implements CanActivate {
     if (!token) throw new UnauthorizedException('Token de acesso MCP ausente');
 
     const accessTokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const stored = await this.prisma.mcpToken.findUnique({ where: { accessTokenHash } });
-    if (!stored || stored.revoked || stored.accessExpiresAt < new Date()) {
+    const stored = await this.prisma.mcpToken.findUnique({
+      where: { accessTokenHash },
+      include: { user: { select: { isActive: true } } },
+    });
+    // Conta excluída/desativada perde o acesso na hora, mesmo com o token
+    // (que vale 90 dias) ainda dentro da validade — igual ao JwtStrategy.
+    if (!stored || stored.revoked || stored.accessExpiresAt < new Date() || !stored.user.isActive) {
       throw new UnauthorizedException('Token de acesso MCP inválido ou expirado');
     }
 

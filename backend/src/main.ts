@@ -19,8 +19,11 @@ async function bootstrap() {
   app.useBodyParser('urlencoded', { extended: true, limit: '8mb' });
 
   // Atrás do proxy do Render, sem isso `req.ip` retorna o IP interno do
-  // proxy em vez do IP real do cliente — usado no log de auditoria.
-  app.getHttpAdapter().getInstance().set('trust proxy', 1);
+  // proxy em vez do IP de quem chamou — usado no log de auditoria e no
+  // limite de requisições das rotas públicas. TRUST_PROXY_HOPS diz quantos
+  // proxies confiáveis existem na frente da API (padrão 1, só o do Render).
+  const proxyHops = Number(process.env.TRUST_PROXY_HOPS ?? 1);
+  app.getHttpAdapter().getInstance().set('trust proxy', Number.isInteger(proxyHops) && proxyHops >= 0 ? proxyHops : 1);
 
   // Segurança
   app.use(helmet());
@@ -31,9 +34,11 @@ async function bootstrap() {
       ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim()).filter(Boolean)
       : true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    // A autenticação é 100% via header Authorization (Bearer token), sem cookies —
-    // credentials:true não é necessário e, combinado com origin:true, permitiria
-    // qualquer site fazer requisições "credenciadas" à API. Ver auditoria de segurança.
+    // As chamadas são autenticadas pelo header Authorization (Bearer token). O
+    // único cookie é o do refresh token, que só trafega na mesma origem do site
+    // (proxy /api-proxy do Next), nunca cross-origin — por isso credentials
+    // fica false: com origin:true, true permitiria a qualquer site fazer
+    // requisições "credenciadas" à API.
     credentials: false,
   });
 

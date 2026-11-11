@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, HttpException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { AuthService } from './auth.service';
 
@@ -9,6 +9,7 @@ function build(user: any) {
   const prisma: any = {
     user: {
       findUnique: jest.fn().mockResolvedValue(user),
+      findFirst: jest.fn().mockResolvedValue(user),
       create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'u1', ...data, settings: undefined })),
       update: jest.fn().mockResolvedValue(user),
     },
@@ -22,7 +23,12 @@ function build(user: any) {
       }),
       update: jest.fn().mockImplementation(({ data }) => { codes[0].attempts += data.attempts.increment; return Promise.resolve(); }),
     },
-    refreshToken: { create: jest.fn().mockResolvedValue({}) },
+    refreshToken: {
+      create: jest.fn().mockResolvedValue({}),
+      findUnique: jest.fn(),
+      update: jest.fn().mockResolvedValue({}),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     $transaction: jest.fn().mockImplementation((ops) => Promise.all(ops)),
   };
   const jwt: any = { sign: jest.fn().mockReturnValue('access') };
@@ -108,5 +114,84 @@ describe('AuthService — verificação de e-mail', () => {
     const passwordHash = await bcrypt.hash('123456', 4);
     const { service } = build({ ...baseUser, passwordHash, emailVerificationRequired: false });
     await expect(service.login({ email: 'm@x.com', password: '123456' } as any)).resolves.toHaveProperty('accessToken');
+  });
+});
+
+describe('AuthService — login e sessão', () => {
+  it('e-mail é normalizado: "  M@X.com " entra na conta m@x.com', async () => {
+    const passwordHash = await bcrypt.hash('123456', 4);
+    const { service, prisma } = build({ ...baseUser, passwordHash, emailVerificationRequired: false });
+    await expect(service.login({ email: '  M@X.com ', password: '123456' } as any)).resolves.toHaveProperty('accessToken');
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({ where: { email: 'm@x.com' } });
+  });
+
+  it('cadastro grava o e-mail em minúsculas', async () => {
+    const { service, prisma } = build(null);
+    await service.register({ name: 'Maria', email: 'Maria@X.com', password: '123456' });
+    expect(prisma.user.create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ email: 'maria@x.com' }) }));
+  });
+
+  it('e-mail inexistente e senha errada dão o mesmo erro', async () => {
+    const passwordHash = await bcrypt.hash('123456', 4);
+    const missing = build(null);
+    const wrong = build({ ...baseUser, passwordHash });
+    await expect(missing.service.login({ email: 'x@x.com', password: '123456' } as any)).rejects.toThrow('Credenciais inválidas');
+    await expect(wrong.service.login({ email: 'm@x.com', password: 'errada' } as any)).rejects.toThrow('Credenciais inválidas');
+  });
+
+  it('bloqueia a conta após 10 senhas erradas seguidas, mesmo com a senha certa depois', async () => {
+    const passwordHash = await bcrypt.hash('123456', 4);
+    const { service } = build({ ...baseUser, passwordHash, emailVerificationRequired: false });
+    for (let i = 0; i < 10; i++) {
+      await expect(service.login({ email: 'm@x.com', password: 'errada' } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+    }
+    const err: any = await service.login({ email: 'M@x.com', password: '123456' } as any).catch((e) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect(err.getStatus()).toBe(429);
+  });
+
+  it('login certo zera a contagem de erros', async () => {
+    const passwordHash = await bcrypt.hash('123456', 4);
+    const { service } = build({ ...baseUser, passwordHash, emailVerificationRequired: false });
+    for (let round = 0; round < 3; round++) {
+      for (let i = 0; i < 9; i++) {
+        await expect(service.login({ email: 'm@x.com', password: 'errada' } as any)).rejects.toBeInstanceOf(UnauthorizedException);
+      }
+      await expect(service.login({ email: 'm@x.com', password: '123456' } as any)).resolves.toHaveProperty('accessToken');
+    }
+  });
+
+  it('refresh de conta desativada é recusado', async () => {
+    const { service, prisma } = build({ ...baseUser, isActive: false });
+    prisma.refreshToken.findUnique.mockResolvedValue({ id: 'r1', userId: 'u1', revoked: false, expiresAt: new Date(Date.now() + 60_000) });
+    await expect(service.refresh('token')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(prisma.refreshToken.update).not.toHaveBeenCalled();
+  });
+
+  it('refresh mantém o "Lembrar de mim": sessão de 28 dias renova por 28 dias', async () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const { service, prisma } = build({ ...baseUser, emailVerifiedAt: new Date() });
+    const createdAt = new Date(Date.now() - 2 * DAY);
+
+    prisma.refreshToken.findUnique.mockResolvedValue({ id: 'r1', userId: 'u1', revoked: false, createdAt, expiresAt: new Date(createdAt.getTime() + 28 * DAY) });
+    const remembered = await service.refresh('token');
+    expect(remembered.rememberMe).toBe(true);
+    const rememberedExpiry = prisma.refreshToken.create.mock.calls.at(-1)[0].data.expiresAt.getTime();
+    expect(Math.round((rememberedExpiry - Date.now()) / DAY)).toBe(28);
+
+    prisma.refreshToken.findUnique.mockResolvedValue({ id: 'r2', userId: 'u1', revoked: false, createdAt, expiresAt: new Date(createdAt.getTime() + 7 * DAY) });
+    const regular = await service.refresh('token');
+    expect(regular.rememberMe).toBe(false);
+    const regularExpiry = prisma.refreshToken.create.mock.calls.at(-1)[0].data.expiresAt.getTime();
+    expect(Math.round((regularExpiry - Date.now()) / DAY)).toBe(7);
+  });
+
+  it('forgotPassword responde igual quando o envio do e-mail falha', async () => {
+    const { service, prisma, mail } = build(baseUser);
+    prisma.passwordResetToken = { create: jest.fn().mockResolvedValue({}) };
+    mail.send.mockRejectedValue(new Error('smtp fora do ar'));
+    await expect(service.forgotPassword('m@x.com')).resolves.toEqual({
+      message: 'Se este e-mail existir na nossa base, enviamos um link de recuperação.',
+    });
   });
 });

@@ -27,6 +27,10 @@ type DueItem = { description: string; amount: number; date: Date };
 @Injectable()
 export class DigestService {
   private readonly logger = new Logger(DigestService.name);
+  // userId -> dia (AAAA-MM-DD) do último resumo enviado. O agendador repete a
+  // chamada quando o Render demora a acordar; sem isto, uma repetição depois
+  // de um envio que deu certo mandava o mesmo resumo duas vezes.
+  private readonly sentOn = new Map<string, string>();
 
   constructor(
     private prisma: PrismaService,
@@ -38,6 +42,7 @@ export class DigestService {
   async sendDailyDigests(options: { dryRun?: boolean } = {}): Promise<DigestResult> {
     const users = await this.prisma.user.findMany({
       where: {
+        isActive: true,
         whatsappNumber: { not: null },
         transactions: {
           some: { notes: WHATSAPP_NOTE, createdAt: { gte: new Date(Date.now() - SEND_WINDOW_MS) } },
@@ -56,9 +61,18 @@ export class DigestService {
           result.messages!.push({ userId: user.id, text });
           continue;
         }
+        const today = todayInBrazil();
+        if (this.sentOn.get(user.id) === today) continue;
+        // Marca antes de enviar: uma segunda chamada simultânea pula este usuário.
+        this.sentOn.set(user.id, today);
+
         const ok = await this.whatsappService.sendProactiveMessage(user.whatsappNumber!, text);
-        if (ok) result.sent++;
-        else result.failed++;
+        if (ok) {
+          result.sent++;
+        } else {
+          this.sentOn.delete(user.id);
+          result.failed++;
+        }
       } catch (err) {
         this.logger.error(`Falha ao montar o resumo do usuário ${user.id}`, err);
         result.failed++;

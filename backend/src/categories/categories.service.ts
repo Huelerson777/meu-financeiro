@@ -32,7 +32,8 @@ export class CategoriesService {
     });
   }
 
-  create(userId: string, dto: CreateCategoryDto) {
+  async create(userId: string, dto: CreateCategoryDto) {
+    await this.ensureParentOwnership(dto.parentId, userId);
     return this.prisma.category.create({
       data: {
         userId,
@@ -60,6 +61,8 @@ export class CategoriesService {
 
   async update(id: string, userId: string, dto: UpdateCategoryDto) {
     await this.ensureOwnership(id, userId);
+    if (dto.parentId === id) throw new ForbiddenException('Uma categoria não pode ser subcategoria dela mesma');
+    await this.ensureParentOwnership(dto.parentId, userId);
 
     return this.prisma.category.update({
       where: { id },
@@ -82,6 +85,12 @@ export class CategoriesService {
 
     await this.prisma.category.delete({ where: { id } });
     return { id };
+  }
+
+  private async ensureParentOwnership(parentId: string | undefined, userId: string) {
+    if (!parentId) return;
+    const parent = await this.prisma.category.findFirst({ where: { id: parentId, userId }, select: { id: true } });
+    if (!parent) throw new ForbiddenException('Categoria pai não encontrada ou não pertence a você');
   }
 
   private async ensureOwnership(id: string, userId: string) {

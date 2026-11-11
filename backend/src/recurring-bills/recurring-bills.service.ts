@@ -3,9 +3,12 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateRecurringBillDto } from './dto/create-recurring-bill.dto';
 import { UpdateRecurringBillDto } from './dto/update-recurring-bill.dto';
 import { monthKey, nameScore } from './recurring-match';
+import { KeyedSingleFlight } from '../common/utils/single-flight';
 
 @Injectable()
 export class RecurringBillsService {
+  private readonly syncFlight = new KeyedSingleFlight<{ generated: number }>();
+
   constructor(private prisma: PrismaService) {}
 
   findAll(userId: string) {
@@ -89,7 +92,15 @@ export class RecurringBillsService {
    * cada conta fixa (ou receita recorrente) ativa do usuário que ainda não tem lançamento nesse mês.
    * Chamado pelo frontend ao abrir Dashboard/Transações.
    */
-  async sync(userId: string) {
+  sync(userId: string) {
+    // Uma sincronização por usuário de cada vez: Dashboard, Transações e
+    // Recorrentes chamam este sync ao abrir, e navegar rápido entre elas
+    // deixava duas execuções em paralelo — as duas viam "ainda não gerou
+    // este mês" e a conta fixa saía duplicada.
+    return this.syncFlight.run(userId, () => this.runSync(userId));
+  }
+
+  private async runSync(userId: string) {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
