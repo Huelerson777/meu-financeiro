@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, Suspense, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,8 +8,39 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { authService } from '@/services/auth.service';
-import { mcpOAuthService } from '@/services/mcp-oauth.service';
+import { McpClientInfo, mcpOAuthService } from '@/services/mcp-oauth.service';
 import { useAuthStore } from '@/stores/auth-store';
+
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+
+/**
+ * Mesma regra do backend (isAllowedRedirectUri em mcp-oauth.service.ts): só
+ * https, ou http em loopback. A redirect_uri chega pela URL desta página —
+ * um link malicioso poderia trazer `javascript:...`, que executaria script
+ * aqui dentro ao redirecionar. Com isso o link nem chega a mostrar o login.
+ */
+function isSafeRedirectUri(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol === 'https:') return true;
+    return url.protocol === 'http:' && LOOPBACK_HOSTS.includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function InvalidLink({ message }: { message: string }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg font-semibold text-foreground">Link inválido</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">{message}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 /**
  * Tela de consentimento do fluxo OAuth do MCP (ver backend/src/mcp/
@@ -17,6 +48,10 @@ import { useAuthStore } from '@/stores/auth-store';
  * redireciona a partir de GET /mcp/oauth/authorize. Funciona logado ou
  * deslogado: sem sessão, pede login (form próprio, sem depender de
  * app/(auth)/login); com sessão, mostra o consentimento direto.
+ *
+ * Nada do que vem na URL é tratado como confiável: o nome do aplicativo e o
+ * destino exibidos vêm do servidor (mcpOAuthService.clientInfo), e os botões
+ * só redirecionam depois dessa conferência — inclusive o "Cancelar".
  */
 function McpAuthorizeContent() {
   const searchParams = useSearchParams();
@@ -25,7 +60,6 @@ function McpAuthorizeContent() {
   const codeChallenge = searchParams.get('code_challenge');
   const codeChallengeMethod = searchParams.get('code_challenge_method');
   const state = searchParams.get('state');
-  const clientName = searchParams.get('client_name');
 
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s.hasHydrated);
@@ -34,11 +68,34 @@ function McpAuthorizeContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [client, setClient] = useState<McpClientInfo | null>(null);
+  const [clientRejected, setClientRejected] = useState(false);
 
   const missingParams = !clientId || !redirectUri || !codeChallenge || !codeChallengeMethod;
+  const unsafeRedirect = !!redirectUri && !isSafeRedirectUri(redirectUri);
+
+  useEffect(() => {
+    if (!accessToken || !clientId || !redirectUri || unsafeRedirect) return;
+    let cancelled = false;
+    setClient(null);
+    setClientRejected(false);
+    mcpOAuthService
+      .clientInfo(clientId, redirectUri)
+      .then((info) => {
+        if (!cancelled) setClient(info);
+      })
+      .catch(() => {
+        if (!cancelled) setClientRejected(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken, clientId, redirectUri, unsafeRedirect]);
 
   function redirectTo(params: Record<string, string>) {
-    const url = new URL(redirectUri as string);
+    // Só redireciona pra um destino que o servidor confirmou ser deste aplicativo.
+    if (!client || !redirectUri) return;
+    const url = new URL(redirectUri);
     Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
     if (state) url.searchParams.set('state', state);
     window.location.href = url.toString();
@@ -77,17 +134,8 @@ function McpAuthorizeContent() {
     redirectTo({ error: 'access_denied' });
   }
 
-  if (missingParams) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg font-semibold text-foreground">Link inválido</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">Este link de autorização está incompleto ou inválido.</p>
-        </CardContent>
-      </Card>
-    );
+  if (missingParams || unsafeRedirect) {
+    return <InvalidLink message="Este link de autorização está incompleto ou inválido." />;
   }
 
   if (!hasHydrated) return null;
@@ -105,6 +153,7 @@ function McpAuthorizeContent() {
               <Input
                 id="email"
                 type="email"
+                autoComplete="username"
                 placeholder="voce@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -116,6 +165,7 @@ function McpAuthorizeContent() {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -131,21 +181,40 @@ function McpAuthorizeContent() {
     );
   }
 
+  if (clientRejected) {
+    return (
+      <InvalidLink message="Não foi possível confirmar o aplicativo que pediu este acesso. Volte ao aplicativo e inicie a conexão de novo." />
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-lg font-semibold text-foreground">Autorizar acesso</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <p className="text-sm text-muted-foreground">
-          <strong className="text-foreground">{clientName || 'Este aplicativo'}</strong> quer acessar sua conta PouPay para
-          consultar e lançar transações, cartões e investimentos em seu nome.
-        </p>
+        {client ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted-foreground">
+              <strong className="text-foreground">{client.clientName || 'Este aplicativo'}</strong> quer acessar sua conta
+              PouPay para consultar e lançar transações, cartões e investimentos em seu nome.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Depois de responder, você volta para{' '}
+              <strong className="break-all text-foreground">{client.redirectHost}</strong>. Só autorize se foi você quem
+              iniciou esta conexão.
+            </p>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground" aria-live="polite">
+            Conferindo o pedido de acesso…
+          </p>
+        )}
         <div className="flex gap-3">
-          <Button variant="outline" className="w-full" onClick={handleDeny} disabled={isSubmitting}>
+          <Button variant="outline" className="w-full" onClick={handleDeny} disabled={!client || isSubmitting}>
             Cancelar
           </Button>
-          <Button className="w-full" onClick={handleAuthorize} isLoading={isSubmitting}>
+          <Button className="w-full" onClick={handleAuthorize} isLoading={isSubmitting} disabled={!client}>
             Autorizar
           </Button>
         </div>

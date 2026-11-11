@@ -3,9 +3,18 @@
 import { notifyAlert, confirmDialog } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Lock, Palette, AlertTriangle, Tag } from 'lucide-react';
+import { User, Lock, Palette, AlertTriangle, Tag, Plug } from 'lucide-react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/auth-store';
+
+interface ConnectedApp {
+  clientId: string;
+  clientName: string | null;
+  connectedAt: string;
+  lastRenewedAt: string;
+}
+
+const formatDate = (iso: string) => new Date(iso).toLocaleDateString('pt-BR');
 
 interface CategoryItem {
   id: string;
@@ -32,6 +41,10 @@ export default function SettingsPage() {
   const [email, setEmail] = useState('');
   const [whatsappNumber, setWhatsappNumber] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
+  // Trocar o e-mail exige a senha atual (o backend recusa sem ela).
+  const [originalEmail, setOriginalEmail] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
+  const emailChanged = !!originalEmail && email.trim().toLowerCase() !== originalEmail.trim().toLowerCase();
 
   // Senha
   const [currentPassword, setCurrentPassword] = useState('');
@@ -46,6 +59,30 @@ export default function SettingsPage() {
   // Excluir conta
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+
+  // Aplicativos conectados (acessos concedidos via MCP, ex: Claude)
+  const [connectedApps, setConnectedApps] = useState<ConnectedApp[]>([]);
+  const [appsLoading, setAppsLoading] = useState(true);
+
+  const fetchConnectedApps = () => {
+    setAppsLoading(true);
+    api.get('/mcp/connections').then((res) => {
+      const list = res.data?.data ?? res.data;
+      setConnectedApps(Array.isArray(list) ? list : []);
+    }).catch(() => setConnectedApps([])).finally(() => setAppsLoading(false));
+  };
+
+  const handleRevokeApp = async (app: ConnectedApp) => {
+    const label = app.clientName || 'este aplicativo';
+    if (!(await confirmDialog(`Revogar o acesso de ${label}? Ele deixa de consultar e lançar na sua conta na hora; pra voltar a usar, é só conectar de novo.`))) return;
+    try {
+      await api.delete(`/mcp/connections/${app.clientId}`);
+      fetchConnectedApps();
+    } catch {
+      notifyAlert('Erro ao revogar o acesso.');
+    }
+  };
 
   // Categorias
   const [categories, setCategories] = useState<CategoryItem[]>([]);
@@ -68,6 +105,7 @@ export default function SettingsPage() {
       const user = res.data?.data ?? res.data;
       setName(user.name ?? '');
       setEmail(user.email ?? '');
+      setOriginalEmail(user.email ?? '');
       setWhatsappNumber(user.whatsappNumber ?? '');
     }).catch(() => {});
 
@@ -78,6 +116,7 @@ export default function SettingsPage() {
     }).catch(() => {});
 
     fetchCategories();
+    fetchConnectedApps();
   }, []);
 
   const handleOpenCreateCategory = () => {
@@ -128,8 +167,16 @@ export default function SettingsPage() {
     e.preventDefault();
     setProfileSaving(true);
     try {
-      await api.patch('/users/me', { name, email, whatsappNumber: whatsappNumber || undefined });
-      notifyAlert('Perfil atualizado com sucesso!');
+      await api.patch('/users/me', {
+        name,
+        email,
+        whatsappNumber: whatsappNumber || undefined,
+        ...(emailChanged ? { currentPassword: profilePassword } : {}),
+      });
+      setOriginalEmail(email.trim().toLowerCase());
+      setEmail(email.trim().toLowerCase());
+      setProfilePassword('');
+      notifyAlert(emailChanged ? 'Perfil atualizado! Confirme o novo e-mail quando o app pedir.' : 'Perfil atualizado com sucesso!');
     } catch (err: any) {
       const msg = err.response?.data?.message;
       notifyAlert(Array.isArray(msg) ? msg.join('\n') : msg || 'Erro ao atualizar perfil.');
@@ -170,11 +217,12 @@ export default function SettingsPage() {
   const handleDeleteAccount = async () => {
     setDeleting(true);
     try {
-      await api.delete('/users/me');
+      await api.delete('/users/me', { data: { password: deletePassword } });
       logout();
       router.replace('/login');
     } catch (err: any) {
-      notifyAlert('Erro ao excluir conta.');
+      const msg = err.response?.data?.message;
+      notifyAlert(typeof msg === 'string' ? msg : 'Erro ao excluir conta.');
       setDeleting(false);
     }
   };
@@ -208,6 +256,19 @@ export default function SettingsPage() {
                 className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
+            {emailChanged && (
+              <div>
+                <label htmlFor="profile-password" className="block text-sm font-medium mb-1">Senha atual</label>
+                <input
+                  id="profile-password"
+                  type="password" autoComplete="current-password" required value={profilePassword} onChange={(e) => setProfilePassword(e.target.value)}
+                  className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Pra trocar o e-mail, confirme sua senha. O novo endereço vai precisar ser verificado.
+                </p>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium mb-1">
                 WhatsApp <span className="text-xs font-normal text-foreground">(pra lançar transações por mensagem)</span>
@@ -246,7 +307,7 @@ export default function SettingsPage() {
             <div>
               <label className="block text-sm font-medium mb-1">Nova senha</label>
               <input
-                type="password" autoComplete="new-password" required minLength={6} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
+                type="password" autoComplete="new-password" required minLength={8} value={newPassword} onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full h-11 px-3 border border-input rounded-md bg-transparent focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/30"
               />
             </div>
@@ -321,7 +382,7 @@ export default function SettingsPage() {
           ) : categories.length === 0 ? (
             <p className="text-sm text-foreground">Nenhuma categoria cadastrada ainda.</p>
           ) : (
-            <ul className="divide-y divide-gray-100 dark:divide-zinc-800">
+            <ul className="divide-y divide-border/70">
               {categories.map((cat) => (
                 <li key={cat.id} className="flex items-center justify-between py-2.5 group">
                   <div className="flex items-center gap-3">
@@ -336,6 +397,43 @@ export default function SettingsPage() {
                       Excluir
                     </button>
                   </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Aplicativos conectados */}
+        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
+          <div className="flex items-center gap-2 mb-1">
+            <Plug className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-semibold">Aplicativos conectados</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Aplicativos (como o Claude) que você autorizou a consultar e lançar na sua conta. Trocar a senha também encerra todos estes acessos.
+          </p>
+
+          {appsLoading ? (
+            <p className="text-sm text-muted-foreground">Carregando...</p>
+          ) : connectedApps.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Nenhum aplicativo conectado.</p>
+          ) : (
+            <ul className="divide-y divide-border/70">
+              {connectedApps.map((app) => (
+                <li key={app.clientId} className="flex items-center justify-between gap-4 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{app.clientName || 'Aplicativo sem nome'}</p>
+                    <p className="text-xs text-muted-foreground">
+                      Conectado em {formatDate(app.connectedAt)}
+                      {app.lastRenewedAt !== app.connectedAt && ` · renovado em ${formatDate(app.lastRenewedAt)}`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleRevokeApp(app)}
+                    className="shrink-0 rounded-md border border-danger/30 px-3 py-1.5 text-sm font-medium text-danger transition hover:bg-danger/10"
+                  >
+                    Revogar acesso
+                  </button>
                 </li>
               ))}
             </ul>
@@ -364,16 +462,24 @@ export default function SettingsPage() {
               <p className="text-sm font-semibold text-danger">
                 Tem certeza? Essa ação não pode ser desfeita.
               </p>
+              <div>
+                <label htmlFor="delete-password" className="block text-sm font-medium mb-1 text-danger">Digite sua senha para confirmar</label>
+                <input
+                  id="delete-password"
+                  type="password" autoComplete="current-password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)}
+                  className="w-full max-w-sm h-11 px-3 border border-danger/40 rounded-md bg-card focus:outline-none focus:border-danger focus:ring-2 focus:ring-danger/30"
+                />
+              </div>
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowDeleteConfirm(false)}
+                  onClick={() => { setShowDeleteConfirm(false); setDeletePassword(''); }}
                   className="px-4 py-2 text-sm text-foreground hover:underline"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleDeleteAccount}
-                  disabled={deleting}
+                  disabled={deleting || !deletePassword}
                   className="bg-danger hover:brightness-110 text-white px-5 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50"
                 >
                   {deleting ? 'Excluindo...' : 'Sim, excluir permanentemente'}

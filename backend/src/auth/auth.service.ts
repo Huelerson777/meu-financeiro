@@ -2,6 +2,8 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   ServiceUnavailableException,
@@ -17,19 +19,36 @@ import { LoginDto } from './dto/login.dto';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { MailService } from '../common/mail/mail.service';
 import { verificationEmailHtml } from './email-verification.mail';
+import { AttemptLimiter } from '../common/utils/attempt-limiter';
+import { escapeHtml } from '../common/utils/escape-html';
+import { normalizeEmail } from '../common/utils/normalize-email';
 
 const ACCESS_EXPIRES_IN = process.env.JWT_EXPIRES_IN ?? '15m';
 const REFRESH_EXPIRES_DAYS = 7;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Validade do refresh token (e do cookie que o carrega): 7 dias, ou 28 com "Lembrar de mim". */
+export function refreshTokenDays(rememberMe?: boolean): number {
+  return rememberMe ? REFRESH_EXPIRES_DAYS * 4 : REFRESH_EXPIRES_DAYS;
+}
 const RESET_TOKEN_EXPIRES_MINUTES = 60;
 const VERIFY_CODE_EXPIRES_MINUTES = 15;
 const VERIFY_CODE_MAX_ATTEMPTS = 5;
 const VERIFY_CODE_RESEND_COOLDOWN_SECONDS = 60;
+// Força bruta de senha: depois de 10 erros seguidos na mesma conta, bloqueia
+// novas tentativas por 15 minutos (independe de IP — ver AttemptLimiter).
+const LOGIN_MAX_FAILURES = 10;
+const LOGIN_LOCK_MINUTES = 15;
+// Hash descartável: quando o e-mail não existe, compara a senha contra ele
+// mesmo assim, pra o tempo de resposta não revelar se a conta existe.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('poupay-dummy-password', 10);
 
 export const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
+  private readonly loginAttempts = new AttemptLimiter(LOGIN_MAX_FAILURES, LOGIN_LOCK_MINUTES * 60 * 1000);
 
   constructor(
     private prisma: PrismaService,
@@ -45,7 +64,8 @@ export class AuthService {
    * qualquer um poderia "queimar" o e-mail de outra pessoa cadastrando antes.
    */
   async register(dto: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } });
+    const email = normalizeEmail(dto.email);
+    const existing = await this.findUserByEmail(email);
     if (existing && (existing.emailVerifiedAt || !existing.emailVerificationRequired)) {
       throw new ConflictException('Já existe uma conta com este e-mail');
     }
@@ -62,7 +82,7 @@ export class AuthService {
       user = await this.prisma.user.create({
         data: {
           name: dto.name,
-          email: dto.email,
+          email,
           passwordHash,
           settings: { create: {} },
         },
@@ -75,15 +95,21 @@ export class AuthService {
   }
 
   async login(dto: LoginDto) {
-    const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
-    if (!user) {
-      throw new UnauthorizedException('Credenciais inválidas');
+    const email = normalizeEmail(dto.email);
+    if (this.loginAttempts.isBlocked(email)) {
+      throw new HttpException(
+        `Muitas tentativas de login. Aguarde ${LOGIN_LOCK_MINUTES} minutos ou redefina sua senha.`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
-    const passwordMatches = await bcrypt.compare(dto.password, user.passwordHash);
-    if (!passwordMatches) {
+    const user = await this.findUserByEmail(email);
+    const passwordMatches = await bcrypt.compare(dto.password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!user || !passwordMatches) {
+      this.loginAttempts.registerFailure(email);
       throw new UnauthorizedException('Credenciais inválidas');
     }
+    this.loginAttempts.reset(email);
 
     if (!user.isActive) {
       throw new UnauthorizedException('Conta desativada');
@@ -115,7 +141,7 @@ export class AuthService {
   async verifyEmail(email: string, code: string) {
     const invalid = new BadRequestException('Código inválido ou expirado');
 
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.findUserByEmail(email);
     if (!user || user.emailVerifiedAt || !user.isActive) throw invalid;
 
     const stored = await this.prisma.emailVerificationCode.findFirst({
@@ -150,7 +176,7 @@ export class AuthService {
 
   /** Reenvia o código. Resposta sempre igual, exista a conta ou não. */
   async resendVerification(email: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.findUserByEmail(email);
     if (user && user.isActive && !user.emailVerifiedAt) {
       await this.sendVerificationCode(user);
     }
@@ -218,7 +244,8 @@ export class AuthService {
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: stored.userId } });
-    if (!user) throw new UnauthorizedException('Usuário não encontrado');
+    // Conta excluída/desativada não renova sessão, mesmo com refresh token ainda válido.
+    if (!user || !user.isActive) throw new UnauthorizedException('Usuário inválido ou inativo');
 
     // Rotaciona o refresh token (revoga o antigo, emite um novo)
     await this.prisma.refreshToken.update({
@@ -226,7 +253,12 @@ export class AuthService {
       data: { revoked: true },
     });
 
-    return this.issueTokens(user.id, user.email, user.role);
+    // "Lembrar de mim" vale pra sessão inteira: antes a primeira renovação
+    // (15 min depois do login) já emitia um token comum de 7 dias e a escolha
+    // se perdia. A validade do token anterior diz como a sessão foi aberta.
+    const rememberMe = stored.expiresAt.getTime() - stored.createdAt.getTime() > (REFRESH_EXPIRES_DAYS + 1) * DAY_MS;
+    const tokens = await this.issueTokens(user.id, user.email, user.role, rememberMe);
+    return { ...tokens, rememberMe };
   }
 
   async logout(refreshToken: string) {
@@ -244,7 +276,7 @@ export class AuthService {
    * endpoint pra descobrir quais e-mails estão cadastrados no sistema.
    */
   async forgotPassword(email: string) {
-    const user = await this.prisma.user.findUnique({ where: { email } });
+    const user = await this.findUserByEmail(email);
 
     if (user && user.isActive) {
       const rawToken = crypto.randomBytes(32).toString('hex');
@@ -259,14 +291,22 @@ export class AuthService {
       });
 
       const resetUrl = `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/reset-password?token=${rawToken}`;
-      await this.mailService.send(
-        user.email,
-        'Recuperação de senha — PouPay',
-        `<p>Olá, ${user.name}.</p>` +
-          `<p>Clique no link abaixo para redefinir sua senha. Ele expira em ${RESET_TOKEN_EXPIRES_MINUTES} minutos.</p>` +
-          `<p><a href="${resetUrl}">${resetUrl}</a></p>` +
-          `<p>Se você não pediu essa recuperação, pode ignorar este e-mail.</p>`,
-      );
+      // Envia em segundo plano e nunca propaga a falha: se o envio demorasse
+      // ou desse erro só quando o e-mail existe, o tempo/erro da resposta
+      // revelaria quais e-mails estão cadastrados — justamente o que este
+      // endpoint promete não fazer.
+      this.mailService
+        .send(
+          user.email,
+          'Recuperação de senha — PouPay',
+          `<p>Olá, ${escapeHtml(user.name)}.</p>` +
+            `<p>Clique no link abaixo para redefinir sua senha. Ele expira em ${RESET_TOKEN_EXPIRES_MINUTES} minutos.</p>` +
+            `<p><a href="${resetUrl}">${resetUrl}</a></p>` +
+            `<p>Se você não pediu essa recuperação, pode ignorar este e-mail.</p>`,
+        )
+        .catch((error) =>
+          this.logger.error(`Falha ao enviar o e-mail de recuperação de senha: ${(error as Error).message}`),
+        );
     }
 
     return { message: 'Se este e-mail existir na nossa base, enviamos um link de recuperação.' };
@@ -282,17 +322,37 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
 
-    await this.prisma.$transaction([
+    const [user] = await this.prisma.$transaction([
       this.prisma.user.update({ where: { id: stored.userId }, data: { passwordHash } }),
       this.prisma.passwordResetToken.update({ where: { id: stored.id }, data: { used: true } }),
-      // Redefinir a senha encerra todas as sessões ativas, por segurança
+      // Redefinir a senha encerra todas as sessões ativas, por segurança —
+      // inclusive os acessos concedidos a apps via MCP (tokens de 90 dias):
+      // quem redefine a senha por suspeita de invasão espera tirar todo mundo.
       this.prisma.refreshToken.updateMany({
         where: { userId: stored.userId, revoked: false },
         data: { revoked: true },
       }),
+      this.prisma.mcpToken.updateMany({
+        where: { userId: stored.userId, revoked: false },
+        data: { revoked: true },
+      }),
     ]);
+    // Senha nova: libera o login caso a conta estivesse bloqueada por tentativas erradas.
+    this.loginAttempts.reset(normalizeEmail(user.email));
 
     return { message: 'Senha redefinida com sucesso' };
+  }
+
+  /**
+   * Busca pelo e-mail normalizado. O segundo passo (sem diferenciar
+   * maiúsculas) cobre contas criadas antes da normalização, cujo e-mail pode
+   * ter sido salvo como "Maria@Email.com".
+   */
+  private async findUserByEmail(email: string) {
+    const normalized = normalizeEmail(email);
+    const exact = await this.prisma.user.findUnique({ where: { email: normalized } });
+    if (exact) return exact;
+    return this.prisma.user.findFirst({ where: { email: { equals: normalized, mode: 'insensitive' } } });
   }
 
   private async issueTokens(userId: string, email: string, role: string, rememberMe = false) {
@@ -305,15 +365,25 @@ export class AuthService {
 
     const refreshToken = crypto.randomBytes(64).toString('hex');
     const tokenHash = this.hashToken(refreshToken);
-    const expiresInDays = rememberMe ? REFRESH_EXPIRES_DAYS * 4 : REFRESH_EXPIRES_DAYS;
-
     await this.prisma.refreshToken.create({
       data: {
         userId,
         tokenHash,
-        expiresAt: new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + refreshTokenDays(rememberMe) * DAY_MS),
       },
     });
+
+    // Faxina em segundo plano: cada renovação (a cada ~15 min de uso) deixa um
+    // token revogado pra trás, e a tabela só crescia. Vencidos e revogados há
+    // mais de uma semana não servem pra mais nada.
+    this.prisma.refreshToken
+      .deleteMany({
+        where: {
+          userId,
+          OR: [{ expiresAt: { lt: new Date() } }, { revoked: true, createdAt: { lt: new Date(Date.now() - 7 * DAY_MS) } }],
+        },
+      })
+      .catch(() => undefined);
 
     return { accessToken, refreshToken };
   }

@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { TransactionsService } from '../transactions/transactions.service';
 import { AccountsService } from '../accounts/accounts.service';
@@ -7,20 +9,14 @@ import { CategoriesService } from '../categories/categories.service';
 import { CardsService } from '../cards/cards.service';
 import { InvestmentsService } from '../investments/investments.service';
 import { InstallmentPurchasesService } from '../installment-purchases/installment-purchases.service';
+import { CreatePurchaseDto } from '../cards/dto/create-purchase.dto';
+import { CreateInstallmentPurchaseDto } from '../installment-purchases/dto/create-installment-purchase.dto';
+import { CreatePositionDto } from '../investments/dto/create-position.dto';
 import { MCP_TOOLS } from './mcp-tool-definitions';
+import { McpSearchTransactionsDto, McpTransactionEntryDto, McpTransactionsBatchDto } from './dto/mcp-tool-args.dto';
 
-type TransactionEntry = {
-  type: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'INVESTMENT';
-  description: string;
-  amount: number;
-  date: string;
-  status?: 'PAID' | 'PENDING';
-  accountId: string;
-  toAccountId?: string;
-  categoryId?: string;
-  /** Confirma o lançamento mesmo que já exista um possível duplicado (ver findPossibleDuplicate). */
-  force?: boolean;
-};
+/** `force` confirma o lançamento mesmo que já exista um possível duplicado (ver findPossibleDuplicate). */
+type TransactionEntry = McpTransactionEntryDto;
 
 type CreateEntryResult =
   | { outcome: 'created'; transaction: unknown }
@@ -61,17 +57,19 @@ export class McpToolsService {
         case 'list_investment_positions':
           return this.ok(await this.investmentsService.listPositions(userId));
         case 'search_transactions':
-          return this.ok(await this.searchTransactions(userId, args));
+          return this.ok(await this.searchTransactions(userId, await this.parseArgs(McpSearchTransactionsDto, args)));
         case 'create_transaction':
-          return this.ok(await this.createSingleEntry(userId, args as unknown as TransactionEntry));
+          return this.ok(await this.createSingleEntry(userId, await this.parseArgs(McpTransactionEntryDto, args)));
         case 'create_transactions_batch':
-          return this.ok(await this.createTransactionsBatch(userId, args));
+          return this.ok(await this.createTransactionsBatch(userId, await this.parseArgs(McpTransactionsBatchDto, args)));
         case 'create_card_purchase':
           return this.ok(await this.createCardPurchase(userId, args));
         case 'create_installment_purchase':
-          return this.ok(await this.installmentPurchasesService.create(userId, args as any));
+          return this.ok(
+            await this.installmentPurchasesService.create(userId, await this.parseArgs(CreateInstallmentPurchaseDto, args)),
+          );
         case 'create_investment_position':
-          return this.ok(await this.investmentsService.createPosition(userId, args as any));
+          return this.ok(await this.investmentsService.createPosition(userId, await this.parseArgs(CreatePositionDto, args)));
         default:
           return this.error(`Tool desconhecida: ${name}`);
       }
@@ -89,16 +87,31 @@ export class McpToolsService {
     return accounts.map((a) => ({ ...a, currentBalance: Number(a.currentBalance) }));
   }
 
-  private searchTransactions(userId: string, args: Record<string, unknown>) {
+  /**
+   * Valida os argumentos de uma tool com as mesmas regras (class-validator)
+   * que os endpoints HTTP aplicam via ValidationPipe — aqui ele não roda,
+   * porque as tools chamam os Services direto. Campos fora do DTO são descartados.
+   */
+  private async parseArgs<T extends object>(dto: new () => T, args: unknown): Promise<T> {
+    const instance = plainToInstance(dto, args ?? {});
+    const errors = await validate(instance, { whitelist: true });
+    if (errors.length > 0) {
+      const details = errors.flatMap((e) => Object.values(e.constraints ?? {})).join('; ');
+      throw new Error(`Argumentos inválidos: ${details || 'confira os campos enviados'}`);
+    }
+    return instance;
+  }
+
+  private searchTransactions(userId: string, args: McpSearchTransactionsDto) {
     return this.transactionsService.findAll(userId, {
-      startDate: typeof args.startDate === 'string' ? args.startDate : undefined,
-      endDate: typeof args.endDate === 'string' ? args.endDate : undefined,
-      search: typeof args.search === 'string' ? args.search : undefined,
-      amount: typeof args.amount === 'string' ? args.amount : undefined,
-      types: Array.isArray(args.types) ? (args.types as TransactionEntry['type'][]) : undefined,
-      status: typeof args.status === 'string' ? (args.status as any) : undefined,
-      page: typeof args.page === 'number' ? args.page : undefined,
-      limit: typeof args.limit === 'number' ? args.limit : undefined,
+      startDate: args.startDate,
+      endDate: args.endDate,
+      search: args.search,
+      amount: args.amount,
+      types: args.types,
+      status: args.status,
+      page: args.page,
+      limit: args.limit,
     });
   }
 
@@ -181,15 +194,16 @@ export class McpToolsService {
     };
   }
 
-  private async createTransactionsBatch(userId: string, args: Record<string, unknown>) {
-    const entries = Array.isArray(args.transactions) ? (args.transactions as TransactionEntry[]) : [];
+  private async createTransactionsBatch(userId: string, args: McpTransactionsBatchDto) {
+    const entries = args.transactions;
     const created: unknown[] = [];
     const possibleDuplicates: { index: number; attempted: TransactionEntry; existing: unknown }[] = [];
     const failed: { index: number; error: string }[] = [];
 
     for (let index = 0; index < entries.length; index++) {
       try {
-        const result = await this.createEntry(userId, entries[index]);
+        // Cada item é validado por si: um inválido vai pra "failed" sem derrubar os demais.
+        const result = await this.createEntry(userId, await this.parseArgs(McpTransactionEntryDto, entries[index]));
         if (result.outcome === 'created') {
           created.push(result.transaction);
         } else {
@@ -214,15 +228,11 @@ export class McpToolsService {
     };
   }
 
-  private createCardPurchase(userId: string, args: Record<string, unknown>) {
-    const cardId = args.cardId as string;
-    return this.cardsService.createPurchase(cardId, userId, {
-      description: args.description as string,
-      totalAmount: args.totalAmount as number,
-      installmentsCount: (args.installmentsCount as number) ?? 1,
-      purchaseDate: args.purchaseDate as string,
-      categoryId: args.categoryId as string | undefined,
-    });
+  private async createCardPurchase(userId: string, args: Record<string, unknown>) {
+    const { cardId, ...rest } = args;
+    if (typeof cardId !== 'string' || !cardId) throw new Error('Argumentos inválidos: cardId é obrigatório');
+    const dto = await this.parseArgs(CreatePurchaseDto, { ...rest, installmentsCount: rest.installmentsCount ?? 1 });
+    return this.cardsService.createPurchase(cardId, userId, dto);
   }
 
   private ok(data: unknown): CallToolResult {

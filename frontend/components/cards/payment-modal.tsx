@@ -3,6 +3,7 @@
 import { notifyAlert } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { api } from '@/services/api';
+import { todayLocalISO } from '@/utils/date';
 import { formatCurrency } from '@/utils/currency';
 
 interface AccountOption {
@@ -41,7 +42,7 @@ export function PaymentModal({
 }: PaymentModalProps) {
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [accountId, setAccountId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayLocalISO());
   const [amountValue, setAmountValue] = useState(amount.toString());
   const [isSubmitting, setIsSubmitting] = useState(false);
 

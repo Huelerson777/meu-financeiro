@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { todayLocalISO } from '@/utils/date';
 import { investmentsService } from '@/services/investments.service';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +44,7 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
   const [destinationAccountId, setDestinationAccountId] = useState('');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayLocalISO());
 
   const [investMode, setInvestMode] = useState<'simple' | 'asset'>('simple');
   // Ativo comprado antes de usar o app: registra só a posição, sem mexer em
@@ -55,7 +56,7 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
   const [assetUnitPrice, setAssetUnitPrice] = useState('');
   const [assetIndexer, setAssetIndexer] = useState<'CDI' | 'SELIC' | 'IPCA_PLUS' | 'PREFIXADO'>('CDI');
   const [assetRate, setAssetRate] = useState('');
-  const [assetStartDate, setAssetStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [assetStartDate, setAssetStartDate] = useState(todayLocalISO());
   // Valor de hoje de um ativo antigo — só faz sentido pra "já possuía", já
   // que um aporte novo vale o mesmo que custou no momento do registro.
   const [assetCurrentAmount, setAssetCurrentAmount] = useState('');
@@ -67,7 +68,7 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
     setDestinationAccountId('');
     setDescription('');
     setAmount('');
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(todayLocalISO());
     setInvestMode('simple');
     setAlreadyOwned(false);
     setAssetCategory('FIXED_INCOME');
@@ -76,7 +77,7 @@ export function InvestModal({ open, onClose, onCreated }: InvestModalProps) {
     setAssetUnitPrice('');
     setAssetIndexer('CDI');
     setAssetRate('');
-    setAssetStartDate(new Date().toISOString().split('T')[0]);
+    setAssetStartDate(todayLocalISO());
     setAssetCurrentAmount('');
 
     setLoadingAccounts(true);

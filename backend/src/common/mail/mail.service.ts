@@ -24,6 +24,13 @@ export class MailService {
 
     const host = process.env.SMTP_HOST;
     if (!host) {
+      // O corpo traz o código de verificação / link de redefinição de senha:
+      // em produção nunca vai pro log (quem lê o log entraria na conta).
+      // (o assunto também: o do código de verificação começa com o próprio código).
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error(`E-mail NÃO enviado para ${to}: configure RESEND_API_KEY ou SMTP_HOST.`);
+        return;
+      }
       this.logger.warn(
         `SMTP não configurado — e-mail não enviado de verdade. Para: ${to} | Assunto: ${subject}\n${html}`,
       );

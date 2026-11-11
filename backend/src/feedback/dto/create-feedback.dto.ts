@@ -9,11 +9,13 @@ export class CreateFeedbackDto {
   @ApiProperty({ example: 'Contas', description: 'Tela/aba sobre a qual o feedback é' })
   @IsString()
   @MinLength(2)
+  @MaxLength(100)
   screen!: string;
 
   @ApiProperty({ example: 'Erro no cadastro de conta: ao salvar, o saldo não aparece.' })
   @IsString()
   @MinLength(5)
+  @MaxLength(5000)
   message!: string;
 
   @ApiPropertyOptional({ description: 'Print/imagem anexada, como data URI (ex: "data:image/png;base64,...")' })

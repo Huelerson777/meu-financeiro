@@ -8,6 +8,7 @@ import React, { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { X, ArrowDownCircle, ArrowUpCircle, ArrowLeftRight } from 'lucide-react';
 import { api } from '@/services/api';
+import { todayLocalISO } from '@/utils/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -52,6 +53,18 @@ interface Transaction {
   category?: { name: string; color: string } | null;
   transfer?: { id: string; toId: string; toAccount?: { name: string; type: string } } | null;
   installments?: { paid: boolean; paidAt?: string | null }[] | null;
+  cardId?: string | null;
+}
+
+// Parcela de compra no cartão ou de parcelamento: valor, pagamento e exclusão
+// passam pela fatura/parcelamento (que devolvem limite e saldo junto). Editar
+// ou excluir por esta tela mexeria só no lançamento e deixaria o resto errado —
+// o backend recusa, então aqui a linha aponta pro lugar certo em vez dos botões.
+function installmentSource(t: Transaction): { href: string; label: string } | null {
+  if (!t.installments || t.installments.length === 0) return null;
+  return t.cardId
+    ? { href: '/accounts?tab=cards', label: 'Ver na fatura' }
+    : { href: '/recurring-bills', label: 'Ver parcelamento' };
 }
 
 interface AccountOption {
@@ -148,7 +161,7 @@ function TransactionsPageContent() {
   const [categoryId, setCategoryId] = useState('');
   const [destinationAccountId, setDestinationAccountId] = useState('');
   const [status, setStatus] = useState<'PAID' | 'PENDING'>('PAID');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(todayLocalISO());
 
   // Sugestão automática de categoria: só sobrescreve o campo enquanto o
   // valor ali dentro ainda for uma sugestão (não uma escolha manual do usuário).
@@ -257,7 +270,7 @@ function TransactionsPageContent() {
     setCategoryId('');
     setCategoryAutoSuggested(false);
     setDestinationAccountId('');
-    setDate(new Date().toISOString().split('T')[0]);
+    setDate(todayLocalISO());
     if (accounts.length > 0) setAccountId(accounts[0].id);
     setIsModalOpen(true);
   };
@@ -316,7 +329,9 @@ function TransactionsPageContent() {
       }
       fetchData();
     } catch (err: any) {
-      notifyAlert('Erro ao excluir transação.');
+      // O backend explica quando a exclusão precisa ser feita em outro lugar (ex: compra no cartão).
+      const backendMessage = err?.response?.data?.message;
+      notifyAlert(typeof backendMessage === 'string' ? backendMessage : 'Erro ao excluir transação.');
     }
   };
 
@@ -539,7 +554,7 @@ function TransactionsPageContent() {
           </div>
         ) : (
           <>
-          <ul className="divide-y divide-border md:hidden">
+          <ul className="divide-y divide-border xl:hidden">
             {transactions.map((t) => {
               const isIncome = t.type === 'INCOME';
               const isInvestment = t.type === 'TRANSFER' && t.transfer?.toAccount?.type === 'INVESTMENT';
@@ -583,15 +598,23 @@ function TransactionsPageContent() {
                       )}
                     </div>
                     <div className="flex shrink-0 gap-4">
-                      <button onClick={() => handleEdit(t)} className="py-1 text-sm font-semibold text-primary">Editar</button>
-                      <button onClick={() => handleDelete(t)} className="py-1 text-sm font-semibold text-danger">Excluir</button>
+                      {installmentSource(t) ? (
+                        <Link href={installmentSource(t)!.href} className="py-1 text-sm font-semibold text-primary">
+                          {installmentSource(t)!.label}
+                        </Link>
+                      ) : (
+                        <>
+                          <button onClick={() => handleEdit(t)} className="py-1 text-sm font-semibold text-primary">Editar</button>
+                          <button onClick={() => handleDelete(t)} className="py-1 text-sm font-semibold text-danger">Excluir</button>
+                        </>
+                      )}
                     </div>
                   </div>
                 </li>
               );
             })}
           </ul>
-          <div className="hidden overflow-x-auto md:block"><table className="min-w-[640px] w-full text-left border-collapse">
+          <div className="hidden overflow-x-auto xl:block"><table className="min-w-[640px] w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-border bg-muted/60">
                 <th className="p-4 font-semibold">Tipo</th>
@@ -668,12 +691,20 @@ function TransactionsPageContent() {
                     </td>
                     <td className="p-4 text-center">
                       <div className="flex justify-center gap-3 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => handleEdit(t)} className="text-primary hover:text-primary text-sm font-medium">
-                          Editar
-                        </button>
-                        <button onClick={() => handleDelete(t)} className="text-danger hover:text-danger text-sm font-medium">
-                          Excluir
-                        </button>
+                        {installmentSource(t) ? (
+                          <Link href={installmentSource(t)!.href} className="text-primary hover:text-primary text-sm font-medium">
+                            {installmentSource(t)!.label}
+                          </Link>
+                        ) : (
+                          <>
+                            <button onClick={() => handleEdit(t)} className="text-primary hover:text-primary text-sm font-medium">
+                              Editar
+                            </button>
+                            <button onClick={() => handleDelete(t)} className="text-danger hover:text-danger text-sm font-medium">
+                              Excluir
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

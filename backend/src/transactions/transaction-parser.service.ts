@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PARSE_TRANSACTION_TOOL } from './parse-transaction-tool';
+import { todayInBrazil } from '../common/utils/brazil-date';
 
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 
@@ -82,7 +83,7 @@ export class TransactionParserService {
     const category = typeof input.categoryId === 'string' ? categories.find((c) => c.id === input.categoryId) : undefined;
 
     const dateMatch = typeof input.date === 'string' ? /^\d{4}-\d{2}-\d{2}$/.exec(input.date) : null;
-    const date = dateMatch ? input.date as string : new Date().toISOString().split('T')[0];
+    const date = dateMatch ? input.date as string : todayInBrazil();
 
     // Transferência/investimento não têm cartão, categoria ou parcelas —
     // são sempre conta-a-conta.
@@ -144,7 +145,7 @@ ${cardsList}
 Categorias disponíveis:
 ${categoriesList}
 
-Data de hoje: ${new Date().toISOString().split('T')[0]}
+Data de hoje: ${todayInBrazil()}
 
 Regras:
 - Se o texto descrever mover dinheiro entre duas contas do próprio usuário (ex: "passei", "transferi", "movi"), use type TRANSFER: accountId é a conta de origem, toAccountId é a conta de destino.

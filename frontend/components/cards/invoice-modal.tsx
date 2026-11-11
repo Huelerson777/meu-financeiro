@@ -231,33 +231,33 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
       return;
     }
 
-    try {
-      const res = await api.get('/transactions', { params: { type: 'EXPENSE', limit: 100 } });
-      const raw = res.data;
-      const all = Array.isArray(raw?.data?.items) ? raw.data.items
-        : Array.isArray(raw?.items) ? raw.items
-        : Array.isArray(raw) ? raw
-        : [];
-      const group = all.filter((t: any) => (item.installmentGroupId ? t.installmentGroupId === item.installmentGroupId : t.id === item.id));
-      if (group.length === 0) return;
-
-      const totalAmount = group.reduce((acc: number, t: any) => acc + Number(t.amount), 0);
-      const earliest = group.reduce((a: any, b: any) => (new Date(a.date) < new Date(b.date) ? a : b));
-      const { name } = parseInstallmentLabel(item.description);
-
-      setPurchaseToEdit({
-        installmentGroupId: item.installmentGroupId ?? item.id,
-        description: name,
-        totalAmount,
-        installmentsCount: group.length,
-        // purchaseDate só existe pra compras lançadas depois desse campo existir;
-        // pra compras antigas cai pro "date" (vencimento) como aproximação.
-        purchaseDate: new Date(earliest.purchaseDate ?? earliest.date).toISOString().split('T')[0],
-        categoryId: item.categoryId ?? null,
-      });
-    } catch {
-      notifyAlert('Erro ao carregar dados da compra para edição.');
+    // As parcelas da compra já estão todas nas faturas carregadas (o endpoint
+    // de faturas devolve o cartão inteiro, todos os meses). Antes isto buscava
+    // "as 100 primeiras despesas" do usuário e filtrava pelo grupo: com mais de
+    // 100 despesas, parte das parcelas ficava de fora e a edição abria com
+    // total e número de parcelas errados — salvar encolhia a compra.
+    const group = invoices
+      .flatMap((inv) => inv.items)
+      .filter((t) => !t.isCredit && (item.installmentGroupId ? t.installmentGroupId === item.installmentGroupId : t.id === item.id));
+    if (group.length === 0) {
+      notifyAlert('Não encontrei as parcelas desta compra. Recarregue a fatura e tente de novo.');
+      return;
     }
+
+    const totalAmount = Math.round(group.reduce((acc, t) => acc + Number(t.amount), 0) * 100) / 100;
+    const earliest = group.reduce((a, b) => (new Date(a.date) < new Date(b.date) ? a : b));
+    const { name } = parseInstallmentLabel(item.description);
+
+    setPurchaseToEdit({
+      installmentGroupId: item.installmentGroupId ?? item.id,
+      description: name,
+      totalAmount,
+      installmentsCount: group.length,
+      // purchaseDate só existe pra compras lançadas depois desse campo existir;
+      // pra compras antigas cai pro "date" (vencimento) como aproximação.
+      purchaseDate: new Date(earliest.purchaseDate ?? earliest.date).toISOString().split('T')[0],
+      categoryId: item.categoryId ?? null,
+    });
   };
 
   const currentInvoice = invoices.find((inv) => inv.month === selectedMonth);
@@ -292,7 +292,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
         ) : (
           <>
             {/* Abas de mês */}
-            <div className="flex-shrink-0 flex gap-2 px-6 py-3 overflow-x-auto border-b border-border">
+            <div className="flex-shrink-0 flex gap-2 px-6 py-3 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {invoices.map((inv) => {
                 const isPaid = inv.openTotal <= 0;
                 return (

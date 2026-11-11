@@ -45,6 +45,7 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { PaymentsStatusItem } from '@/services/dashboard.service';
 import { formatCurrency } from '@/utils/currency';
 import { api } from '@/services/api';
+import { fetchAllTransactions } from '@/services/transactions.service';
 import { useAuthStore } from '@/stores/auth-store';
 
 // Saudação de acordo com o horário local do usuário
@@ -180,14 +181,7 @@ export default function DashboardPage() {
       const endDate = new Date(selectedYear, selectedMonth, 0).toISOString().split('T')[0];
       // A API já filtra por tipo, status pago e mês/ano selecionados no
       // Dashboard; o filtro de status abaixo é só uma rede de segurança.
-      const res = await api.get('/transactions', {
-        params: { type, status: 'PAID', startDate, endDate, limit: 100 },
-      });
-      const raw = res.data;
-      const list = Array.isArray(raw?.data?.items) ? raw.data.items
-        : Array.isArray(raw?.items) ? raw.items
-        : Array.isArray(raw) ? raw
-        : [];
+      const list = await fetchAllTransactions({ type, status: 'PAID', startDate, endDate });
       setAllTransactions(list.filter((t: any) => t.status === 'PAID'));
     } catch {
       setAllTransactions([]);

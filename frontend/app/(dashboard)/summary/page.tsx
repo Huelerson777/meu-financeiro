@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { useBudgets } from '@/hooks/use-budgets';
 import { useDashboardExpensesByCategory, useDashboardSummary, useGoalsSummary } from '@/hooks/use-dashboard';
 import { api } from '@/services/api';
+import { fetchAllTransactions } from '@/services/transactions.service';
 import { formatCurrency } from '@/utils/currency';
 import { cn } from '@/utils/cn';
 
@@ -57,9 +58,8 @@ export default function SummaryPage() {
   const { data: topExpenses, isLoading: txLoading } = useQuery({
     queryKey: ['summary', 'top-expenses', startDate, endDate],
     queryFn: async () => {
-      const res = await api.get('/transactions', { params: { type: 'EXPENSE', status: 'PAID', startDate, endDate, limit: 100 } });
-      const raw = res.data;
-      const list: Tx[] = Array.isArray(raw?.data?.items) ? raw.data.items : Array.isArray(raw?.items) ? raw.items : [];
+      // O mês inteiro, não só a primeira página: o maior gasto pode estar depois dos 100 primeiros.
+      const list = await fetchAllTransactions<Tx>({ type: 'EXPENSE', status: 'PAID', startDate, endDate });
       return list.sort((a, b) => Number(b.amount) - Number(a.amount)).slice(0, 5);
     },
   });

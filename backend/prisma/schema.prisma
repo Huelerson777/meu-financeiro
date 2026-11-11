@@ -1,6 +1,6 @@
 // ============================================================================
 // Sistema de Gestão Financeira - Schema Prisma
-// PostgreSQL (Supabase)
+// PostgreSQL (Neon)
 // ============================================================================
 
 generator client {

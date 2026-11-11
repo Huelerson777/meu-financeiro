@@ -1,8 +1,10 @@
+import { NormalizeEmail } from '../../common/utils/normalize-email';
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, Matches } from 'class-validator';
 
 export class VerifyEmailDto {
   @ApiProperty({ example: 'maria@email.com' })
+  @NormalizeEmail()
   @IsEmail()
   email: string;
 

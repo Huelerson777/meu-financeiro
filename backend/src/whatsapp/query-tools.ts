@@ -67,7 +67,5 @@ export function parseIsoDate(value: unknown): string | undefined {
   return Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== value ? undefined : value;
 }
 
-/** Hoje (AAAA-MM-DD) no fuso do usuário, não o do servidor (UTC). */
-export function todayInBrazil(now: Date = new Date()): string {
-  return now.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-}
+// Mora em common/ porque outros módulos (parser de IA, investimentos) também precisam.
+export { todayInBrazil } from '../common/utils/brazil-date';

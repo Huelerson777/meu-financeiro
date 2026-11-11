@@ -29,8 +29,11 @@ export class WhatsappController {
     @Query('hub.challenge') challenge: string,
     @Res() res: Response,
   ) {
-    if (mode === 'subscribe' && token && token === process.env.WHATSAPP_VERIFY_TOKEN) {
-      res.status(200).send(challenge);
+    // text/plain de propósito: `challenge` vem da URL e, devolvido como HTML
+    // (padrão do res.send com string), seria um ponto de XSS refletido.
+    res.type('text/plain');
+    if (mode === 'subscribe' && isValidCronSecret(process.env.WHATSAPP_VERIFY_TOKEN, token)) {
+      res.status(200).send(String(challenge ?? ''));
       return;
     }
     res.status(403).send('Token de verificação inválido');

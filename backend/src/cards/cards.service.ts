@@ -10,9 +10,13 @@ import { PayInvoiceDto } from './dto/pay-invoice.dto';
 import { CreateCreditDto } from './dto/create-credit.dto';
 import { CreateRecurringPurchaseDto } from './dto/create-recurring-purchase.dto';
 import { UpdateRecurringPurchaseDto } from './dto/update-recurring-purchase.dto';
+import { KeyedSingleFlight } from '../common/utils/single-flight';
+import { parseDateOnly } from '../common/utils/date-only';
 
 @Injectable()
 export class CardsService {
+  private readonly recurringSync = new KeyedSingleFlight<{ generated: number }>();
+
   constructor(private prisma: PrismaService) {}
 
   /**
@@ -119,6 +123,7 @@ export class CardsService {
     if (!card) throw new NotFoundException('Cartão não encontrado');
     if (card.userId !== userId) throw new ForbiddenException('Este cartão não pertence a você');
     if (card.isArchived) throw new BadRequestException('Este cartão está arquivado');
+    await this.ensureCategoryOwnership(dto.categoryId, userId);
 
     const availableLimit = Number(card.limitAmount) - Number(card.usedLimit);
     if (dto.totalAmount > availableLimit) {
@@ -128,7 +133,7 @@ export class CardsService {
     }
 
     const installmentAmounts = this.splitAmount(dto.totalAmount, dto.installmentsCount);
-    const purchaseDate = this.parseDateOnly(dto.purchaseDate);
+    const purchaseDate = parseDateOnly(dto.purchaseDate);
     const installmentGroupId = randomUUID();
 
     return this.prisma.$transaction(async (tx) => {
@@ -191,8 +196,9 @@ export class CardsService {
     if (!card) throw new NotFoundException('Cartão não encontrado');
     if (card.userId !== userId) throw new ForbiddenException('Este cartão não pertence a você');
     if (card.isArchived) throw new BadRequestException('Este cartão está arquivado');
+    await this.ensureCategoryOwnership(dto.categoryId, userId);
 
-    const creditDate = this.parseDateOnly(dto.date);
+    const creditDate = parseDateOnly(dto.date);
     const invoiceDate = this.calculateInstallmentDueDate(creditDate, card.closingDay, card.dueDay, 0);
 
     return this.prisma.$transaction(async (tx) => {
@@ -254,7 +260,7 @@ export class CardsService {
     return this.prisma.$transaction(
       async (tx) => {
         for (const row of fresh) {
-          const purchaseDate = this.parseDateOnly(row.date);
+          const purchaseDate = parseDateOnly(row.date);
           const description = row.description.trim().slice(0, 200) || 'Sem descrição';
 
           if (row.amount < 0) {
@@ -408,6 +414,7 @@ export class CardsService {
     if (!card) throw new NotFoundException('Cartão não encontrado');
     if (card.userId !== userId) throw new ForbiddenException('Este cartão não pertence a você');
     if (card.isArchived) throw new BadRequestException('Este cartão está arquivado');
+    await this.ensureCategoryOwnership(dto.categoryId, userId);
 
     const recurring = await this.prisma.cardRecurringPurchase.create({
       data: {
@@ -445,6 +452,7 @@ export class CardsService {
   async updateRecurringPurchase(id: string, userId: string, dto: UpdateRecurringPurchaseDto) {
     const existing = await this.prisma.cardRecurringPurchase.findFirst({ where: { id, userId } });
     if (!existing) throw new NotFoundException('Compra recorrente não encontrada');
+    await this.ensureCategoryOwnership(dto.categoryId, userId);
 
     const updated = await this.prisma.cardRecurringPurchase.update({
       where: { id },
@@ -508,7 +516,15 @@ export class CardsService {
    * cada compra recorrente ativa do usuário que ainda não tem lançamento
    * nesse ciclo. Chamado pelo frontend ao abrir a fatura do cartão.
    */
-  async syncRecurringPurchases(userId: string) {
+  syncRecurringPurchases(userId: string) {
+    // Uma sincronização por usuário de cada vez: a tela de cartões e o modal
+    // da fatura disparam este sync quase juntos, e duas execuções paralelas
+    // passavam as duas pelo "já gerou este mês?" antes de qualquer uma gravar
+    // — a assinatura saía duplicada na fatura e o limite subia em dobro.
+    return this.recurringSync.run(userId, () => this.runRecurringPurchasesSync(userId));
+  }
+
+  private async runRecurringPurchasesSync(userId: string) {
     const now = new Date();
     const recurrences = await this.prisma.cardRecurringPurchase.findMany({
       where: { userId, isActive: true },
@@ -676,10 +692,18 @@ export class CardsService {
         data: { status: 'PAID' },
       });
 
-      return tx.installment.update({
-        where: { id: installmentId },
-        data: { paid: true, paidFromAccountId: dto.accountId, paidAt: dto.date ? this.parseDateOnly(dto.date) : new Date() },
+      // Marca como paga só se ainda estiver em aberto. A conferência lá em
+      // cima é feita fora da transação: num duplo clique (ou duas abas) as
+      // duas requisições passavam por ela e a conta era debitada duas vezes.
+      // Aqui a segunda não encontra a parcela em aberto e tudo é desfeito,
+      // inclusive o débito.
+      const claimed = await tx.installment.updateMany({
+        where: { id: installmentId, paid: false },
+        data: { paid: true, paidFromAccountId: dto.accountId, paidAt: dto.date ? parseDateOnly(dto.date) : new Date() },
       });
+      if (claimed.count === 0) throw new BadRequestException('Esta parcela já está paga');
+
+      return tx.installment.findUniqueOrThrow({ where: { id: installmentId } });
     });
   }
 
@@ -711,10 +735,14 @@ export class CardsService {
         data: { status: 'PENDING' },
       });
 
-      return tx.installment.update({
-        where: { id: installmentId },
+      // Mesmo cuidado do pagamento: desfazer duas vezes devolveria o valor em dobro.
+      const claimed = await tx.installment.updateMany({
+        where: { id: installmentId, paid: true },
         data: { paid: false, paidFromAccountId: null, paidAt: null },
       });
+      if (claimed.count === 0) throw new BadRequestException('Esta parcela ainda não está paga');
+
+      return tx.installment.findUniqueOrThrow({ where: { id: installmentId } });
     });
   }
 
@@ -744,7 +772,7 @@ export class CardsService {
     if (!account) throw new NotFoundException('Conta não encontrada');
 
     const total = installments.reduce((acc, i) => acc + Number(i.amount), 0);
-    const paidAt = dto.date ? this.parseDateOnly(dto.date) : new Date();
+    const paidAt = dto.date ? parseDateOnly(dto.date) : new Date();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.account.update({
@@ -757,10 +785,15 @@ export class CardsService {
         data: { status: 'PAID' },
       });
 
-      await tx.installment.updateMany({
-        where: { id: { in: uniqueIds } },
+      const claimed = await tx.installment.updateMany({
+        where: { id: { in: uniqueIds }, paid: false },
         data: { paid: true, paidFromAccountId: dto.accountId, paidAt },
       });
+      // Alguma parcela foi paga por outra requisição no meio do caminho
+      // (duplo clique, outra aba): desfaz tudo, inclusive o débito acima.
+      if (claimed.count !== uniqueIds.length) {
+        throw new BadRequestException('Uma ou mais parcelas selecionadas já estão pagas');
+      }
     });
 
     return { paidCount: installments.length, totalPaid: total };
@@ -801,7 +834,7 @@ export class CardsService {
     // Se o crédito for maior que as parcelas em aberto do mês, não há valor a
     // pagar (a sobra vira saldo credor pro próximo mês, não dinheiro de volta).
     const total = Math.max(0, installmentsTotal + creditsTotal);
-    const paidAt = dto.date ? this.parseDateOnly(dto.date) : new Date();
+    const paidAt = dto.date ? parseDateOnly(dto.date) : new Date();
 
     await this.prisma.$transaction(async (tx) => {
       await tx.account.update({
@@ -814,10 +847,15 @@ export class CardsService {
         data: { status: 'PAID' },
       });
 
-      await tx.installment.updateMany({
-        where: { id: { in: openInstallments.map((i) => i.id) } },
+      const claimed = await tx.installment.updateMany({
+        where: { id: { in: openInstallments.map((i) => i.id) }, paid: false },
         data: { paid: true, paidFromAccountId: dto.accountId, paidAt },
       });
+      // A fatura mudou enquanto era paga (duplo clique, outra aba): desfaz
+      // tudo, inclusive o débito acima, em vez de cobrar o mesmo valor de novo.
+      if (claimed.count !== openInstallments.length) {
+        throw new BadRequestException('Esta fatura acabou de ser paga ou alterada. Atualize a tela e confira.');
+      }
     });
 
     return { paidCount: openInstallments.length, totalPaid: total };
@@ -895,10 +933,13 @@ export class CardsService {
   async updatePurchase(installmentGroupId: string, userId: string, dto: CreatePurchaseDto) {
     const existing = await this.findPurchaseTransactions(installmentGroupId, userId);
     if (existing.length === 0) throw new NotFoundException('Compra não encontrada');
+    await this.ensureCategoryOwnership(dto.categoryId, userId);
 
     const cardId = existing[0].cardId!;
     const oldTotal = existing.reduce((acc, t) => acc + Number(t.amount), 0);
     const refunds = this.collectPaidRefunds(existing);
+    const preservedExternalId = existing.find((t) => t.externalId)?.externalId ?? null;
+    const preservedRecurringId = existing.find((t) => t.cardRecurringPurchaseId)?.cardRecurringPurchaseId ?? null;
 
     const card = await this.prisma.card.findUnique({ where: { id: cardId } });
     if (!card) throw new NotFoundException('Cartão não encontrado');
@@ -911,7 +952,7 @@ export class CardsService {
     }
 
     const installmentAmounts = this.splitAmount(dto.totalAmount, dto.installmentsCount);
-    const purchaseDate = this.parseDateOnly(dto.purchaseDate);
+    const purchaseDate = parseDateOnly(dto.purchaseDate);
     const newGroupId = randomUUID();
 
     return this.prisma.$transaction(async (tx) => {
@@ -921,7 +962,11 @@ export class CardsService {
         await tx.account.update({ where: { id: accountId }, data: { currentBalance: { increment: amount } } });
       }
 
-      await tx.transaction.deleteMany({ where: { installmentGroupId, userId } });
+      // Apaga exatamente as transações encontradas (não "as do grupo"): compra
+      // à vista importada do banco e cobrança recorrente não têm
+      // installmentGroupId — o identificador é o id da própria transação —
+      // e por grupo nada seria apagado, duplicando a compra na fatura.
+      await tx.transaction.deleteMany({ where: { id: { in: existing.map((t) => t.id) }, userId } });
 
       for (let i = 0; i < dto.installmentsCount; i++) {
         const dueDate = this.calculateInstallmentDueDate(purchaseDate, card.closingDay, card.dueDay, i);
@@ -939,6 +984,10 @@ export class CardsService {
             purchaseDate,
             isInstallment: true,
             installmentGroupId: newGroupId,
+            // Vínculos que impedem duplicar a compra depois: o externalId
+            // (Open Finance) faz a próxima sincronização reconhecer que ela já
+            // foi importada, e o da recorrência evita gerar outra cobrança no mês.
+            ...(i === 0 ? { externalId: preservedExternalId, cardRecurringPurchaseId: preservedRecurringId } : {}),
           },
         });
 
@@ -1005,22 +1054,16 @@ export class CardsService {
     return new Date(cycleYear, targetMonth, Math.min(dueDay, lastDay));
   }
 
+  /** Categoria vinda do cliente precisa ser do próprio usuário (o id de outra pessoa exporia o nome/cor dela na fatura). */
+  private async ensureCategoryOwnership(categoryId: string | null | undefined, userId: string) {
+    if (!categoryId) return;
+    const category = await this.prisma.category.findFirst({ where: { id: categoryId, userId }, select: { id: true } });
+    if (!category) throw new ForbiddenException('Categoria não encontrada ou não pertence ao usuário');
+  }
+
   private async assertOwnership(id: string, userId: string) {
     const card = await this.prisma.card.findUnique({ where: { id } });
     if (!card) throw new NotFoundException('Cartão não encontrado');
     if (card.userId !== userId) throw new ForbiddenException('Este cartão não pertence a você');
-  }
-
-  /**
-   * Converte um "YYYY-MM-DD" (o formato que <input type="date"> manda) pro
-   * dia local certo. `new Date('YYYY-MM-DD')` é interpretado como meia-noite
-   * UTC — em fusos negativos (ex: Brasil, UTC-3) isso vira 21h do dia
-   * anterior no horário local, o que troca o mês quando a data é dia 1º.
-   */
-  private parseDateOnly(value: string): Date {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-    if (!match) return new Date(value);
-    const [, year, month, day] = match;
-    return new Date(Number(year), Number(month) - 1, Number(day));
   }
 }

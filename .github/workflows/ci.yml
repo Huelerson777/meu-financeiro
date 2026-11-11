@@ -20,9 +20,10 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npx tsc --noEmit
+      - run: npm run lint
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
-        continue-on-error: true # informativo: pendências exigem upgrade major (Next 16/Tailwind 4)
+        continue-on-error: true # informativo: pendÃªncias exigem upgrade major (Next 16/Tailwind 4)
 
   backend:
     runs-on: ubuntu-latest
@@ -41,4 +42,4 @@ jobs:
       - run: npx tsc --noEmit -p tsconfig.build.json
       - run: npm test
       - run: npm audit --omit=dev --audit-level=high
-        continue-on-error: true # informativo: pendências exigem upgrade major (NestJS 12)
+        continue-on-error: true # informativo: pendÃªncias exigem upgrade major (NestJS 12)

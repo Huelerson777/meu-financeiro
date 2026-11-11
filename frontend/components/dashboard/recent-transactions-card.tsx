@@ -8,6 +8,7 @@ import { useAccounts } from '@/hooks/use-accounts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api } from '@/services/api';
+import { todayLocalISO } from '@/utils/date';
 import { formatCurrency } from '@/utils/currency';
 import { cn } from '@/utils/cn';
 import { effectiveDate, isEffectivelyPaid } from '@/utils/transaction-status';
@@ -43,11 +44,10 @@ export function RecentTransactionsCard() {
     queryKey: ['dashboard', 'recent-transactions'],
     queryFn: async () => {
       // Só o que já aconteceu: até hoje (parcelas futuras ficam de fora) e nos últimos 60 dias
-      const iso = (d: Date) => d.toISOString().split('T')[0];
-      const end = new Date();
+      // Dia local, não UTC: à noite o toISOString() já devolveria amanhã.
       const start = new Date();
       start.setDate(start.getDate() - 60);
-      const res = await api.get('/transactions', { params: { limit: 100, startDate: iso(start), endDate: iso(end) } });
+      const res = await api.get('/transactions', { params: { limit: 100, startDate: todayLocalISO(start), endDate: todayLocalISO() } });
       const raw = res.data;
       const list: RecentTransaction[] = Array.isArray(raw?.data?.items) ? raw.data.items : Array.isArray(raw?.items) ? raw.items : Array.isArray(raw) ? raw : [];
       // ordena pela data em que de fato aconteceu (pagamento da parcela, quando for o caso)

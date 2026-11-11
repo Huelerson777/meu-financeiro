@@ -8,6 +8,10 @@ import { UpdateAccountDto } from './dto/update-account.dto';
  * Repository Pattern: isola todo acesso a dados (Prisma) do restante da aplicação.
  * O Service nunca fala diretamente com o PrismaClient, apenas com este repositório.
  */
+// Colunas aceitas em ?sortBy= — o valor vem da URL, e um nome de campo
+// qualquer chegava cru ao Prisma (erro 500 em vez de simplesmente ignorar).
+const SORTABLE_FIELDS = new Set(['createdAt', 'updatedAt', 'name', 'type', 'currentBalance']);
+
 @Injectable()
 export class AccountsRepository {
   constructor(private prisma: PrismaService) {}
@@ -48,7 +52,7 @@ export class AccountsRepository {
         where,
         skip,
         take,
-        orderBy: { [sortBy]: sortOrder },
+        orderBy: { [SORTABLE_FIELDS.has(sortBy) ? sortBy : 'createdAt']: sortOrder },
       }),
       this.prisma.account.count({ where }),
     ]);

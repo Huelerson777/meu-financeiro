@@ -3,6 +3,7 @@
 import { notifyAlert } from '@/utils/notify';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '@/services/api';
+import { todayLocalISO } from '@/utils/date';
 import { formatCurrency } from '@/utils/currency';
 
 interface Card {
@@ -40,7 +41,7 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
   const [amountMode, setAmountMode] = useState<'total' | 'installment'>('total');
   const [amountValue, setAmountValue] = useState(editingPurchase?.totalAmount.toString() ?? '');
   const [installmentsCount, setInstallmentsCount] = useState(editingPurchase?.installmentsCount.toString() ?? '1');
-  const [purchaseDate, setPurchaseDate] = useState(editingPurchase?.purchaseDate ?? new Date().toISOString().split('T')[0]);
+  const [purchaseDate, setPurchaseDate] = useState(editingPurchase?.purchaseDate ?? todayLocalISO());
   const [categoryId, setCategoryId] = useState(editingPurchase?.categoryId ?? '');
   const [categoryAutoSuggested, setCategoryAutoSuggested] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,7 +79,10 @@ export function PurchaseModal({ card, onClose, onSuccess, editingPurchase }: Pur
     setCategoryAutoSuggested(false);
   };
 
-  const availableLimit = Number(card.limitAmount) - Number(card.usedLimit);
+  // Ao editar, o valor da própria compra volta a contar como disponível (ela já está dentro
+  // do limite usado) — mesma conta do backend. Sem isso, editar qualquer compra grande
+  // mostrava "acima do limite" mesmo sem aumentar o valor.
+  const availableLimit = Number(card.limitAmount) - Number(card.usedLimit) + (editingPurchase?.totalAmount ?? 0);
   const parsedAmount = parseFloat(amountValue || '0');
   const parsedCount = parseInt(installmentsCount || '1', 10);
   const parsedTotal = amountMode === 'installment' ? parsedAmount * parsedCount : parsedAmount;
