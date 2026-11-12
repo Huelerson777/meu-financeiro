@@ -550,7 +550,12 @@ function TransactionsPageContent() {
   const cardAvailable = selectedCard ? Number(selectedCard.limitAmount) - Number(selectedCard.usedLimit) : 0;
   const parsedFormAmount = parseFloat(amount) || 0;
   // Contas do dia a dia primeiro; as de investimento vão pro fim da fila
-  const sourceOptions = [...accounts].sort((a, b) => Number(a.type === 'INVESTMENT') - Number(b.type === 'INVESTMENT'));
+  // Saída/entrada: só contas do dia a dia (investimento ficaria fora das
+  // despesas/receitas do mês). Na edição, mantém a conta atual mesmo que seja
+  // de investimento. Transferência mostra todas (resgate sai do investimento).
+  const sourceOptions = isTransferForm
+    ? [...accounts].sort((a, b) => Number(a.type === 'INVESTMENT') - Number(b.type === 'INVESTMENT'))
+    : accounts.filter((acc) => acc.type !== 'INVESTMENT' || (!!editingId && acc.id === accountId));
   const destinationOptions = (uiType === 'INVESTMENT' ? investmentAccounts : accounts).filter((acc) => acc.id !== accountId);
 
   const activePeriod = PERIOD_PRESETS.find((p) => {
@@ -898,7 +903,15 @@ function TransactionsPageContent() {
                   <Segmented
                     aria-label="Tipo de lançamento"
                     value={uiType === 'INVESTMENT' ? 'TRANSFER' : uiType}
-                    onChange={(v) => setUiType(v)}
+                    onChange={(v) => {
+                      setUiType(v);
+                      // Voltando de transferência com conta de investimento marcada: troca
+                      // pra uma conta do dia a dia (a de investimento some da lista).
+                      if (v !== 'TRANSFER' && accounts.find((a) => a.id === accountId)?.type === 'INVESTMENT') {
+                        const daily = accounts.find((a) => a.type !== 'INVESTMENT');
+                        if (daily) setAccountId(daily.id);
+                      }
+                    }}
                     options={TYPE_OPTIONS}
                     className="w-full"
                   />

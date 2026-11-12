@@ -68,13 +68,12 @@ export function PaymentModal({
 
   useEffect(() => {
     api.get('/accounts').then((res) => {
-      const list = extractList(res.data);
-      // Contas do dia a dia primeiro; investimento vai pro fim
-      list.sort((a, b) => Number(a.type === 'INVESTMENT') - Number(b.type === 'INVESTMENT'));
+      // Conta de investimento não aparece: pagar/receber por ela tiraria o
+      // valor das despesas/receitas do mês (o Início ignora essas contas).
+      // Dinheiro de investimento chega no dia a dia por resgate/transferência.
+      const list = extractList(res.data).filter((a) => a.type !== 'INVESTMENT');
       setAccounts(list);
-      // Conta de investimento só vem marcada se for a única: pagar uma conta
-      // por ela tira o gasto das despesas do mês (o Início ignora essas contas).
-      const preferred = list.find((a) => a.id === defaultAccountId) ?? list.find((a) => a.type !== 'INVESTMENT') ?? list[0];
+      const preferred = list.find((a) => a.id === defaultAccountId) ?? list[0];
       if (preferred) setAccountId(preferred.id);
     }).catch(() => setAccounts([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -160,7 +159,9 @@ export function PaymentModal({
             <span className="text-xs font-semibold text-muted-foreground">{receive ? 'Entrou na conta' : 'Pagar com a conta'}</span>
             <div className="flex flex-wrap gap-2">
               {accounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhuma conta encontrada.</p>
+                <p className="text-sm text-muted-foreground">
+                  Nenhuma conta do dia a dia encontrada. Cadastre uma conta corrente, poupança ou carteira em Contas.
+                </p>
               ) : (
                 accounts.map((acc) => (
                   <Chip key={acc.id} active={accountId === acc.id} onClick={() => setAccountId(acc.id)} className="pl-1.5">
