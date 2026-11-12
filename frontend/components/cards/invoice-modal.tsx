@@ -39,6 +39,7 @@ interface Card {
   id: string;
   name: string;
   color?: string;
+  paymentAccountId?: string | null;
 }
 
 interface InvoiceModalProps {
@@ -531,6 +532,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
           title="Pagar fatura total"
           description={`${card.name} · ${formatMonth(payingInvoice.month)}`}
           amount={payingInvoice.openTotal}
+          defaultAccountId={card.paymentAccountId}
           onClose={() => setPayingInvoice(null)}
           onSuccess={() => {
             setPayingInvoice(null);
@@ -547,6 +549,7 @@ export function InvoiceModal({ card, onClose }: InvoiceModalProps) {
           title={selectedItems.length > 1 ? 'Pagar selecionadas' : 'Pagar selecionada'}
           description={`${selectedItems.length} lançamento${selectedItems.length > 1 ? 's' : ''} selecionado${selectedItems.length > 1 ? 's' : ''}`}
           amount={selectedTotal}
+          defaultAccountId={card.paymentAccountId}
           onClose={() => setPayingSelection(false)}
           onSuccess={() => {
             setPayingSelection(false);

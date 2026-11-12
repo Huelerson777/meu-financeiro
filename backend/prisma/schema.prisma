@@ -273,6 +273,7 @@ model Account {
   recurringBills   RecurringBill[]
   investments      Investment[]
   bankLinks        BankAccountLink[]
+  paymentForCards  Card[]          @relation("CardPaymentAccount")
 
   @@index([userId])
   @@map("accounts")
@@ -513,11 +514,15 @@ model Card {
   color       String?
   /// logo do cartão (imagem pequena em data URL), como em Account.icon
   icon        String?
+  /// conta que normalmente paga a fatura — vem marcada por padrão ao pagar
+  /// fatura/parcela (o usuário pode trocar na hora)
+  paymentAccountId String? @map("payment_account_id")
   isArchived  Boolean  @default(false) @map("is_archived")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paymentAccount     Account?                @relation("CardPaymentAccount", fields: [paymentAccountId], references: [id], onDelete: SetNull)
   transactions       Transaction[]
   recurringPurchases CardRecurringPurchase[]
   bankLinks          BankCardLink[]

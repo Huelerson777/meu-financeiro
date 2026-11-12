@@ -1,6 +1,6 @@
 'use client';
 
-import { ImagePlus, Landmark, X } from 'lucide-react';
+import { ImagePlus, Landmark, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { AccountAvatar } from '@/components/accounts/account-avatar';
 import { fileToLogoDataUrl, isImageIcon } from '@/utils/image-resize';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -186,132 +186,123 @@ export function AccountsView() {
     }
   };
 
-  const totalBalance = accounts
-    .filter((a) => a.includeInDashboard)
-    .reduce((sum, a) => sum + Number(a.currentBalance ?? a.initialBalance ?? 0), 0);
+  const balanceOf = (a: Account) => Number(a.currentBalance ?? a.initialBalance ?? 0);
+  const inTotal = accounts.filter((a) => a.includeInDashboard);
+  const totalBalance = inTotal.reduce((sum, a) => sum + balanceOf(a), 0);
+  // Mesma divisão do Início: "Disponível nas contas" exclui contas de investimento
+  const investedBalance = inTotal.filter((a) => a.type === 'INVESTMENT').reduce((sum, a) => sum + balanceOf(a), 0);
+  const availableBalance = totalBalance - investedBalance;
 
   return (
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">Saldo total</p>
+          <p className="text-sm font-medium text-muted-foreground">Total nas contas</p>
           <p className={`font-num mt-1 text-4xl font-bold leading-none ${totalBalance < 0 ? 'text-danger' : ''}`}>
             {formatCurrency(totalBalance)}
           </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Soma das contas marcadas com Controle de Saldo
-          </p>
+          {investedBalance !== 0 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              <span className="font-num font-semibold text-foreground">{formatCurrency(availableBalance)}</span> disponível
+              {' · '}
+              <span className="font-num font-semibold text-foreground">{formatCurrency(investedBalance)}</span> em investimentos
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-muted-foreground">Soma das contas marcadas como “No saldo geral”.</p>
+          )}
         </div>
         <button
           onClick={handleOpenCreate}
-          className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow"
+          className="btn-sheen inline-flex h-10 w-fit items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_6px_14px_-6px_hsl(var(--primary)/0.55)] transition-theme hover:-translate-y-px hover:brightness-110 active:scale-[0.97]"
         >
-          + Nova Conta
+          <Plus className="h-4 w-4" strokeWidth={2.2} />
+          Nova conta
         </button>
       </div>
 
-      {/* Legenda */}
-      <div className="mb-4 flex items-start gap-2 text-xs text-muted-foreground">
-        <span className="mt-0.5 inline-block h-3 w-3 shrink-0 rounded-full bg-primary"></span>
-        <span>
-          Contas marcadas com <strong className="text-foreground">Controle de Saldo</strong> entram no{' '}
-          <strong className="text-foreground">Saldo Geral</strong> do Dashboard
-        </span>
-      </div>
-
       {loading ? (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 rounded-xl" />
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-[4.25rem] rounded-2xl" />
           ))}
         </div>
       ) : accounts.length === 0 ? (
         <EmptyState
-          className="rounded-xl border border-dashed border-border"
+          className="rounded-[1.375rem] border border-dashed border-border"
           icon={Landmark}
           title="Nenhuma conta ainda"
           description="Cadastre sua primeira conta, carteira ou instituição para começar a acompanhar saldos."
           action={
             <button
               onClick={handleOpenCreate}
-              className="h-10 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition-theme hover:brightness-110 active:scale-[0.97]"
+              className="h-10 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-theme hover:brightness-110 active:scale-[0.97]"
             >
-              + Nova Conta
+              Nova conta
             </button>
           }
         />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-          {accounts.map((acc) => (
-            <div
-              key={acc.id}
-              className="bg-card p-6 rounded-xl shadow-soft border border-border/70 relative overflow-hidden group"
-            >
-              {/* Barra de cor no topo */}
-              <div
-                className="absolute top-0 left-0 right-0 h-1"
-                style={{ backgroundColor: acc.color || '#3b82f6' }}
-              />
+        // Uma lista só, estilo extrato: cada conta é uma linha (logo, nome, tipo,
+        // saldo), em vez de uma grade de cartões iguais.
+        <ul className="divide-y divide-border/60 overflow-hidden rounded-[1.375rem] border border-border/60 bg-card shadow-soft">
+          {accounts.map((acc) => {
+            const balance = Number(acc.currentBalance ?? acc.initialBalance ?? 0);
+            return (
+              <li key={acc.id} className="group flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-foreground/[0.025] sm:gap-4 sm:px-5">
+                <AccountAvatar name={acc.name} color={acc.color} icon={acc.icon} className="h-11 w-11" />
 
-              {/* Botões Editar / Excluir (hover) */}
-              <div className="absolute top-4 right-4 flex gap-3 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => handleEdit(acc)}
-                  className="text-foreground hover:text-primary text-sm font-medium"
-                >
-                  Editar
-                </button>
-                <button
-                  onClick={() => handleArchive(acc.id, acc.name)}
-                  className="text-foreground hover:text-danger text-sm font-medium"
-                >
-                  Excluir
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <AccountAvatar name={acc.name} color={acc.color} icon={acc.icon} className="h-12 w-12" />
-                <div className="min-w-0">
-                  <span className="text-xs uppercase font-bold tracking-wider text-primary bg-primary/10 px-2 py-1 rounded">
-                    {ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}
-                  </span>
-                  <h3 className="mt-1.5 truncate text-xl font-bold">{acc.name}</h3>
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-[15px] font-semibold">
+                    {/* No toque não há hover: o nome abre a edição (excluir fica lá dentro) */}
+                    <button type="button" onClick={() => handleEdit(acc)} className="max-w-full truncate text-left [@media(hover:hover)]:pointer-events-none">
+                      {acc.name}
+                    </button>
+                  </h3>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                    <span>{ACCOUNT_TYPE_LABELS[acc.type] ?? acc.type}</span>
+                    {/* Alterna se a conta entra no Saldo Geral do Dashboard */}
+                    <button
+                      onClick={() => handleToggleDashboard(acc)}
+                      aria-pressed={acc.includeInDashboard}
+                      title={acc.includeInDashboard ? 'Clique para remover do Saldo Geral' : 'Clique para incluir no Saldo Geral'}
+                      className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-theme ${
+                        acc.includeInDashboard
+                          ? 'border-primary/30 bg-primary/10 text-primary'
+                          : 'border-border text-muted-foreground hover:border-foreground/25 hover:text-foreground'
+                      }`}
+                    >
+                      <span className={`h-1.5 w-1.5 rounded-full ${acc.includeInDashboard ? 'bg-primary' : 'bg-muted-foreground/50'}`} />
+                      {acc.includeInDashboard ? 'No saldo geral' : 'Fora do saldo geral'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <p
-                className={`text-2xl font-semibold mt-2 ${
-                  Number(acc.currentBalance ?? acc.initialBalance ?? 0) < 0
-                    ? 'text-danger'
-                    : 'text-success'
-                }`}
-              >
-                {formatCurrency(acc.currentBalance ?? acc.initialBalance)}
-              </p>
 
-              {/* ITEM 6 — Botão toggle "Utilizar para controle de saldo" */}
-              <button
-                onClick={() => handleToggleDashboard(acc)}
-                title={
-                  acc.includeInDashboard
-                    ? 'Clique para remover do Saldo Geral'
-                    : 'Clique para incluir no Saldo Geral'
-                }
-                className={`mt-4 flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
-                  acc.includeInDashboard
-                    ? 'bg-primary/10 border-primary/30 text-primary'
-                    : 'bg-muted border-input text-foreground'
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    acc.includeInDashboard ? 'bg-primary' : 'bg-muted'
-                  }`}
-                />
-                {acc.includeInDashboard ? 'No controle de saldo' : 'Fora do saldo geral'}
-              </button>
-            </div>
-          ))}
-        </div>
+                <p className={`font-num shrink-0 text-base font-semibold sm:text-lg ${balance < 0 ? 'text-danger' : ''}`}>
+                  {formatCurrency(acc.currentBalance ?? acc.initialBalance)}
+                </p>
+
+                <div className="hidden shrink-0 gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:flex">
+                  <button
+                    onClick={() => handleEdit(acc)}
+                    aria-label={`Editar ${acc.name}`}
+                    title="Editar"
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-primary/10 hover:text-primary"
+                  >
+                    <Pencil className="h-4 w-4" strokeWidth={1.9} />
+                  </button>
+                  <button
+                    onClick={() => handleArchive(acc.id, acc.name)}
+                    aria-label={`Excluir ${acc.name}`}
+                    title="Excluir"
+                    className="flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-danger/10 hover:text-danger"
+                  >
+                    <Trash2 className="h-4 w-4" strokeWidth={1.9} />
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {/* Modal Criar / Editar */}
@@ -439,18 +430,34 @@ export function AccountsView() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3">
+              <div className="flex items-center justify-end gap-3 pt-3">
+                {editingId && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const acc = accounts.find((a) => a.id === editingId);
+                      if (!acc) return;
+                      setIsModalOpen(false);
+                      await handleArchive(acc.id, acc.name);
+                    }}
+                    aria-label="Excluir conta"
+                    title="Excluir conta"
+                    className="mr-auto flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-danger/10 hover:text-danger"
+                  >
+                    <Trash2 className="h-[18px] w-[18px]" strokeWidth={1.9} />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-sm text-foreground hover:underline"
+                  className="h-10 rounded-full px-4 text-sm font-semibold text-muted-foreground transition-theme hover:bg-foreground/[0.06] hover:text-foreground"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-5 py-2 rounded-md text-sm font-medium transition disabled:opacity-50"
+                  className="btn-sheen h-10 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-theme hover:-translate-y-px hover:brightness-110 active:scale-[0.97] disabled:opacity-50"
                 >
                   {isSubmitting ? 'Salvando...' : editingId ? 'Salvar Alterações' : 'Criar Conta'}
                 </button>

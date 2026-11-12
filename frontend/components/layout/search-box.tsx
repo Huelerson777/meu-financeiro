@@ -101,7 +101,7 @@ export function SearchBox() {
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
       <Input
         placeholder="Pesquisar transações, contas, cartões..."
-        className="pl-9"
+        className="h-10 rounded-full border-transparent bg-foreground/[0.05] pl-9 hover:bg-foreground/[0.07] focus-visible:bg-card"
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -169,7 +169,7 @@ export function SearchBox() {
                   {cards.map((c) => (
                     <button
                       key={c.id}
-                      onClick={() => goTo('/accounts?tab=cards')}
+                      onClick={() => goTo('/cards')}
                       className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-muted transition"
                     >
                       <CreditCard className="h-4 w-4 text-muted-foreground shrink-0" />

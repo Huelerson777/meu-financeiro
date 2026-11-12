@@ -155,7 +155,7 @@ export default function ReportsPage() {
           changePct={changePct(cashFlow?.totalExpense ?? 0, prevCashFlow?.totalExpense)} compareLabel="vs. período anterior" invertChangeTone
         />
         <SummaryCard
-          label="Saldo do período"
+          label="Sobra do período"
           value={cashFlow?.balance}
           icon={Scale}
           tone={(cashFlow?.balance ?? 0) >= 0 ? 'success' : 'danger'}

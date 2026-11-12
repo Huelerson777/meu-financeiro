@@ -18,8 +18,8 @@ const ICONS: Record<Notification['type'], typeof Bell> = {
 const TARGETS: Partial<Record<Notification['type'], string>> = {
   BUDGET_EXCEEDED: '/budgets',
   GOAL_PROGRESS: '/goals',
-  CARD_DUE: '/accounts?tab=cards',
-  CARD_INVOICE_CLOSED: '/accounts?tab=cards',
+  CARD_DUE: '/cards',
+  CARD_INVOICE_CLOSED: '/cards',
   BILL_DUE: '/dashboard',
 };
 
@@ -60,9 +60,9 @@ export function NotificationBell() {
       <button
         onClick={() => setOpen((o) => !o)}
         aria-label="Notificações"
-        className="relative flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-theme hover:bg-muted hover:text-foreground"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-foreground/[0.05] hover:text-foreground"
       >
-        <Bell className="h-4 w-4" />
+        <Bell className="h-[18px] w-[18px]" />
         {unreadCount > 0 && (
           <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
             {unreadCount > 9 ? '9+' : unreadCount}

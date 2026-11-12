@@ -81,9 +81,9 @@ export function FeedbackButton() {
         onClick={handleOpen}
         title="Enviar feedback ou dúvida"
         aria-label="Enviar feedback ou dúvida"
-        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-theme"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-foreground/[0.05] hover:text-foreground transition-theme"
       >
-        <HelpCircle className="h-5 w-5" />
+        <HelpCircle className="h-[18px] w-[18px]" />
       </button>
 
       {isOpen && createPortal(

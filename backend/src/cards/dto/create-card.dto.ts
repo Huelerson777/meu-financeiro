@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsInt, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { MAX_MONEY_AMOUNT } from '../../common/utils/money';
 import { MAX_ICON_LENGTH } from '../../common/utils/icon';
 
@@ -38,4 +38,12 @@ export class CreateCardDto {
   @IsString()
   @MaxLength(MAX_ICON_LENGTH)
   icon?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Conta que normalmente paga a fatura (vem marcada por padrão ao pagar). null remove o vínculo.',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsUUID()
+  paymentAccountId?: string | null;
 }

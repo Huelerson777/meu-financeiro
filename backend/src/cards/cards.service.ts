@@ -87,7 +87,15 @@ export class CardsService {
     return card;
   }
 
-  create(userId: string, dto: CreateCardDto) {
+  /** A conta de pagamento padrão precisa ser do próprio usuário. */
+  private async ensurePaymentAccountOwnership(accountId: string | null | undefined, userId: string) {
+    if (!accountId) return;
+    const account = await this.prisma.account.findFirst({ where: { id: accountId, userId, isArchived: false } });
+    if (!account) throw new BadRequestException('Conta de pagamento inválida');
+  }
+
+  async create(userId: string, dto: CreateCardDto) {
+    await this.ensurePaymentAccountOwnership(dto.paymentAccountId, userId);
     return this.prisma.card.create({
       data: {
         userId,
@@ -97,12 +105,14 @@ export class CardsService {
         dueDay: dto.dueDay,
         color: dto.color,
         icon: dto.icon ?? undefined,
+        paymentAccountId: dto.paymentAccountId ?? null,
       },
     });
   }
 
   async update(id: string, userId: string, dto: UpdateCardDto) {
     await this.assertOwnership(id, userId);
+    await this.ensurePaymentAccountOwnership(dto.paymentAccountId, userId);
     return this.prisma.card.update({ where: { id }, data: dto });
   }
 
