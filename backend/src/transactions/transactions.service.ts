@@ -431,8 +431,13 @@ export class TransactionsService {
   }
 
   /**
-   * Importação vinda do Open Finance: ignora o que já foi importado (pelo `externalId`), categoriza
-   * como no import de extrato, grava como pago e ajusta o saldo da conta. `amount` vem com sinal.
+   * Importação vinda do Open Finance: ignora o que já foi importado (pelo `externalId`), grava como
+   * pago e ajusta o saldo da conta. `amount` vem com sinal.
+   *
+   * Entra SEM categoria: a sugestão por histórico/palavra-chave errava demais aqui (ex: um Pix
+   * qualquer caía em Mercado/Alimentação por parecer com uma compra antiga), e como a sincronização
+   * roda sozinha ninguém revisa antes de gravar. O usuário categoriza depois ("Despesas sem
+   * categoria" no Início). Conta fixa reconhecida continua com a categoria dela.
    */
   async importFromBank(
     userId: string,
@@ -454,8 +459,6 @@ export class TransactionsService {
     // fatura como saída: importá-lo descontaria a fatura duas vezes no saldo.
     fresh = await this.withoutCardPaymentsAlreadyBooked(userId, accountId, fresh);
     if (fresh.length === 0) return { created: 0, settledRecurring: 0 };
-
-    const suggest = await this.buildCategorySuggester(userId);
 
     // Contas fixas ainda em aberto na conta: se o banco mostra que foi pago, baixa a fixa (atualizando
     // o valor real, ex: energia que muda todo mês) em vez de criar um segundo lançamento.
@@ -498,7 +501,7 @@ export class TransactionsService {
             data: {
               userId,
               accountId,
-              categoryId: suggest(row.description, type)?.id,
+              categoryId: null,
               type,
               description: row.description.trim().slice(0, 200) || 'Sem descrição',
               amount,
