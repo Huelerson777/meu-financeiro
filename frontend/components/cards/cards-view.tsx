@@ -21,7 +21,16 @@ interface Card {
   dueDay: number;
   color?: string;
   icon?: string;
+  paymentAccountId?: string | null;
   currentInvoiceOpenTotal?: number | string;
+}
+
+interface AccountOption {
+  id: string;
+  name: string;
+  type: string;
+  color?: string;
+  icon?: string;
 }
 
 const DEFAULT_COLOR = '#8B5CF6';
@@ -45,6 +54,8 @@ export function CardsView() {
   // logo: undefined = sem mudança | string = nova imagem | null = remover
   const [logo, setLogo] = useState<string | null | undefined>(undefined);
   const [currentIcon, setCurrentIcon] = useState<string | undefined>(undefined);
+  const [paymentAccountId, setPaymentAccountId] = useState<string>('');
+  const [accounts, setAccounts] = useState<AccountOption[]>([]);
 
   const extractList = (raw: any): Card[] => {
     if (Array.isArray(raw)) return raw;
@@ -68,6 +79,14 @@ export function CardsView() {
     // recorrente ativa assim que a lista de cartões é aberta — sem isso, só
     // aconteceria ao entrar na fatura de cada cartão individualmente.
     api.post('/cards/recurring-purchases/sync').catch(() => {}).finally(fetchCards);
+    api
+      .get('/accounts')
+      .then((res) => {
+        const raw = res.data;
+        const list: AccountOption[] = Array.isArray(raw?.data?.items) ? raw.data.items : Array.isArray(raw?.items) ? raw.items : Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
+        setAccounts(list.filter((a) => a.type !== 'INVESTMENT'));
+      })
+      .catch(() => setAccounts([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -80,6 +99,7 @@ export function CardsView() {
     setClosingDay('10');
     setDueDay('17');
     setColor(DEFAULT_COLOR);
+    setPaymentAccountId('');
     setIsModalOpen(true);
   };
 
@@ -92,6 +112,7 @@ export function CardsView() {
     setColor(c.color || DEFAULT_COLOR);
     setLogo(undefined);
     setCurrentIcon(c.icon);
+    setPaymentAccountId(c.paymentAccountId ?? '');
     setIsModalOpen(true);
   };
 
@@ -115,6 +136,7 @@ export function CardsView() {
         closingDay: parseInt(closingDay, 10),
         dueDay: parseInt(dueDay, 10),
         color,
+        paymentAccountId: paymentAccountId || null,
         ...(logo !== undefined ? { icon: logo } : {}),
       };
 
@@ -224,6 +246,9 @@ export function CardsView() {
                     <h3 className="text-lg font-bold text-foreground truncate">{c.name}</h3>
                     <p className="text-xs text-muted-foreground">
                       Fecha dia {c.closingDay} · Vence dia {c.dueDay}
+                      {c.paymentAccountId && accounts.find((a) => a.id === c.paymentAccountId) && (
+                        <> · Paga com {accounts.find((a) => a.id === c.paymentAccountId)!.name}</>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -329,6 +354,23 @@ export function CardsView() {
                     className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Conta que paga a fatura</label>
+                <select
+                  value={paymentAccountId}
+                  onChange={(e) => setPaymentAccountId(e.target.value)}
+                  className="w-full px-3 py-2 border border-border rounded-lg bg-background text-foreground"
+                >
+                  <option value="">Escolher na hora de pagar</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Vem marcada ao pagar a fatura ou uma parcela. Dá pra trocar na hora.
+                </p>
               </div>
 
               <LogoField name={name} color={color} currentIcon={currentIcon} value={logo} onChange={setLogo} />

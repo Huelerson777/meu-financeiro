@@ -31,6 +31,7 @@ import { NetWorthCard } from '@/components/dashboard/net-worth-card';
 import { InsightsHero } from '@/components/dashboard/insights-hero';
 import { AiQuickAddCard } from '@/components/dashboard/ai-quick-add-card';
 import { WidgetPicker, useDashboardWidgetOrder, WIDGET_SPANS } from '@/components/dashboard/widget-picker';
+import { MonthSwitcher } from '@/components/ui/month-switcher';
 import { AccountVisibilityPicker, useHiddenAccountIds } from '@/components/dashboard/account-visibility-picker';
 import { PaymentModal } from '@/components/cards/payment-modal';
 import { notifyAlert, confirmDialog } from '@/utils/notify';
@@ -69,12 +70,6 @@ export default function DashboardPage() {
   const currentDate = new Date();
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
-
-  // Sempre calculado a partir do ano atual (não mais uma lista fixa) — assim
-  // quando o ano virar (ex: 2026 -> 2027) a opção do novo ano já aparece
-  // sozinha no seletor, sem precisar lembrar de atualizar isso a cada virada.
-  const thisYear = currentDate.getFullYear();
-  const yearOptions = Array.from(new Set([thisYear - 2, thisYear - 1, thisYear, thisYear + 1, selectedYear])).sort();
 
   // ITEM 4 — passa month/year para que o hook realmente filtre no backend
   const { data, isLoading, refetch: refetchSummary } = useDashboardSummary({
@@ -252,41 +247,40 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Cabeçalho + seletor de mês/ano */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Cabeçalho + navegação de mês */}
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">
+          <h1 className="font-display text-[1.7rem] font-bold leading-tight tracking-tight sm:text-3xl">
             {getGreeting()}{firstName ? `, ${firstName}` : ''}
           </h1>
-          <p className="text-sm text-muted-foreground">Acompanhe suas finanças em tempo real.</p>
+          <p className="mt-0.5 text-sm text-muted-foreground first-letter:uppercase">
+            {currentDate.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' })}
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(Number(e.target.value))}
-            className="flex h-10 items-center justify-between rounded-md border border-input bg-card px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-          >
-            {['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
-              'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
-              .map((m, i) => (
-                <option key={i + 1} value={i + 1}>{m}</option>
-              ))}
-          </select>
-
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(Number(e.target.value))}
-            className="flex h-10 items-center justify-between rounded-md border border-input bg-card px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-          >
-            {yearOptions.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
+          <MonthSwitcher
+            month={selectedMonth}
+            year={selectedYear}
+            onChange={(m, y) => {
+              setSelectedMonth(m);
+              setSelectedYear(y);
+            }}
+          />
 
           <WidgetPicker />
         </div>
       </div>
+
+      {order.includes('aiQuickAdd') && (
+        <AiQuickAddCard
+          variant="bar"
+          onSuccess={() => {
+            refetchPaymentsStatus();
+            refetchSummary();
+          }}
+        />
+      )}
 
       <InsightsHero
         isLoading={isLoading || paymentsLoading}
@@ -296,6 +290,8 @@ export default function DashboardPage() {
         expense={data?.totalExpense ?? 0}
         leftovers={data?.leftovers ?? 0}
         openExpenseTotal={paymentsStatus?.openExpenseTotal ?? 0}
+        openIncomeTotal={paymentsStatus?.openIncomeTotal ?? 0}
+        previousResult={prevData ? prevData.totalIncome - prevData.totalExpense : undefined}
         openExpenseCount={paymentsStatus?.openItems.filter((i) => i.type === 'EXPENSE').length ?? 0}
         overdueCount={paymentsStatus?.openItems.filter((i) => i.isOverdue && i.type === 'EXPENSE').length ?? 0}
         nextDue={
@@ -342,13 +338,16 @@ export default function DashboardPage() {
             />
           ),
           leftovers: (
+            // Saldo das contas do dia a dia (sem investimentos) no fim do mês —
+            // não confundir com a "Sobra do mês" (receitas − despesas) do topo.
             <SummaryCard
-              label="Saldo"
+              label="Disponível nas contas"
               value={data?.leftovers}
-              icon={Target}
-              tone={(data?.leftovers ?? 0) >= 0 ? 'success' : 'danger'}
+              icon={Wallet}
+              tone={(data?.leftovers ?? 0) < 0 ? 'danger' : 'default'}
               isLoading={isLoading}
               changePct={data?.comparison?.leftoversChangePct}
+              compareLabel="vs. mês anterior"
             />
           ),
           paymentsStatus: <PaymentsStatusCard status={paymentsStatus} isLoading={paymentsLoading} onPay={setPayingItem} onSkip={handleSkipRecurring} />,
@@ -388,7 +387,7 @@ export default function DashboardPage() {
           ),
         };
 
-        const visibleOrder = order.filter((key) => widgetContent[key]);
+        const visibleOrder = order.filter((key) => widgetContent[key] && key !== 'aiQuickAdd');
 
         return (
           <DndContext
@@ -398,9 +397,9 @@ export default function DashboardPage() {
             onDragEnd={handleDragEnd}
           >
             <SortableContext items={visibleOrder} strategy={rectSortingStrategy}>
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {visibleOrder.map((key) => (
-                  <SortableWidget key={key} id={key} span={WIDGET_SPANS[key]}>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:gap-x-6 lg:grid-cols-4">
+                {visibleOrder.map((key, index) => (
+                  <SortableWidget key={key} id={key} index={index} span={WIDGET_SPANS[key]}>
                     {widgetContent[key]}
                   </SortableWidget>
                 ))}
@@ -434,6 +433,8 @@ export default function DashboardPage() {
           amount={payingItem.amount}
           category={payingItem.category}
           amountEditable={payingItem.kind === 'transaction'}
+          kind={payingItem.type === 'INCOME' ? 'receive' : 'pay'}
+          defaultAccountId={payingItem.accountId}
           onClose={() => setPayingItem(null)}
           onSuccess={handlePaymentSuccess}
           onConfirm={handleConfirmPayment}

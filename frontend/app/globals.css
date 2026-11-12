@@ -112,7 +112,26 @@
     letter-spacing: -0.02em;
   }
   .shadow-soft {
-    box-shadow: 0 1px 2px hsl(var(--shadow-tint) / 0.05), 0 8px 24px -12px hsl(var(--shadow-tint) / 0.12);
+    box-shadow: 0 1px 2px hsl(var(--shadow-tint) / 0.04), 0 10px 28px -18px hsl(var(--shadow-tint) / 0.14);
+  }
+  /* Luz ambiente no topo da área de conteúdo: gradiente estático (sem blur
+     nem animação), então não custa nada pra rolar a página. */
+  .canvas-glow {
+    background:
+      radial-gradient(55% 100% at 88% 0%, hsl(var(--primary) / 0.11), transparent 70%),
+      radial-gradient(40% 90% at 8% 0%, hsl(var(--primary) / 0.05), transparent 72%);
+  }
+  /* Linha fina que some nas pontas — separa blocos sem desenhar uma caixa */
+  .hairline {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(var(--border)) 12%, hsl(var(--border)) 88%, transparent);
+  }
+  /* Rolagem horizontal de chips sem barra aparente */
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
   .shadow-lift {
     box-shadow: 0 2px 4px hsl(var(--shadow-tint) / 0.06), 0 16px 32px -14px hsl(var(--shadow-tint) / 0.2);

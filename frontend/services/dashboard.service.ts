@@ -69,6 +69,8 @@ export interface PaymentsStatusItem {
   amount: number;
   dueDate: string;
   source: string;
+  /** Conta do lançamento, ou a conta vinculada ao cartão (parcela). */
+  accountId?: string | null;
   category: { name: string; color: string } | null;
   isOverdue: boolean;
 }

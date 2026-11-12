@@ -9,6 +9,8 @@ import { cn } from '@/utils/cn';
 interface SortableWidgetProps {
   id: string;
   span?: string;
+  /** Posição na grade — escalona a entrada dos cards (cascata curta, só na montagem). */
+  index?: number;
   children: ReactNode;
 }
 
@@ -18,7 +20,7 @@ interface SortableWidgetProps {
  * hover) — assim cliques dentro do card (botões, links, gráficos) não
  * disparam o drag por engano.
  */
-export function SortableWidget({ id, span, children }: SortableWidgetProps) {
+export function SortableWidget({ id, span, index = 0, children }: SortableWidgetProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
   const style = {
@@ -42,7 +44,10 @@ export function SortableWidget({ id, span, children }: SortableWidgetProps) {
       >
         <GripVertical className="h-4 w-4" />
       </button>
-      {children}
+      {/* A animação fica num wrapper interno: no de fora o transform é do dnd-kit */}
+      <div className="h-full animate-rise" style={{ animationDelay: `${Math.min(index, 8) * 45}ms` }}>
+        {children}
+      </div>
     </div>
   );
 }

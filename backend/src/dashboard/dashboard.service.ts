@@ -586,7 +586,11 @@ export class DashboardService {
         },
         include: {
           transaction: {
-            select: { description: true, card: { select: { name: true, color: true } }, category: { select: { name: true, color: true } } },
+            select: {
+              description: true,
+              card: { select: { name: true, color: true, paymentAccountId: true } },
+              category: { select: { name: true, color: true } },
+            },
           },
         },
         orderBy: { dueDate: 'asc' },
@@ -606,6 +610,8 @@ export class DashboardService {
       amount: Number(t.amount),
       dueDate: t.date,
       source: t.account?.name ?? '—',
+      // Conta já escolhida no lançamento — vem marcada ao pagar/receber
+      accountId: t.accountId,
       category: t.category,
       isOverdue: t.date < today,
     }));
@@ -618,6 +624,8 @@ export class DashboardService {
       amount: Number(i.amount),
       dueDate: i.dueDate,
       source: i.transaction.card?.name ?? '—',
+      // Conta vinculada ao cartão (pagamento padrão da fatura), se houver
+      accountId: i.transaction.card?.paymentAccountId ?? null,
       category: i.transaction.category,
       isOverdue: i.dueDate < today,
     }));

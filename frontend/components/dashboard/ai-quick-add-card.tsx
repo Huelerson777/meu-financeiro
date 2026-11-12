@@ -44,7 +44,7 @@ const TYPE_OPTIONS: { value: DraftType; label: string }[] = [
 const selectClass =
   'h-11 w-full rounded-md border border-input bg-card px-3 text-sm transition-theme focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30';
 
-export function AiQuickAddCard({ onSuccess }: { onSuccess?: () => void }) {
+export function AiQuickAddCard({ onSuccess, variant = 'card' }: { onSuccess?: () => void; variant?: 'card' | 'bar' }) {
   const [text, setText] = useState('');
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -150,6 +150,37 @@ export function AiQuickAddCard({ onSuccess }: { onSuccess?: () => void }) {
       setSubmitting(false);
     }
   };
+
+  // Barra de comando: uma linha só no topo do Início. Ao interpretar, o
+  // rascunho abre no formato de card logo abaixo pra conferir antes de lançar.
+  if (variant === 'bar' && !draft) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleInterpret();
+          }}
+          className="group flex items-center gap-2 rounded-full border border-border/60 bg-card py-1.5 pl-4 pr-1.5 shadow-soft transition-theme focus-within:border-primary/50 focus-within:ring-4 focus-within:ring-primary/10"
+        >
+          <Sparkles className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.9} />
+          <input
+            aria-label="Lançamento por IA"
+            className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/80"
+            placeholder="Lance escrevendo: mercado 85,90 ontem no nubank"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={parsing}
+          />
+          <Button type="submit" size="sm" className="h-9 px-4" isLoading={parsing} disabled={text.trim().length < 3}>
+            Interpretar
+          </Button>
+        </form>
+        {parseError && <p className="px-4 text-sm text-danger">{parseError}</p>}
+        {successMessage && <p className="px-4 text-sm font-medium text-success">{successMessage}</p>}
+      </div>
+    );
+  }
 
   return (
     <Card className="border-primary/20 bg-gradient-to-br from-primary/[0.07] via-card to-card">
