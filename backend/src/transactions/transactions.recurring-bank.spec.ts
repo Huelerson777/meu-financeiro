@@ -23,7 +23,6 @@ describe('contas fixas x banco', () => {
     const { prisma, tx, service } = setup();
     prisma.transaction.findMany
       .mockResolvedValueOnce([]) // externalIds já conhecidos
-      .mockResolvedValueOnce([]) // histórico p/ categorias
       .mockResolvedValueOnce([{ id: 'p1', description: 'Energia', amount: 303.55, date: d('2026-11-10'), type: 'EXPENSE' }]);
     const r = await service.importFromBank('u', 'acc', [
       { externalId: 'pluggy:1', date: d('2026-11-06'), description: 'Pagamento para CELESC DISTRIBUICAO S.A', amount: -245.65 },
@@ -35,6 +34,22 @@ describe('contas fixas x banco', () => {
       data: { status: 'PAID', amount: 245.65, date: d('2026-11-06'), accountId: 'acc', externalId: 'pluggy:1' },
     });
     expect(tx.account.update).toHaveBeenCalledTimes(1); // saldo mexe uma única vez
+  });
+
+  it('importFromBank grava o lançamento novo sem categoria (o usuário categoriza depois)', async () => {
+    const { prisma, tx, service } = setup();
+    prisma.transaction.findMany
+      .mockResolvedValueOnce([]) // externalIds já conhecidos
+      .mockResolvedValueOnce([]); // nenhuma conta fixa em aberto
+    const r = await service.importFromBank('u', 'acc', [
+      { externalId: 'pluggy:9', date: d('2026-11-07'), description: 'PIX ENVIADO MERCADO SAO JOAO', amount: -80 },
+    ]);
+    expect(r).toEqual({ created: 1, settledRecurring: 0 });
+    expect(tx.transaction.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ categoryId: null, type: 'EXPENSE', amount: 80, externalId: 'pluggy:9' }),
+    });
+    // não consulta histórico nem categorias pra adivinhar
+    expect(prisma.category.findMany).not.toHaveBeenCalled();
   });
 
   it('não importa a saída do banco que é a fatura de cartão já baixada no app (evita descontar 2x)', async () => {
