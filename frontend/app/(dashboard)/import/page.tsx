@@ -326,7 +326,7 @@ export default function ImportPage() {
                   ))}
                 </ul>
 
-                <div className="sticky bottom-20 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/70 bg-card/95 p-4 shadow-lift backdrop-blur lg:bottom-4">
+                <div className="sticky bottom-20 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[1.75rem] bg-foreground/[0.03]/95 p-4 shadow-lift backdrop-blur lg:bottom-4">
                   <div className="text-sm">
                     <p className="font-semibold">{included.length} lançamentos selecionados</p>
                     <p className="text-xs text-muted-foreground">

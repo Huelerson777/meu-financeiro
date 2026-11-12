@@ -14,3 +14,9 @@ export function formatCurrency(value: number | string | null | undefined, curren
   if (useValuesVisibilityStore.getState().hidden) return maskFor(currency);
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(Number(value ?? 0));
 }
+
+/** Sem centavos — para números dentro de frases e rótulos de gráfico. */
+export function formatCurrencyRound(value: number | string | null | undefined, currency: string = 'BRL') {
+  if (useValuesVisibilityStore.getState().hidden) return maskFor(currency);
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Math.round(Number(value ?? 0)));
+}

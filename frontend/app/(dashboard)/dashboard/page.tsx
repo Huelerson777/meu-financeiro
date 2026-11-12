@@ -289,6 +289,7 @@ export default function DashboardPage() {
         income={data?.totalIncome ?? 0}
         expense={data?.totalExpense ?? 0}
         leftovers={data?.leftovers ?? 0}
+        invested={data?.totalInvested ?? 0}
         openExpenseTotal={paymentsStatus?.openExpenseTotal ?? 0}
         openIncomeTotal={paymentsStatus?.openIncomeTotal ?? 0}
         previousResult={prevData ? prevData.totalIncome - prevData.totalExpense : undefined}
@@ -301,7 +302,8 @@ export default function DashboardPage() {
         }
         expenseChangePct={data?.comparison?.expenseChangePct}
         topCategory={sortedCategoryData[0] ?? null}
-        dailyExpenses={monthCashFlow?.series}
+        dailyFlow={monthCashFlow?.series}
+        openItems={paymentsStatus?.openItems}
         budgetAlert={budgetAlert}
         limit={monthlyLimit}
         onChangeLimit={setMonthlyLimit}

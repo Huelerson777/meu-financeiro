@@ -361,7 +361,7 @@ export default function RecurringBillsPage() {
         </button>
       </div>
 
-      <div className="bg-card rounded-xl shadow-soft border border-border/70 overflow-hidden">
+      <div className="rounded-[1.75rem] bg-foreground/[0.03] overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-foreground">Carregando...</div>
         ) : activeTab === 'recurring' ? (

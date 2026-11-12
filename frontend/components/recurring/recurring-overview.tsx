@@ -191,7 +191,7 @@ export function RecurringOverview({ bills, purchases, loading, onAddIncome }: { 
         </div>
 
         {kind === 'expenses' && (
-          <div className="inline-flex items-center gap-1 self-start rounded-xl border border-border/70 bg-card p-1 shadow-soft">
+          <div className="inline-flex items-center gap-1 self-start rounded-[1.75rem] bg-foreground/[0.03] p-1 shadow-soft">
             <button onClick={() => shift(-1)} aria-label="Mês anterior" className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-theme hover:bg-muted hover:text-foreground active:scale-90">
               <ChevronLeft className="h-4 w-4" />
             </button>

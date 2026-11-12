@@ -236,7 +236,7 @@ export default function SettingsPage() {
 
       <div className="flex flex-col gap-6">
         {/* Perfil */}
-        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
+        <div className="rounded-[1.75rem] bg-foreground/[0.03] p-6">
           <div className="flex items-center gap-2 mb-4">
             <User className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold">Perfil</h2>
@@ -291,7 +291,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Trocar Senha */}
-        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
+        <div className="rounded-[1.75rem] bg-foreground/[0.03] p-6">
           <div className="flex items-center gap-2 mb-4">
             <Lock className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold">Trocar Senha</h2>
@@ -323,7 +323,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Preferências */}
-        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
+        <div className="rounded-[1.75rem] bg-foreground/[0.03] p-6">
           <div className="flex items-center gap-2 mb-4">
             <Palette className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold">Preferências</h2>
@@ -363,7 +363,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Categorias */}
-        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
+        <div className="rounded-[1.75rem] bg-foreground/[0.03] p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Tag className="w-5 h-5 text-primary" />
@@ -404,7 +404,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Aplicativos conectados */}
-        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-6">
+        <div className="rounded-[1.75rem] bg-foreground/[0.03] p-6">
           <div className="flex items-center gap-2 mb-1">
             <Plug className="w-5 h-5 text-primary" />
             <h2 className="text-lg font-semibold">Aplicativos conectados</h2>
