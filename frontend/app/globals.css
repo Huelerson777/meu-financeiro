@@ -126,6 +126,14 @@
     height: 1px;
     background: linear-gradient(90deg, transparent, hsl(var(--border)) 12%, hsl(var(--border)) 88%, transparent);
   }
+  /* A linha do mês "se desenha" da esquerda pra direita (só clip-path, sem layout) */
+  .river-reveal {
+    animation: river-reveal 1.4s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+  }
+  @keyframes river-reveal {
+    from { clip-path: inset(-20% 100% -20% 0); }
+    to { clip-path: inset(-20% -5% -20% 0); }
+  }
   /* Rolagem horizontal de chips sem barra aparente */
   .scrollbar-none {
     scrollbar-width: none;

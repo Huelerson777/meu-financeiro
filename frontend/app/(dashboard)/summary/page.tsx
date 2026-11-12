@@ -99,7 +99,7 @@ export default function SummaryPage() {
           <p className="mt-1 text-sm text-muted-foreground">O fechamento do mês em uma página — dá para salvar em PDF.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-1 rounded-xl border border-border/70 bg-card p-1 shadow-soft">
+          <div className="inline-flex items-center gap-1 rounded-[1.75rem] bg-foreground/[0.03] p-1 shadow-soft">
             <button onClick={() => shift(-1)} aria-label="Mês anterior" className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-theme hover:bg-muted hover:text-foreground active:scale-90">
               <ChevronLeft className="h-4 w-4" />
             </button>

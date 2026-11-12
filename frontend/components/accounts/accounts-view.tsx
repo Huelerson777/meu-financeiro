@@ -9,6 +9,8 @@ import { notifyAlert, confirmDialog } from '@/utils/notify';
 import React, { useEffect, useState } from 'react';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
+import { Story, Dim } from '@/components/ui/story';
+import { Money } from '@/components/dashboard/month-story';
 
 interface Account {
   id: string;
@@ -195,25 +197,31 @@ export function AccountsView() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Total nas contas</p>
-          <p className={`font-num mt-1 text-4xl font-bold leading-none ${totalBalance < 0 ? 'text-danger' : ''}`}>
-            {formatCurrency(totalBalance)}
-          </p>
-          {investedBalance !== 0 ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              <span className="font-num font-semibold text-foreground">{formatCurrency(availableBalance)}</span> disponível
-              {' · '}
-              <span className="font-num font-semibold text-foreground">{formatCurrency(investedBalance)}</span> em investimentos
-            </p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="max-w-3xl">
+          {accounts.length === 0 ? (
+            <Story>
+              Cadastre suas contas <Dim>para acompanhar saldos num lugar só.</Dim>
+            </Story>
           ) : (
-            <p className="mt-2 text-xs text-muted-foreground">Soma das contas marcadas como “No saldo geral”.</p>
+            <Story>
+              <Dim>Você tem</Dim> <Money value={totalBalance} className={totalBalance < 0 ? 'text-danger' : 'text-primary'} />{' '}
+              <Dim>
+                em {inTotal.length} {inTotal.length === 1 ? 'conta' : 'contas'}
+                {investedBalance !== 0 ? ':' : '.'}
+              </Dim>
+              {investedBalance !== 0 && (
+                <>
+                  {' '}
+                  <Money value={availableBalance} /> <Dim>para o dia a dia e</Dim> <Money value={investedBalance} /> <Dim>investidos.</Dim>
+                </>
+              )}
+            </Story>
           )}
         </div>
         <button
           onClick={handleOpenCreate}
-          className="btn-sheen inline-flex h-10 w-fit items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_6px_14px_-6px_hsl(var(--primary)/0.55)] transition-theme hover:-translate-y-px hover:brightness-110 active:scale-[0.97]"
+          className="btn-sheen inline-flex h-10 w-fit shrink-0 items-center gap-2 whitespace-nowrap rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_6px_14px_-6px_hsl(var(--primary)/0.55)] transition-theme hover:-translate-y-px hover:brightness-110 active:scale-[0.97]"
         >
           <Plus className="h-4 w-4" strokeWidth={2.2} />
           Nova conta
@@ -244,7 +252,7 @@ export function AccountsView() {
       ) : (
         // Uma lista só, estilo extrato: cada conta é uma linha (logo, nome, tipo,
         // saldo), em vez de uma grade de cartões iguais.
-        <ul className="divide-y divide-border/60 overflow-hidden rounded-[1.375rem] border border-border/60 bg-card shadow-soft">
+        <ul className="divide-y divide-border/60 overflow-hidden rounded-[1.75rem] bg-foreground/[0.03]">
           {accounts.map((acc) => {
             const balance = Number(acc.currentBalance ?? acc.initialBalance ?? 0);
             return (

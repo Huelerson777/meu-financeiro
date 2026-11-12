@@ -6,9 +6,9 @@ import {
   TrendingDown, TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
-import { Area, ComposedChart, Line, ReferenceDot, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatCurrency } from '@/utils/currency';
+import { Money, MonthDial, MonthRiver, type RiverOpenItem } from '@/components/dashboard/month-story';
+import { formatCurrency, formatCurrencyRound } from '@/utils/currency';
 import { cn } from '@/utils/cn';
 
 interface InsightsHeroProps {
@@ -18,6 +18,8 @@ interface InsightsHeroProps {
   income: number;
   expense: number;
   leftovers: number;
+  /** Aportes do mês em contas de investimento. */
+  invested?: number;
   openExpenseTotal: number;
   /** Receitas previstas no mês que ainda não entraram. */
   openIncomeTotal: number;
@@ -32,8 +34,10 @@ interface InsightsHeroProps {
   /** Categoria que mais passou do orçamento no mês, se alguma passou. */
   budgetAlert?: { name: string; over: number; pct: number } | null;
   onChangeLimit: (value: number | null) => void;
-  /** Despesas pagas por dia do mês (série diária do fluxo de caixa). */
-  dailyExpenses?: { key: string; despesas: number }[];
+  /** Série diária do fluxo de caixa do mês (pago/recebido). */
+  dailyFlow?: { key: string; receitas: number; despesas: number }[];
+  /** O que ainda está em aberto no mês (trecho pontilhado da linha do mês). */
+  openItems?: RiverOpenItem[];
 }
 
 type Tone = 'good' | 'bad' | 'neutral';
@@ -137,7 +141,7 @@ function TipsStrip({ insights, isLoading }: { insights: Insight[]; isLoading: bo
 
   return (
     <div
-      className="flex flex-col gap-2 border-t border-primary/15 bg-primary/[0.06] px-5 py-3 sm:flex-row sm:items-center sm:gap-4"
+      className="flex flex-col gap-2 rounded-2xl bg-primary/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:gap-4"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
@@ -195,66 +199,6 @@ const toneIcon: Record<Tone, string> = {
   neutral: 'text-warning',
 };
 
-/** Gasto acumulado no mês (linha cheia) contra o ritmo ideal do limite (tracejada). */
-function PaceChart({ p }: { p: InsightsHeroProps }) {
-  const now = new Date();
-  const isCurrent = now.getMonth() + 1 === p.month && now.getFullYear() === p.year;
-  const isFuture = new Date(p.year, p.month - 1, 1) > now;
-  const daysInMonth = new Date(p.year, p.month, 0).getDate();
-  const lastDay = isFuture ? 0 : isCurrent ? now.getDate() : daysInMonth;
-
-  const perDay = new Map<number, number>();
-  (p.dailyExpenses ?? []).forEach((d) => {
-    const day = Number(d.key.split('-')[2]);
-    if (day) perDay.set(day, (perDay.get(day) ?? 0) + d.despesas);
-  });
-
-  let acc = 0;
-  const data = Array.from({ length: daysInMonth }, (_, i) => {
-    const day = i + 1;
-    acc += perDay.get(day) ?? 0;
-    return {
-      day,
-      real: day <= lastDay ? acc : null,
-      ideal: p.limit ? (p.limit * day) / daysInMonth : null,
-    };
-  });
-  const maxY = Math.max(p.limit ?? 0, acc, 1) * 1.08;
-  const today = data[lastDay - 1];
-
-  return (
-    <div className="h-28 px-2">
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 8, left: 8, right: 12, bottom: 0 }}>
-          <defs>
-            <linearGradient id="paceFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.22} />
-              <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <XAxis dataKey="day" hide />
-          <YAxis hide domain={[0, maxY]} />
-          <RechartsTooltip
-            cursor={{ stroke: 'hsl(var(--border))' }}
-            content={({ active, payload }: any) =>
-              active && payload?.length ? (
-                <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lift">
-                  <p className="font-semibold">Dia {payload[0].payload.day}</p>
-                  {payload[0].payload.real != null && <p className="text-muted-foreground">Gasto: {formatCurrency(payload[0].payload.real)}</p>}
-                  {payload[0].payload.ideal != null && <p className="text-muted-foreground">Ritmo do limite: {formatCurrency(payload[0].payload.ideal)}</p>}
-                </div>
-              ) : null
-            }
-          />
-          {p.limit && <Line type="linear" dataKey="ideal" stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" strokeOpacity={0.6} dot={false} strokeWidth={1.5} isAnimationActive={false} />}
-          <Area type="monotone" dataKey="real" stroke="hsl(var(--primary))" strokeWidth={2.25} fill="url(#paceFill)" connectNulls={false} dot={false} />
-          {today && today.real != null && <ReferenceDot x={today.day} y={today.real} r={4} fill="hsl(var(--primary))" stroke="hsl(var(--card))" strokeWidth={2} />}
-        </ComposedChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
 /**
  * Quanto ainda dá pra gastar no mês. Com limite definido: limite − gasto.
  * Sem limite: o que entrou no mês − o que já saiu − o que ainda vence.
@@ -265,151 +209,155 @@ export function computeFreeToSpend(p: Pick<InsightsHeroProps, 'limit' | 'income'
   return p.limit != null ? p.limit - p.expense : p.income - p.expense - p.openExpenseTotal;
 }
 
-/** Bloco principal: quanto ainda dá para gastar (discreto) e o ritmo do mês. */
-function SpendBlock({ props }: { props: InsightsHeroProps }) {
-  const remaining = computeFreeToSpend(props);
-  const negative = remaining < 0;
+/**
+ * O mês contado numa frase, com os números dentro do texto (animados) — no
+ * lugar de três cartões com um número cada.
+ */
+function MonthSentence({ props }: { props: InsightsHeroProps }) {
+  const now = new Date();
+  const isCurrent = now.getMonth() + 1 === props.month && now.getFullYear() === props.year;
+  const isFuture = new Date(props.year, props.month - 1, 1) > now;
+  const lastDay = new Date(props.year, props.month, 0).getDate();
+  const free = computeFreeToSpend(props);
+  const result = props.income - props.expense;
+  const dim = 'text-muted-foreground';
+
+  if (props.isLoading) {
+    return (
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-9 w-11/12" />
+        <Skeleton className="h-9 w-8/12" />
+      </div>
+    );
+  }
+
+  if (props.income === 0 && props.expense === 0 && props.openExpenseTotal === 0) {
+    return (
+      <p className="font-display text-[1.6rem] font-semibold leading-tight tracking-tight sm:text-[2.1rem]">
+        {isFuture ? 'Nada previsto para este mês ainda.' : 'Nada lançado neste mês ainda.'}{' '}
+        <span className={dim}>Use o “+” para começar.</span>
+      </p>
+    );
+  }
 
   return (
-    <div className="flex min-w-0 flex-col">
-      <div className="px-5 pt-5">
-        <p className="text-sm text-muted-foreground">
-          {negative
-            ? props.limit == null ? 'Faltam para fechar o mês' : 'Você passou do limite em'
-            : props.limit == null ? 'Livre para gastar este mês' : 'Ainda cabe no seu limite'}
-        </p>
-        {props.isLoading ? (
-          <Skeleton className="mt-2 h-9 w-44" />
+    <p className="font-display text-[1.6rem] font-semibold leading-[1.2] tracking-tight sm:text-[2.1rem] lg:text-[2.35rem]">
+      Entraram <Money value={props.income} className="text-primary" />
+      <span className={dim}>, saíram</span> <Money value={props.expense} />
+      {props.openExpenseTotal > 0 && (
+        <>
+          {' '}
+          <span className={dim}>
+            {isCurrent || isFuture
+              ? `e ainda ${props.openExpenseCount === 1 ? 'vence' : 'vencem'}`
+              : `e ${props.openExpenseCount === 1 ? 'ficou' : 'ficaram'} em aberto`}
+          </span>{' '}
+          <Link href="#para-fazer-agora" className="text-warning underline decoration-warning/50 decoration-dashed decoration-2 underline-offset-[6px] transition-colors hover:decoration-warning">
+            <Money value={props.openExpenseTotal} />
+          </Link>
+        </>
+      )}
+      <span className={dim}>.</span>{' '}
+      {props.limit != null ? (
+        free >= 0 ? (
+          <>
+            <span className={dim}>Ainda cabem</span> <Money value={free} className="text-primary" />{' '}
+            <span className={dim}>no seu limite de {formatCurrencyRound(props.limit)}.</span>
+          </>
         ) : (
-          <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
-            <span className={cn('font-num text-3xl font-bold leading-none', negative && 'text-danger')}>
-              {formatCurrency(Math.abs(remaining))}
-            </span>
-            {props.limit != null && <span className="text-sm text-muted-foreground">/ {formatCurrency(props.limit)}</span>}
-          </p>
-        )}
-        {!props.isLoading && (
-          <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">
-            {props.limit != null ? (
-              <>Limite de {formatCurrency(props.limit)} menos {formatCurrency(props.expense)} já gastos.</>
-            ) : (
-              <>
-                Entrou {formatCurrency(props.income)}, saiu {formatCurrency(props.expense)} e ainda vence{' '}
-                {formatCurrency(props.openExpenseTotal)}.
-                {props.openIncomeTotal > 0 && (
-                  <> Sem contar {formatCurrency(props.openIncomeTotal)} a receber.</>
-                )}
-              </>
-            )}
-          </p>
-        )}
-      </div>
-      <div className="mt-3 flex-1 pb-3">
-        {props.isLoading ? <Skeleton className="mx-5 h-24" /> : <PaceChart p={props} />}
-      </div>
-    </div>
+          <>
+            <span className={dim}>Você passou do limite em</span> <Money value={-free} className="text-danger" />
+            <span className={dim}>.</span>
+          </>
+        )
+      ) : isCurrent ? (
+        free >= 0 ? (
+          <>
+            Sobram <Money value={free} className="text-primary" /> <span className={dim}>livres até o dia {lastDay}.</span>
+          </>
+        ) : (
+          <>
+            Faltam <Money value={-free} className="text-danger" /> <span className={dim}>para fechar o mês.</span>
+          </>
+        )
+      ) : (
+        <>
+          {result >= 0 ? 'Sobraram' : 'Faltaram'} <Money value={Math.abs(result)} className={result >= 0 ? 'text-primary' : 'text-danger'} />{' '}
+          <span className={dim}>no mês.</span>
+        </>
+      )}
+    </p>
   );
 }
 
-/** Sobra do mês (receitas − despesas) comparada com o mês anterior. */
-function ResultBlock({ props }: { props: InsightsHeroProps }) {
+/** Linha de apoio sob a frase: sobra vs. mês passado, a receber e o limite (edição inline). */
+function SupportLine({ props }: { props: InsightsHeroProps }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
   const result = props.income - props.expense;
   const prev = props.previousResult;
   const pct = prev != null && prev !== 0 ? Math.round(((result - prev) / Math.abs(prev)) * 100) : null;
   const up = pct != null && pct >= 0;
 
-  return (
-    <div className="flex-1 p-5">
-      <p className="text-sm text-muted-foreground">Sobra do mês</p>
-      {props.isLoading ? (
-        <Skeleton className="mt-2 h-8 w-36" />
-      ) : (
-        <>
-          <p className="mt-1 flex flex-wrap items-center gap-2">
-            <span className={cn('font-num text-2xl font-semibold leading-none', result < 0 && 'text-danger')}>
-              {formatCurrency(result)}
-            </span>
-            {pct != null && (
-              <span className={cn('inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-semibold', up ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger')}>
-                {up ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
-                {Math.abs(pct)}%
-              </span>
-            )}
-          </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Receitas menos despesas já pagas.{' '}
-            {prev != null ? `No mês passado: ${formatCurrency(prev)}.` : ''}
-          </p>
-        </>
-      )}
-    </div>
-  );
-}
-
-/** Limite de gasto do mês, com edição inline. */
-function LimitBlock({ limit, expense, onChange, isLoading }: { limit: number | null; expense: number; onChange: (v: number | null) => void; isLoading: boolean }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState('');
-
   const save = () => {
     const n = Number(value.replace(/\./g, '').replace(',', '.'));
-    onChange(Number.isFinite(n) && n > 0 ? n : null);
+    props.onChangeLimit(Number.isFinite(n) && n > 0 ? n : null);
     setEditing(false);
   };
 
-  const pct = limit ? Math.min(100, (expense / limit) * 100) : 0;
-  const over = limit != null && expense > limit;
+  if (props.isLoading) return <Skeleton className="h-5 w-72 max-w-full" />;
 
   return (
-    <div className="p-5">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold">
-          <Gauge className="h-[18px] w-[18px] text-primary" strokeWidth={1.75} />
-          Limite do mês
-        </p>
-        {!editing && (
-          <button
-            onClick={() => { setValue(limit ? String(limit).replace('.', ',') : ''); setEditing(true); }}
-            className="flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-primary transition-theme hover:bg-primary/10"
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+      <span className="flex items-center gap-1.5">
+        Sobra do mês <span className={cn('font-num font-semibold text-foreground', result < 0 && 'text-danger')}>{formatCurrency(result)}</span>
+        {pct != null && (
+          <span
+            title={`No mês passado: ${formatCurrency(prev!)}`}
+            className={cn('inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold', up ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger')}
           >
-            <Pencil className="h-3 w-3" /> {limit ? 'Editar' : 'Definir'}
-          </button>
+            {up ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+            {Math.abs(pct)}%
+          </span>
         )}
-      </div>
-
+      </span>
+      {props.openIncomeTotal > 0 && (
+        <span>
+          <span className="font-num font-semibold text-foreground">{formatCurrency(props.openIncomeTotal)}</span> a receber
+        </span>
+      )}
+      <span title="Saldo das contas do dia a dia (sem investimentos) no fim do mês">
+        <span className={cn('font-num font-semibold text-foreground', props.leftovers < 0 && 'text-danger')}>{formatCurrency(props.leftovers)}</span> nas contas
+      </span>
+      {(props.invested ?? 0) > 0 && (
+        <span>
+          <span className="font-num font-semibold text-foreground">{formatCurrency(props.invested)}</span> investidos no mês
+        </span>
+      )}
       {editing ? (
-        <form onSubmit={(e) => { e.preventDefault(); save(); }} className="mt-3 flex gap-2">
+        <form onSubmit={(e) => { e.preventDefault(); save(); }} className="flex items-center gap-2">
           <input
             autoFocus
             inputMode="decimal"
+            aria-label="Limite de gasto do mês"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder="Ex: 5000 (vazio remove)"
-            className="h-10 min-w-0 flex-1 rounded-xl border border-input bg-card px-3 text-sm focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
+            className="h-9 w-48 rounded-full border border-input bg-card px-3.5 text-sm text-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
           />
-          <button type="submit" className="h-10 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-theme hover:brightness-110 active:scale-[0.97]">
+          <button type="submit" className="h-9 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground transition-theme hover:brightness-110 active:scale-[0.97]">
             Salvar
           </button>
         </form>
-      ) : isLoading ? (
-        <Skeleton className="mt-3 h-10" />
-      ) : limit ? (
-        <>
-          <p className="mt-3 flex items-baseline gap-1.5">
-            <span className={cn('font-num text-2xl font-bold', over && 'text-danger')}>{formatCurrency(expense)}</span>
-            <span className="text-sm text-muted-foreground">de {formatCurrency(limit)}</span>
-          </p>
-          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-            <div className={cn('h-2 rounded-full transition-all', over ? 'bg-danger' : pct > 80 ? 'bg-warning' : 'bg-primary')} style={{ width: `${pct}%` }} />
-          </div>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {over ? `${formatCurrency(expense - limit)} acima do limite` : `Restam ${formatCurrency(limit - expense)} no mês`}
-          </p>
-        </>
       ) : (
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          Defina quanto quer gastar no mês e acompanhe o ritmo aqui e nas dicas.
-        </p>
+        <button
+          onClick={() => { setValue(props.limit ? String(props.limit).replace('.', ',') : ''); setEditing(true); }}
+          className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs font-semibold text-primary transition-theme hover:bg-primary/10"
+        >
+          <Gauge className="h-3.5 w-3.5" strokeWidth={1.9} />
+          {props.limit ? `Limite ${formatCurrencyRound(props.limit)}` : 'Definir limite do mês'}
+          <Pencil className="h-3 w-3" />
+        </button>
       )}
     </div>
   );
@@ -417,21 +365,50 @@ function LimitBlock({ limit, expense, onChange, isLoading }: { limit: number | n
 
 export function InsightsHero(props: InsightsHeroProps) {
   const insights = buildInsights(props);
+  const now = new Date();
+  const isCurrent = now.getMonth() + 1 === props.month && now.getFullYear() === props.year;
+  const isFuture = new Date(props.year, props.month - 1, 1) > now;
+  const daysInMonth = new Date(props.year, props.month, 0).getDate();
+  const elapsed = isFuture ? 0 : isCurrent ? now.getDate() / daysInMonth : 1;
+  const free = computeFreeToSpend(props);
 
-  // Responde "estou bem este mês?": o que dá pra gastar e o ritmo à esquerda,
-  // a sobra vs. mês passado e o limite à direita, e uma dica no rodapé.
-  // O que precisa de ação (contas atrasadas/vencendo) fica em "Para fazer agora".
+  // Mostrador: de tudo que entrou (ou do limite), quanto já saiu, quanto ainda vence e quanto está livre
+  const segments =
+    props.limit != null
+      ? [
+          { key: 'spent', label: 'Já gasto', value: Math.min(props.expense, props.limit), color: 'hsl(var(--foreground) / 0.55)' },
+          { key: 'free', label: 'Cabe no limite', value: Math.max(0, free), color: 'hsl(var(--primary))' },
+          { key: 'over', label: 'Acima do limite', value: Math.max(0, -free), color: 'hsl(var(--danger))' },
+        ]
+      : [
+          { key: 'spent', label: 'Já saiu', value: props.expense, color: 'hsl(var(--foreground) / 0.55)' },
+          { key: 'due', label: 'Ainda vence', value: props.openExpenseTotal, color: 'hsl(var(--warning))' },
+          { key: 'free', label: 'Livre', value: Math.max(0, free), color: 'hsl(var(--primary))' },
+        ];
+  // Mês que já fechou: o centro mostra o que sobrou de fato, não "livre para gastar"
+  const closed = !isCurrent && !isFuture && props.limit == null;
+  const dialValue = closed ? props.income - props.expense : free;
+  const dialCaption = closed
+    ? dialValue < 0 ? 'faltou no mês' : 'sobrou no mês'
+    : free < 0
+      ? props.limit != null ? 'acima do limite' : 'faltam'
+      : props.limit != null ? 'cabe no limite' : 'livre para gastar';
+  const base = props.limit ?? props.income;
+  const spentPct = base > 0 ? Math.round((props.expense / base) * 100) : null;
+
+  // Responde "estou bem este mês?" sem cartões: a frase conta o mês, o
+  // mostrador resume, e a linha do mês mostra o caminho (cheio = aconteceu,
+  // pontilhado = ainda vem). O que pede ação fica em "Para fazer agora".
   return (
-    <section className="animate-rise overflow-hidden rounded-[1.375rem] border border-border/60 bg-card shadow-soft">
-      <div className="grid lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-        <SpendBlock props={props} />
-
-        <div className="flex flex-col divide-y divide-border/60 border-t border-border/60 lg:border-l lg:border-t-0">
-          <ResultBlock props={props} />
+    <section className="flex animate-rise flex-col gap-6">
+      <div className="grid items-center gap-x-10 gap-y-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <div className="flex min-w-0 flex-col gap-4">
+          <MonthSentence props={props} />
+          <SupportLine props={props} />
           {props.budgetAlert && !props.isLoading && (
             <Link
               href="/budgets"
-              className="flex items-start gap-2.5 bg-danger/[0.06] px-5 py-3 text-sm transition-colors hover:bg-danger/10"
+              className="flex w-fit max-w-full items-start gap-2 rounded-2xl bg-danger/[0.07] px-3.5 py-2 text-sm transition-colors hover:bg-danger/[0.12]"
             >
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-danger" strokeWidth={1.9} />
               <span>
@@ -442,9 +419,28 @@ export function InsightsHero(props: InsightsHeroProps) {
               </span>
             </Link>
           )}
-          <LimitBlock limit={props.limit} expense={props.expense} onChange={props.onChangeLimit} isLoading={props.isLoading} />
         </div>
+
+        {props.isLoading ? (
+          <Skeleton className="mx-auto h-60 w-60 rounded-full" />
+        ) : (
+          <MonthDial
+            segments={segments}
+            elapsed={elapsed}
+            caption={dialCaption}
+            value={dialValue}
+            negative={dialValue < 0}
+            footnote={spentPct != null ? `gastou ${spentPct}% · mês em ${Math.round(elapsed * 100)}%` : undefined}
+          />
+        )}
       </div>
+
+      {props.isLoading ? (
+        <Skeleton className="h-44 rounded-2xl sm:h-56" />
+      ) : (
+        <MonthRiver month={props.month} year={props.year} series={props.dailyFlow} openItems={props.openItems} />
+      )}
+
       <TipsStrip insights={insights} isLoading={props.isLoading} />
     </section>
   );

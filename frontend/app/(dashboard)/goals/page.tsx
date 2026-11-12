@@ -4,7 +4,10 @@ import { notifyAlert, confirmDialog } from '@/utils/notify';
 import { useEffect, useState } from 'react';
 import { Target, Plus, Trash2, Pencil } from 'lucide-react';
 import { api } from '@/services/api';
-import { formatCurrency } from '@/utils/currency';
+import { formatCurrency, formatCurrencyRound } from '@/utils/currency';
+import { Ring } from '@/components/ui/ring';
+import { Story, Dim } from '@/components/ui/story';
+import { Money } from '@/components/dashboard/month-story';
 
 interface Goal {
   id: string;
@@ -134,25 +137,34 @@ export default function GoalsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-3xl font-bold tracking-tight">Metas</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Defina objetivos financeiros e acompanhe o progresso.
-          </p>
-        </div>
+      <div className="mb-4 flex items-end justify-between gap-4">
+        <h1 className="font-display text-[1.7rem] font-bold leading-tight tracking-tight sm:text-3xl">Metas</h1>
         <button
           onClick={handleOpenCreate}
-          className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow flex items-center gap-2"
+          className="btn-sheen inline-flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_6px_14px_-6px_hsl(var(--primary)/0.55)] transition-theme hover:-translate-y-px hover:brightness-110 active:scale-[0.97]"
         >
-          <Plus className="w-4 h-4" /> Nova Meta
+          <Plus className="h-4 w-4" /> Nova meta
         </button>
       </div>
+      {!loading && goals.length > 0 && (() => {
+        const saved = goals.reduce((s, g) => s + Number(g.currentAmount), 0);
+        const target = goals.reduce((s, g) => s + Number(g.targetAmount), 0);
+        const done = goals.filter((g) => Number(g.currentAmount) >= Number(g.targetAmount)).length;
+        return (
+          <Story className="mb-8 max-w-3xl">
+            <Dim>Você já juntou</Dim> <Money value={saved} className="text-primary" /> <Dim>dos</Dim> <Money value={target} />{' '}
+            <Dim>
+              {goals.length === 1 ? 'da sua meta' : `das suas ${goals.length} metas`}
+              {done > 0 ? ` — ${done} ${done === 1 ? 'concluída' : 'concluídas'}.` : '.'}
+            </Dim>
+          </Story>
+        );
+      })()}
 
       {loading ? (
         <div className="text-foreground py-8">Carregando...</div>
       ) : goals.length === 0 ? (
-        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-10 flex flex-col items-center text-center gap-3">
+        <div className="rounded-[1.75rem] bg-foreground/[0.03] p-10 flex flex-col items-center text-center gap-3">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
             <Target className="w-7 h-7 text-primary" />
           </div>
@@ -162,7 +174,7 @@ export default function GoalsPage() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {goals.map((g) => {
             const target = Number(g.targetAmount);
             const current = Number(g.currentAmount);
@@ -171,68 +183,58 @@ export default function GoalsPage() {
             const isComplete = current >= target;
 
             return (
-              <div
-                key={g.id}
-                className="bg-card rounded-xl shadow-soft border border-border/70 relative overflow-hidden group p-6"
-              >
-                <div
-                  className="absolute top-0 left-0 right-0 h-1"
-                  style={{ backgroundColor: isComplete ? 'hsl(var(--success))' : 'hsl(var(--primary))' }}
-                />
+              <div key={g.id} className="group relative flex gap-4 rounded-[1.75rem] bg-foreground/[0.03] p-5 sm:p-6">
+                <Ring value={pct / 100} size={72} thickness={6} color={isComplete ? 'hsl(var(--success))' : undefined} aria-label={`${pct.toFixed(0)}% da meta`}>
+                  <span className="font-num text-base font-bold leading-none">{pct.toFixed(0)}%</span>
+                </Ring>
 
-                <div className="absolute top-4 right-4 flex gap-3 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => handleEdit(g)} className="text-foreground hover:text-primary">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => handleDelete(g)} className="text-foreground hover:text-danger">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <h3 className="font-display text-lg font-bold tracking-tight flex items-center gap-2">
-                  <Target className="w-5 h-5 text-primary" />
-                  {g.name}
-                </h3>
-
-                {g.deadline && (
-                  <p className="text-xs text-foreground mt-1">
-                    {days !== null && days >= 0
-                      ? `Faltam ${days} dia${days === 1 ? '' : 's'}`
-                      : days !== null && days < 0
-                      ? 'Prazo vencido'
-                      : ''}
-                    {' · '}
-                    {new Date(g.deadline).toLocaleDateString('pt-BR')}
-                  </p>
-                )}
-
-                <div className="mt-4">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-foreground">
-                      {formatCurrency(current)} de {formatCurrency(target)}
-                    </span>
-                    <span className="font-semibold">{pct.toFixed(0)}%</span>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-display min-w-0 break-words text-lg font-bold leading-tight tracking-tight">{g.name}</h3>
+                    <div className="-mr-2 -mt-1 flex shrink-0 gap-0.5 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0">
+                      <button onClick={() => handleEdit(g)} aria-label={`Editar ${g.name}`} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-primary/10 hover:text-primary">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => handleDelete(g)} aria-label={`Excluir ${g.name}`} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-danger/10 hover:text-danger">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${pct}%`, backgroundColor: isComplete ? 'hsl(var(--success))' : 'hsl(var(--primary))' }}
-                    />
-                  </div>
-                </div>
 
-                {isComplete ? (
-                  <p className="mt-4 text-center text-sm font-semibold text-success">
-                    Meta concluída
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    <span className="font-num font-semibold text-foreground">{formatCurrency(current)}</span> de {formatCurrency(target)}
                   </p>
-                ) : (
-                  <button
-                    onClick={() => setContributeGoal(g)}
-                    className="mt-4 w-full rounded-md bg-primary/10 py-2.5 text-sm font-semibold text-primary transition-theme hover:bg-primary hover:text-primary-foreground active:scale-[0.98]"
-                  >
-                    + Adicionar valor
-                  </button>
-                )}
+
+                  {/* O que fazer para chegar: quanto por mês até o prazo */}
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    {isComplete
+                      ? 'Meta concluída.'
+                      : g.deadline && days !== null && days > 0
+                        ? (() => {
+                            const months = Math.max(1, Math.ceil(days / 30));
+                            return (
+                              <>
+                                Faltam <span className="font-num font-semibold text-foreground">{formatCurrencyRound(target - current)}</span>
+                                {' · '}
+                                <span className="font-semibold text-primary">{formatCurrencyRound((target - current) / months)}/mês</span> até{' '}
+                                {new Date(g.deadline).toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '')}
+                              </>
+                            );
+                          })()
+                        : g.deadline && days !== null && days <= 0
+                          ? <span className="font-semibold text-warning">Prazo vencido · faltam {formatCurrencyRound(target - current)}</span>
+                          : <>Faltam <span className="font-num font-semibold text-foreground">{formatCurrencyRound(target - current)}</span> · sem prazo</>}
+                  </p>
+
+                  {!isComplete && (
+                    <button
+                      onClick={() => setContributeGoal(g)}
+                      className="mt-3 inline-flex h-9 w-fit items-center gap-1.5 rounded-full bg-primary/10 px-4 text-sm font-semibold text-primary transition-theme hover:bg-primary hover:text-primary-foreground active:scale-[0.98]"
+                    >
+                      <Plus className="h-4 w-4" /> Guardar
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}

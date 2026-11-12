@@ -8,6 +8,9 @@ import { AccountAvatar } from '@/components/accounts/account-avatar';
 import { isImageIcon } from '@/utils/image-resize';
 import { api } from '@/services/api';
 import { formatCurrency } from '@/utils/currency';
+import { Ring } from '@/components/ui/ring';
+import { Story, Dim } from '@/components/ui/story';
+import { Money } from '@/components/dashboard/month-story';
 import { PurchaseModal } from '@/components/cards/purchase-modal';
 import { RecurringPurchaseModal } from '@/components/cards/recurring-purchase-modal';
 import { InvoiceModal } from '@/components/cards/invoice-modal';
@@ -162,28 +165,32 @@ export function CardsView() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">Faturas em aberto</p>
-          <p className="font-num mt-1 text-4xl font-bold leading-none">{formatCurrency(openInvoicesTotal)}</p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {cards.length === 0
-              ? 'Controle de limites, fechamento e compras parceladas.'
-              : `${formatCurrency(usedLimitTotal)} de ${formatCurrency(limitTotal)} do limite em uso`}
-          </p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="max-w-3xl">
+          {cards.length === 0 ? (
+            <Story>
+              Controle limites, fechamento e compras parceladas. <Dim>Cadastre seu primeiro cartão.</Dim>
+            </Story>
+          ) : (
+            <Story>
+              <Dim>As próximas faturas somam</Dim> <Money value={openInvoicesTotal} className="text-warning" />
+              <Dim>. Você usa</Dim> <Money value={usedLimitTotal} /> <Dim>de</Dim> <Money value={limitTotal} />{' '}
+              <Dim>de limite.</Dim>
+            </Story>
+          )}
         </div>
         <button
           onClick={handleOpenCreate}
-          className="bg-primary hover:brightness-110 hover:-translate-y-px active:scale-[0.97] btn-sheen text-primary-foreground px-4 py-2 rounded-md font-medium transition shadow flex items-center gap-2"
+          className="btn-sheen inline-flex h-10 w-fit shrink-0 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-[inset_0_1px_0_hsl(0_0%_100%/0.18),0_6px_14px_-6px_hsl(var(--primary)/0.55)] transition-theme hover:-translate-y-px hover:brightness-110 active:scale-[0.97]"
         >
-          <Plus className="w-4 h-4" /> Novo Cartão
+          <Plus className="h-4 w-4" /> Novo cartão
         </button>
       </div>
 
       {loading ? (
         <div className="text-muted-foreground py-8">Carregando...</div>
       ) : cards.length === 0 ? (
-        <div className="bg-card rounded-xl shadow-soft border border-border/70 p-10 flex flex-col items-center text-center gap-3">
+        <div className="rounded-[1.75rem] bg-foreground/[0.03] p-10 flex flex-col items-center text-center gap-3">
           <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
             <CreditCard className="w-7 h-7 text-primary" />
           </div>
@@ -193,111 +200,84 @@ export function CardsView() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {cards.map((c) => {
             const cardColor = c.color || DEFAULT_COLOR;
             const openInvoice = Number(c.currentInvoiceOpenTotal ?? 0);
+            const limit = Number(c.limitAmount ?? 0);
+            const used = Number(c.usedLimit ?? 0);
+            const usedPct = limit > 0 ? used / limit : 0;
+            const payer = c.paymentAccountId ? accounts.find((a) => a.id === c.paymentAccountId)?.name : undefined;
 
             return (
               <div
                 key={c.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => setInvoiceCard(c)}
-                className="bg-card rounded-xl shadow-soft border border-border/70 relative overflow-hidden group p-6 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all"
+                onKeyDown={(e) => { if (e.key === 'Enter') setInvoiceCard(c); }}
+                className="group relative flex cursor-pointer gap-4 rounded-[1.75rem] bg-foreground/[0.03] p-5 transition-colors hover:bg-foreground/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:p-6"
               >
-                <div className="absolute top-0 left-0 right-0 h-1.5" style={{ backgroundColor: cardColor }} />
-                <div
-                  className="absolute -top-10 -right-10 h-32 w-32 rounded-full blur-2xl pointer-events-none"
-                  style={{ backgroundColor: `${cardColor}33` }}
-                />
-
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute top-2 right-2 z-10 flex gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
-                >
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleEdit(c); }}
-                    className="p-2.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition"
-                    title="Editar"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleArchive(c); }}
-                    className="p-2.5 rounded-md text-muted-foreground hover:text-danger hover:bg-danger/10 transition"
-                    title="Excluir"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* pr-16: reserva o canto dos botões Editar/Excluir (absolutos), senão o nome passa por baixo deles */}
-                <div className="relative flex items-center gap-3 pr-16">
+                {/* Anel = limite usado; a cor do cartão aparece no traço */}
+                <Ring value={usedPct} size={72} thickness={6} color={usedPct >= 0.9 ? 'hsl(var(--danger))' : usedPct >= 0.7 ? 'hsl(var(--warning))' : cardColor} aria-label={`${Math.round(usedPct * 100)}% do limite usado`}>
                   {isImageIcon(c.icon) ? (
-                    <AccountAvatar name={c.name} color={cardColor} icon={c.icon} className="h-11 w-11" />
+                    <AccountAvatar name={c.name} color={cardColor} icon={c.icon} className="h-9 w-9 rounded-full" />
                   ) : (
-                    <div
-                      className="h-11 w-11 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: `${cardColor}20` }}
-                    >
-                      <CreditCard className="w-5 h-5" style={{ color: cardColor }} />
-                    </div>
+                    <>
+                      <span className="font-num text-base font-bold leading-none">{Math.round(usedPct * 100)}%</span>
+                      <span className="mt-0.5 text-[10px] text-muted-foreground">do limite</span>
+                    </>
                   )}
-                  <div className="min-w-0">
-                    <h3 className="text-lg font-bold text-foreground truncate">{c.name}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Fecha dia {c.closingDay} · Vence dia {c.dueDay}
-                      {c.paymentAccountId && accounts.find((a) => a.id === c.paymentAccountId) && (
-                        <> · Paga com {accounts.find((a) => a.id === c.paymentAccountId)!.name}</>
-                      )}
-                    </p>
-                  </div>
-                </div>
+                </Ring>
 
-                {(() => {
-                  const limit = Number(c.limitAmount ?? 0);
-                  const used = Number(c.usedLimit ?? 0);
-                  const pct = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
-                  return (
-                    <div className="mt-5">
-                      <div className="flex items-baseline justify-between text-xs text-muted-foreground">
-                        <span>Limite usado</span>
-                        <span>
-                          <strong className="font-num text-sm text-foreground">{formatCurrency(used)}</strong> de {formatCurrency(limit)}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-2 rounded-full transition-all duration-500 ${pct >= 90 ? 'bg-danger' : pct >= 70 ? 'bg-warning' : ''}`}
-                          style={{ width: `${pct}%`, ...(pct < 70 ? { backgroundColor: cardColor } : {}) }}
-                        />
-                      </div>
-                      <p className="mt-1 text-[11px] text-muted-foreground">Disponível {formatCurrency(Math.max(0, limit - used))}</p>
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="font-display min-w-0 break-words text-lg font-bold leading-tight tracking-tight">{c.name}</h3>
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="-mr-2 -mt-1 flex shrink-0 gap-0.5 transition-opacity focus-within:opacity-100 group-hover:opacity-100 [@media(hover:hover)]:opacity-0"
+                    >
+                      <button onClick={() => handleEdit(c)} aria-label={`Editar ${c.name}`} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-primary/10 hover:text-primary">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button onClick={() => handleArchive(c)} aria-label={`Excluir ${c.name}`} className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-theme hover:bg-danger/10 hover:text-danger">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                  );
-                })()}
+                  </div>
 
-                <div className="mt-4 flex items-center justify-between rounded-lg bg-muted/60 px-3 py-2.5">
-                  <span className="text-sm text-muted-foreground">Próxima fatura em aberto</span>
-                  <span className={`font-semibold ${openInvoice > 0 ? 'text-warning' : 'text-success'}`}>
-                    {formatCurrency(openInvoice)}
-                  </span>
-                </div>
+                  {/* A fatura contada numa linha, em vez de caixinhas separadas */}
+                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                    {openInvoice > 0 ? (
+                      <>
+                        Fatura de <span className="font-num font-semibold text-warning">{formatCurrency(openInvoice)}</span>, fecha dia {c.closingDay} e vence dia {c.dueDay}
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-semibold text-success">Nada em aberto</span> · fecha dia {c.closingDay}, vence dia {c.dueDay}
+                      </>
+                    )}
+                    {payer && <> · paga com {payer}</>}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    <span className="font-num font-semibold text-foreground">{formatCurrency(Math.max(0, limit - used))}</span> disponíveis de {formatCurrency(limit)}
+                  </p>
 
-                <div className="mt-3 flex gap-2">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setPurchaseCard(c); }}
-                    className="flex-1 text-sm font-medium py-2 rounded-lg transition"
-                    style={{ backgroundColor: `${cardColor}14`, color: cardColor }}
-                  >
-                    + Compra
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setRecurringCard(c); }}
-                    className="flex-1 text-sm font-medium py-2 rounded-lg transition"
-                    style={{ backgroundColor: `${cardColor}14`, color: cardColor }}
-                  >
-                    + Recorrente
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPurchaseCard(c); }}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-theme active:scale-[0.97]"
+                      style={{ backgroundColor: `${cardColor}1f`, color: cardColor }}
+                    >
+                      <Plus className="h-4 w-4" /> Compra
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setRecurringCard(c); }}
+                      className="inline-flex h-9 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-muted-foreground transition-theme hover:bg-foreground/[0.06] hover:text-foreground active:scale-[0.97]"
+                    >
+                      <Plus className="h-4 w-4" /> Recorrente
+                    </button>
+                  </div>
                 </div>
               </div>
             );

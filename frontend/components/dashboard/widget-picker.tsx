@@ -29,10 +29,13 @@ export const DASHBOARD_WIDGETS: { key: string; label: string }[] = [
 const ALL_KEYS = DASHBOARD_WIDGETS.map((w) => w.key);
 // Fora do padrão por repetir o que o topo já mostra (sobra do mês e
 // receitas x despesas) — continua disponível em "Personalizar".
-const OFF_BY_DEFAULT = ['balanceChart'];
+// Os 4 indicadores soltos (receitas, despesas, investido, disponível) também:
+// a frase e a linha de apoio do topo já mostram esses números.
+const OFF_BY_DEFAULT = ['balanceChart', 'income', 'expense', 'invested', 'leftovers'];
+const STAT_KEYS = ['income', 'expense', 'invested', 'leftovers'];
 const DEFAULT_KEYS = ALL_KEYS.filter((k) => !OFF_BY_DEFAULT.includes(k));
 const LAYOUT_VERSION_KEY = 'poupay:dashboard-layout';
-const LAYOUT_VERSION = '2';
+const LAYOUT_VERSION = '3';
 
 // Widgets que já existiam antes do sistema de "novos widgets" — não contam como novidade.
 const LEGACY_WIDGET_KEYS = [
@@ -112,7 +115,8 @@ export function useDashboardWidgetOrder(): {
       } catch {
         /* ignora */
       }
-      if (saved && saved.includes('balanceChart')) {
+      // v2 (Resultado do mês) e v3 (indicadores soltos) numa passada só
+      if (saved && (saved.includes('balanceChart') || STAT_KEYS.some((k) => saved.includes(k)))) {
         setOrder(DEFAULT_KEYS.filter((k) => saved.includes(k) || !ALL_KEYS.includes(k)));
         try {
           localStorage.setItem(SEEN_WIDGETS_KEY, JSON.stringify(ALL_KEYS));

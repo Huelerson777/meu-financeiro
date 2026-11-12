@@ -111,7 +111,7 @@ export function PaymentsStatusCard({ status, isLoading, onPay, onSkip }: Payment
   const overdueExpenses = overdue.filter((i) => i.type === 'EXPENSE').length;
 
   return (
-    <Card>
+    <Card id="para-fazer-agora" className="scroll-mt-24">
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-x-4 gap-y-1 space-y-0">
         <div>
           <CardTitle>Para fazer agora</CardTitle>
