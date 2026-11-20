@@ -29,8 +29,10 @@ export function middleware(request: NextRequest) {
 
   const hasSession = request.cookies.has(SESSION_COOKIE_NAME);
 
+  // "/" é a página de apresentação (app/page.tsx) para quem ainda não tem
+  // sessão; quem já está logado segue direto pro painel.
   if (pathname === '/') {
-    return NextResponse.redirect(new URL(hasSession ? '/dashboard' : '/login', request.url));
+    return hasSession ? NextResponse.redirect(new URL('/dashboard', request.url)) : NextResponse.next();
   }
 
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
